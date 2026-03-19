@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Treeniapp</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:#0f0f0f; --surface:#1a1a1a; --surface2:#242424; --border:#2e2e2e;
+  --text:#f0f0f0; --text2:#888; --text3:#555;
+  --teal:#1D9E75; --teal-dim:#0f6e56; --teal-bg:#0a2e22;
+  --blue:#378ADD; --amber:#EF9F27; --amber-bg:#2e1f08; --red:#E24B4A;
+  --r:10px; --rs:6px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;min-height:100vh;}
+nav{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px solid var(--border);display:flex;overflow-x:auto;}
+nav button{flex:1;min-width:70px;padding:13px 6px;background:none;border:none;color:var(--text2);font-size:12px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;}
+nav button.active{color:var(--teal);border-bottom-color:var(--teal);}
+.page{display:none;padding:14px;max-width:600px;margin:0 auto;}
+.page.active{display:block;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:12px;}
+.card-title{font-size:11px;font-weight:500;color:var(--text3);margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em;}
+.metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+.metric{background:var(--surface2);border-radius:var(--rs);padding:11px;}
+.metric-label{font-size:11px;color:var(--text3);margin-bottom:3px;}
+.metric-value{font-size:20px;font-weight:600;}
+.form-row{display:flex;gap:8px;margin-bottom:9px;align-items:center;}
+.form-row label{font-size:13px;color:var(--text2);min-width:90px;}
+input[type=number],input[type=date],select{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);color:var(--text);padding:8px 11px;font-size:14px;outline:none;}
+input:focus,select:focus{border-color:var(--teal);}
+input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.6);}
+.btn{padding:10px 20px;border-radius:var(--rs);border:none;font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;}
+.btn-primary{background:var(--teal);color:#fff;width:100%;margin-top:6px;}
+.btn-primary:hover{background:var(--teal-dim);}
+.btn-primary:active{transform:scale(.98);}
+.day-tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;}
+.day-tab{flex:1;min-width:52px;padding:8px 3px;text-align:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);font-size:11px;cursor:pointer;color:var(--text2);}
+.day-tab.active{border-color:var(--teal);color:var(--teal);background:var(--teal-bg);}
+.day-tab.done{border-color:var(--teal-dim);color:var(--teal-dim);}
+.day-tab.rest{color:var(--text3);}
+.prog-wrap{margin-bottom:12px;}
+.prog-bg{height:3px;background:var(--surface2);border-radius:2px;}
+.prog-fill{height:3px;background:var(--teal);border-radius:2px;transition:width .4s;}
+.prog-text{font-size:11px;color:var(--text3);margin-top:4px;}
+.ex-item{background:var(--surface2);border-radius:var(--rs);padding:12px;margin-bottom:8px;}
+.ex-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.ex-name{font-size:14px;font-weight:500;}
+.ex-prev{font-size:11px;color:var(--text3);}
+.sets-row{display:flex;gap:5px;flex-wrap:wrap;}
+.set-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:6px;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.set-label{font-size:10px;color:var(--text3);}
+.set-inputs{display:flex;gap:3px;align-items:center;}
+.set-input{width:50px;padding:5px 4px;font-size:13px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);text-align:center;outline:none;}
+.set-input:focus{border-color:var(--teal);}
+.set-sep{font-size:11px;color:var(--text3);}
+.pr-badge{font-size:10px;background:var(--amber-bg);color:var(--amber);border-radius:4px;padding:1px 5px;margin-left:5px;}
+.complete-btn{width:100%;margin-top:12px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);color:var(--text2);font-size:14px;cursor:pointer;}
+.complete-btn.done{background:var(--teal-bg);border-color:var(--teal);color:var(--teal);}
+.hist-item{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);}
+.hist-item:last-child{border-bottom:none;}
+.hist-label{font-size:14px;}
+.hist-val{font-size:14px;font-weight:500;color:var(--teal);}
+.hist-date{font-size:11px;color:var(--text3);}
+.chart-wrap{position:relative;height:200px;}
+.status{font-size:12px;text-align:center;padding:6px;min-height:24px;}
+.status.ok{color:var(--teal);}
+.status.err{color:var(--red);}
+.week-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:12px;color:var(--text3);}
+.week-btn{background:none;border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:var(--rs);cursor:pointer;font-size:12px;}
+</style>
+</head>
+<body>
+<nav>
+  <button class="active" onclick="showPage('treeni',this)">Treeni</button>
+  <button onclick="showPage('keho',this)">Keho</button>
+  <button onclick="showPage('aktiviteetti',this)">Aktiviteetti</button>
+  <button onclick="showPage('uni',this)">Uni</button>
+  <button onclick="showPage('historia',this)">Historia</button>
+</nav>
+
+<div id="page-treeni" class="page active">
+  <div class="prog-wrap">
+    <div class="prog-bg"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+    <div class="prog-text" id="prog-text"></div>
+  </div>
+  <div class="week-nav">
+    <button class="week-btn" onclick="changeWeek(-1)">←</button>
+    <span id="week-label"></span>
+    <button class="week-btn" onclick="changeWeek(1)">→</button>
+  </div>
+  <div class="day-tabs" id="day-tabs"></div>
+  <div id="session-content"></div>
+</div>
+
+<div id="page-keho" class="page">
+  <div class="metric-grid">
+    <div class="metric"><div class="metric-label">Paino</div><div class="metric-value" style="color:var(--teal)" id="m-weight">—</div></div>
+    <div class="metric"><div class="metric-label">Rasva%</div><div class="metric-value" style="color:var(--blue)" id="m-fat">—</div></div>
+    <div class="metric"><div class="metric-label">Lihas%</div><div class="metric-value" style="color:var(--amber)" id="m-muscle">—</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Kirjaa mittaus</div>
+    <div class="form-row"><label>Päivämäärä</label><input type="date" id="body-date"></div>
+    <div class="form-row"><label>Paino (kg)</label><input type="number" id="body-weight" step="0.1" placeholder="114.8"></div>
+    <div class="form-row"><label>Rasva%</label><input type="number" id="body-fat" step="0.1" placeholder="37.7"></div>
+    <div class="form-row"><label>Lihas%</label><input type="number" id="body-muscle" step="0.1" placeholder="29.3"></div>
+    <button class="btn btn-primary" onclick="saveBodyMetrics()">Tallenna</button>
+    <div class="status" id="body-status"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Kehitys</div>
+    <div class="chart-wrap"><canvas id="body-chart"></canvas></div>
+  </div>
+</div>
+
+<div id="page-aktiviteetti" class="page">
+  <div class="card">
+    <div class="card-title">Kirjaa aktiviteetti</div>
+    <div class="form-row"><label>Päivämäärä</label><input type="date" id="act-date"></div>
+    <div class="form-row"><label>Laji</label>
+      <select id="act-type">
+        <option>Jääkiekko</option><option>Juoksu</option><option>Kävely</option><option>Sali</option><option>Muu</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Kesto (min)</label><input type="number" id="act-duration" placeholder="60"></div>
+    <div class="form-row"><label>Kalorit</label><input type="number" id="act-calories" placeholder="450"></div>
+    <div class="form-row"><label>Syke (avg)</label><input type="number" id="act-hr" placeholder="145"></div>
+    <button class="btn btn-primary" onclick="saveActivity()">Tallenna</button>
+    <div class="status" id="act-status"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Viimeiset</div>
+    <div id="act-history"><div style="color:var(--text3);font-size:13px">Ladataan...</div></div>
+  </div>
+</div>
+
+<div id="page-uni" class="page">
+  <div class="metric-grid" style="grid-template-columns:1fr 1fr;">
+    <div class="metric"><div class="metric-label">Viime yö</div><div class="metric-value" style="color:var(--teal)" id="sleep-last">—</div></div>
+    <div class="metric"><div class="metric-label">Viikon ka</div><div class="metric-value" style="color:var(--blue)" id="sleep-avg">—</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Kirjaa uni</div>
+    <div class="form-row"><label>Päivämäärä</label><input type="date" id="sleep-date"></div>
+    <div class="form-row"><label>Kesto (min)</label><input type="number" id="sleep-dur" placeholder="450" step="5"></div>
+    <div class="form-row"><label>Syvä uni (min)</label><input type="number" id="sleep-deep" placeholder="90"></div>
+    <div class="form-row"><label>REM (min)</label><input type="number" id="sleep-rem" placeholder="100"></div>
+    <div class="form-row"><label>Heräilyt</label><input type="number" id="sleep-awk" placeholder="2"></div>
+    <button class="btn btn-primary" onclick="saveSleep()">Tallenna</button>
+    <div class="status" id="sleep-status"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Historia</div>
+    <div id="sleep-history"><div style="color:var(--text3);font-size:13px">Ladataan...</div></div>
+  </div>
+</div>
+
+<div id="page-historia" class="page">
+  <div class="card">
+    <div class="card-title">Salilokit</div>
+    <div id="workout-history"><div style="color:var(--text3);font-size:13px">Ladataan...</div></div>
+  </div>
+</div>
+
+<script>
+const SB_URL='https://dodrzzgbdlucjbkmxbjn.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvZHJ6emdiZGx1Y2pia214YmpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5MzUzOTQsImV4cCI6MjA4OTUxMTM5NH0.1NgZJnVAp0AKW_J0tnoZyi9in0uWSFScir7cEnB7BQg';
+const sb=supabase.createClient(SB_URL,SB_KEY);
+
+const DAYS=['Ma','Ti','Ke','To','Pe','La','Su'];
+const SCHED={0:'t1',1:'kiekko',2:'t2',3:'t3',4:'juoksu',5:'lepo',6:'kiekko'};
+const SESS={
+  t1:{name:'Treeni 1 — Työntävät',focus:'Rinta, olkapäät, ojentajat',ex:[
+    {n:'Rintapunnerruslaite',t:'3×8',s:3},{n:'Pystypunnerruslaite',t:'3×10',s:3},
+    {n:'Pec Deck (rintalaite)',t:'3×12',s:3},{n:'Vipunostolaite sivuille',t:'3×15',s:3},
+    {n:'Dippilaite',t:'3×12',s:3},{n:'Erikoisjalkaprässi 38°',t:'3×10',s:3},
+    {n:'Vatsarutistuslaite',t:'3×15',s:3}]},
+  t2:{name:'Treeni 2 — Vetävät',focus:'Selkä, takaolkapäät, hauikset',ex:[
+    {n:'Ylätaljalaite',t:'3×10',s:3},{n:'Tuettu soutulaite (Verti)',t:'3×10',s:3},
+    {n:'Face pulls taljassa',t:'3×15',s:3},{n:'Selänojennuslaite',t:'3×15',s:3},
+    {n:'Hauiskääntölaite',t:'3×12',s:3},{n:'Reiden koukistuslaite',t:'3×15',s:3},
+    {n:'Jalannostot',t:'3×15',s:3}]},
+  t3:{name:'Treeni 3 — Hartiat + hauikset + ojentajat',focus:'Yläkehon viimeistely',ex:[
+    {n:'Vipunostolaite sivuille',t:'4×15',s:4},{n:'Face pulls taljassa',t:'3×15',s:3},
+    {n:'Pystypunnerruslaite',t:'3×10',s:3},{n:'Ojentajapunnerrus taljassa',t:'4×12',s:4},
+    {n:'Hauiskääntö Hammer käsipainoilla',t:'3×12',s:3},{n:'Hauiskääntölaite tai talja',t:'3×10',s:3},
+    {n:'Vatsarutistuslaite',t:'4×15',s:4}]},
+  kiekko:{name:'Jääkiekko',focus:'Harrastejääkiekko + 10 000 askelta',ex:[]},
+  juoksu:{name:'Juoksu / kävely',focus:'Hölkkä tai reipas kävely',ex:[]},
+  lepo:{name:'Lepopäivä',focus:'Palautuminen',ex:[]},
+};
+
+let LD=JSON.parse(localStorage.getItem('treeni_v3')||'{}');
+function saveLD(){localStorage.setItem('treeni_v3',JSON.stringify(LD));}
+
+function todayIdx(){const d=new Date().getDay();return d===0?6:d-1;}
+let wOff=0,aDay=todayIdx();
+
+function wStart(o){
+  const n=new Date(),dy=n.getDay(),diff=dy===0?-6:1-dy;
+  const m=new Date(n);m.setDate(n.getDate()+diff+o*7);m.setHours(0,0,0,0);return m;
+}
+function isoWeek(d){
+  const x=new Date(d);x.setHours(0,0,0,0);x.setDate(x.getDate()+3-(x.getDay()+6)%7);
+  const w1=new Date(x.getFullYear(),0,4);
+  return 1+Math.round(((x-w1)/86400000-3+(w1.getDay()+6)%7)/7);
+}
+function dKey(o,d){return'w'+o+'_d'+d;}
+function eKey(o,d,e){return dKey(o,d)+'_e'+e;}
+function isDone(o,d){return LD[dKey(o,d)+'_done']===true;}
+function setDone(o,d,v){LD[dKey(o,d)+'_done']=v;saveLD();}
+function getED(o,d,e){return LD[eKey(o,d,e)]||{sets:[]};}
+function saveSet(o,d,e,s,f,v){
+  const k=eKey(o,d,e);
+  if(!LD[k])LD[k]={sets:[]};
+  if(!LD[k].sets[s])LD[k].sets[s]={};
+  LD[k].sets[s][f]=v;saveLD();
+  syncSet(o,d,e,s);
+}
+async function syncSet(o,d,e,s){
+  const st=SCHED[d],sess=SESS[st];
+  if(!sess||!sess.ex[e])return;
+  const ex=sess.ex[e],ed=getED(o,d,e),sd=ed.sets[s]||{};
+  if(!sd.kg&&!sd.reps)return;
+  const mon=wStart(o),dt=new Date(mon);dt.setDate(mon.getDate()+d);
+  await sb.from('workout_sets').upsert({
+    workout_date:dt.toISOString().split('T')[0],
+    exercise_name:ex.n,set_number:s+1,
+    weight_kg:parseFloat(sd.kg)||null,reps:parseInt(sd.reps)||null
+  },{onConflict:'workout_date,exercise_name,set_number'});
+}
+
+function getPrev(exName){
+  for(let w=wOff-1;w>=wOff-8;w--){
+    for(let d=0;d<7;d++){
+      const st=SCHED[d],sess=SESS[st];
+      if(!sess||!sess.ex)continue;
+      const ei=sess.ex.findIndex(x=>x.n===exName);
+      if(ei===-1)continue;
+      const ed=getED(w,d,ei);
+      const ws=(ed.sets||[]).map(s=>parseFloat(s&&s.kg)).filter(n=>!isNaN(n)&&n>0);
+      if(ws.length)return Math.max(...ws);
+    }
+  }return null;
+}
+
+function renderTreeni(){
+  const ws=wStart(wOff),wk=isoWeek(ws),yr=ws.getFullYear();
+  document.getElementById('week-label').textContent='Viikko '+wk+' / '+yr;
+  const tabs=document.getElementById('day-tabs');tabs.innerHTML='';
+  DAYS.forEach((lb,i)=>{
+    const b=document.createElement('button');b.className='day-tab';
+    const st=SCHED[i],isSali=['t1','t2','t3'].includes(st);
+    if(i===aDay)b.classList.add('active');
+    else if(isDone(wOff,i))b.classList.add('done');
+    else if(!isSali)b.classList.add('rest');
+    b.innerHTML=lb+'<br><span style="font-size:9px;opacity:.7">'+st.toUpperCase()+'</span>';
+    b.onclick=()=>{aDay=i;renderTreeni();};
+    tabs.appendChild(b);
+  });
+  const saliDays=[0,2,3];
+  const done=saliDays.filter(d=>isDone(wOff,d)).length;
+  document.getElementById('prog-fill').style.width=Math.round(done/saliDays.length*100)+'%';
+  document.getElementById('prog-text').textContent=done+'/'+saliDays.length+' salikerrasta tehty';
+  renderSession();
+}
+
+function renderSession(){
+  const st=SCHED[aDay],sess=SESS[st],el=document.getElementById('session-content');
+  if(!sess.ex||sess.ex.length===0){
+    el.innerHTML=`<div class="card" style="text-align:center;padding:22px">
+      <div style="font-size:16px;font-weight:600;margin-bottom:6px">${sess.name}</div>
+      <div style="font-size:13px;color:var(--text3)">${sess.focus}</div></div>`;return;
+  }
+  const done=isDone(wOff,aDay);
+  let h=`<div class="card" style="margin-bottom:8px"><div style="font-size:16px;font-weight:600">${sess.name}</div>
+    <div style="font-size:13px;color:var(--text3);margin-top:2px">${sess.focus}</div></div>`;
+  sess.ex.forEach((ex,ei)=>{
+    const ed=getED(wOff,aDay,ei);
+    const prev=getPrev(ex.n);
+    const cw=(ed.sets||[]).map(s=>parseFloat(s&&s.kg)).filter(n=>!isNaN(n)&&n>0);
+    const isPR=prev!==null&&cw.length&&Math.max(...cw)>prev;
+    h+=`<div class="ex-item"><div class="ex-header">
+      <span class="ex-name">${ex.n}${isPR?'<span class="pr-badge">PR</span>':''}</span>
+      <span class="ex-prev">${prev!==null?'ed: '+prev+' kg':ex.t}</span></div>
+      <div class="sets-row">`;
+    for(let s=0;s<ex.s;s++){
+      const sd=(ed.sets&&ed.sets[s])||{};
+      h+=`<div class="set-box"><span class="set-label">S${s+1}</span>
+        <div class="set-inputs">
+          <input class="set-input" type="number" min="0" step=".5" placeholder="kg" value="${sd.kg||''}"
+            onchange="saveSet(${wOff},${aDay},${ei},${s},'kg',this.value)">
+          <span class="set-sep">×</span>
+          <input class="set-input" type="number" min="0" step="1" placeholder="tr" value="${sd.reps||''}"
+            onchange="saveSet(${wOff},${aDay},${ei},${s},'reps',this.value)">
+        </div></div>`;
+    }
+    h+=`</div></div>`;
+  });
+  h+=`<button class="complete-btn ${done?'done':''}" onclick="toggleDone()">${done?'Treeni tehty ✓':'Merkitse tehdyksi'}</button>`;
+  el.innerHTML=h;
+}
+
+function toggleDone(){setDone(wOff,aDay,!isDone(wOff,aDay));renderTreeni();}
+function changeWeek(dir){wOff+=dir;renderTreeni();}
+
+async function loadBodyMetrics(){
+  const{data}=await sb.from('body_metrics').select('*').order('measured_at',{ascending:false}).limit(1);
+  if(data&&data[0]){
+    document.getElementById('m-weight').textContent=data[0].weight_kg?data[0].weight_kg+' kg':'—';
+    document.getElementById('m-fat').textContent=data[0].fat_pct?data[0].fat_pct+'%':'—';
+    document.getElementById('m-muscle').textContent=data[0].muscle_pct?data[0].muscle_pct+'%':'—';
+  }
+  const{data:hist}=await sb.from('body_metrics').select('*').order('measured_at').limit(20);
+  if(hist&&hist.length>1){
+    if(window.bc)window.bc.destroy();
+    window.bc=new Chart(document.getElementById('body-chart'),{
+      type:'line',
+      data:{labels:hist.map(d=>d.measured_at.slice(5)),datasets:[
+        {label:'Paino',data:hist.map(d=>d.weight_kg),borderColor:'#1D9E75',borderWidth:2,pointRadius:3,pointBackgroundColor:'#1D9E75',tension:.3,fill:false,yAxisID:'y1'},
+        {label:'Rasva%',data:hist.map(d=>d.fat_pct),borderColor:'#378ADD',borderWidth:2,pointRadius:3,pointBackgroundColor:'#378ADD',tension:.3,fill:false,yAxisID:'y2'},
+        {label:'Lihas%',data:hist.map(d=>d.muscle_pct),borderColor:'#EF9F27',borderWidth:2,pointRadius:3,pointBackgroundColor:'#EF9F27',tension:.3,fill:false,yAxisID:'y2'},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{y1:{position:'left',ticks:{color:'#555',font:{size:10}},grid:{color:'#222'}},
+          y2:{position:'right',ticks:{color:'#555',font:{size:10},callback:v=>v+'%'},grid:{display:false}},
+          x:{ticks:{color:'#555',font:{size:10}},grid:{display:false}}}}
+    });
+  }
+}
+
+async function saveBodyMetrics(){
+  const date=document.getElementById('body-date').value;
+  if(!date){showStatus('body-status','Valitse päivämäärä',true);return;}
+  const{error}=await sb.from('body_metrics').upsert({
+    measured_at:date,
+    weight_kg:parseFloat(document.getElementById('body-weight').value)||null,
+    fat_pct:parseFloat(document.getElementById('body-fat').value)||null,
+    muscle_pct:parseFloat(document.getElementById('body-muscle').value)||null,
+  },{onConflict:'measured_at'});
+  if(error){showStatus('body-status','Virhe: '+error.message,true);return;}
+  showStatus('body-status','Tallennettu!',false);loadBodyMetrics();
+}
+
+async function loadActivities(){
+  const{data}=await sb.from('activity_data').select('*').order('activity_date',{ascending:false}).limit(10);
+  const el=document.getElementById('act-history');
+  if(!data||!data.length){el.innerHTML='<div style="color:var(--text3);font-size:13px">Ei aktiviteetteja vielä</div>';return;}
+  el.innerHTML=data.map(a=>`<div class="hist-item">
+    <div><div class="hist-label">${a.activity_type}</div><div class="hist-date">${a.activity_date}</div></div>
+    <div style="text-align:right"><div class="hist-val">${a.duration_min?a.duration_min+' min':'—'}</div>
+    <div style="font-size:11px;color:var(--text3)">${a.calories?a.calories+' kcal':''}${a.avg_heart_rate?' · '+a.avg_heart_rate+' bpm':''}</div></div>
+    </div>`).join('');
+}
+
+async function saveActivity(){
+  const date=document.getElementById('act-date').value;
+  if(!date){showStatus('act-status','Valitse päivämäärä',true);return;}
+  const{error}=await sb.from('activity_data').insert({
+    activity_date:date,activity_type:document.getElementById('act-type').value,
+    duration_min:parseInt(document.getElementById('act-duration').value)||null,
+    calories:parseInt(document.getElementById('act-calories').value)||null,
+    avg_heart_rate:parseInt(document.getElementById('act-hr').value)||null,
+  });
+  if(error){showStatus('act-status','Virhe',true);return;}
+  showStatus('act-status','Tallennettu!',false);loadActivities();
+}
+
+async function loadSleep(){
+  const{data}=await sb.from('sleep_data').select('*').order('sleep_date',{ascending:false}).limit(7);
+  if(data&&data[0])document.getElementById('sleep-last').textContent=(data[0].duration_min/60).toFixed(1)+'h';
+  if(data&&data.length){
+    const avg=data.reduce((s,d)=>s+(d.duration_min||0),0)/data.length;
+    document.getElementById('sleep-avg').textContent=(avg/60).toFixed(1)+'h';
+    document.getElementById('sleep-history').innerHTML=data.map(s=>`<div class="hist-item">
+      <div><div class="hist-label">${s.sleep_date}</div></div>
+      <div style="text-align:right"><div class="hist-val">${s.duration_min?(s.duration_min/60).toFixed(1)+'h':'—'}</div>
+      <div style="font-size:11px;color:var(--text3)">${s.deep_sleep_min?'Syvä: '+s.deep_sleep_min+'min':''}${s.rem_sleep_min?' · REM: '+s.rem_sleep_min+'min':''}</div>
+      </div></div>`).join('');
+  }
+}
+
+async function saveSleep(){
+  const date=document.getElementById('sleep-date').value;
+  if(!date){showStatus('sleep-status','Valitse päivämäärä',true);return;}
+  const{error}=await sb.from('sleep_data').upsert({
+    sleep_date:date,
+    duration_min:parseInt(document.getElementById('sleep-dur').value)||null,
+    deep_sleep_min:parseInt(document.getElementById('sleep-deep').value)||null,
+    rem_sleep_min:parseInt(document.getElementById('sleep-rem').value)||null,
+    awakenings:parseInt(document.getElementById('sleep-awk').value)||null,
+  },{onConflict:'sleep_date'});
+  if(error){showStatus('sleep-status','Virhe',true);return;}
+  showStatus('sleep-status','Tallennettu!',false);loadSleep();
+}
+
+async function loadWorkoutHistory(){
+  const{data}=await sb.from('workout_sets').select('*').order('workout_date',{ascending:false}).order('exercise_name').limit(100);
+  const el=document.getElementById('workout-history');
+  if(!data||!data.length){el.innerHTML='<div style="color:var(--text3);font-size:13px">Ei lokeja vielä</div>';return;}
+  const g={};
+  data.forEach(s=>{const k=s.workout_date+'|'+s.exercise_name;if(!g[k])g[k]={date:s.workout_date,name:s.exercise_name,sets:[]};g[k].sets.push(s);});
+  el.innerHTML=Object.values(g).map(x=>`<div class="hist-item">
+    <div><div class="hist-label">${x.name}</div><div class="hist-date">${x.date}</div></div>
+    <div style="text-align:right;font-size:12px;color:var(--text3)">${x.sets.map(s=>(s.weight_kg||'?')+'×'+(s.reps||'?')).join(' | ')}</div>
+    </div>`).join('');
+}
+
+function showStatus(id,msg,isErr){
+  const el=document.getElementById(id);el.textContent=msg;el.className='status '+(isErr?'err':'ok');
+  setTimeout(()=>{el.textContent='';el.className='status';},3000);
+}
+
+function showPage(name,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');btn.classList.add('active');
+  if(name==='keho')loadBodyMetrics();
+  if(name==='aktiviteetti')loadActivities();
+  if(name==='uni')loadSleep();
+  if(name==='historia')loadWorkoutHistory();
+}
+
+['body-date','act-date','sleep-date'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(el)el.value=new Date().toISOString().split('T')[0];
+});
+
+renderTreeni();
+</script>
+</body>
+</html>
+
