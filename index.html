@@ -188,6 +188,11 @@ const SESS={
     {n:'Pystypunnerruslaite',t:'3×10',s:3},{n:'Ojentajapunnerrus taljassa',t:'4×12',s:4},
     {n:'Hauiskääntö Hammer käsipainoilla',t:'3×12',s:3},{n:'Hauiskääntölaite tai talja',t:'3×10',s:3},
     {n:'Vatsarutistuslaite',t:'4×15',s:4}]},
+  t4:{name:'Treeni 4 — Power & Core',focus:'Lisätreeni energiselle päivälle',ex:[
+    {n:'Jalkaprässi (38°)',t:'4×10',s:4},{n:'Ylätalja kapealla otteella',t:'3×10',s:3},
+    {n:'Rintapunnerruslaite (yksi käsi)',t:'3×12',s:3},{n:'Vatsarutistuslaite',t:'3×15',s:3},
+    {n:'Lankku',t:'3×45s',s:3},{n:'Selänojennuslaite',t:'3×15',s:3},
+    {n:'Pohjenostot laitteessa',t:'3×15',s:3}]},
   kiekko:{name:'Jääkiekko',focus:'Harrastejääkiekko + 10 000 askelta',ex:[]},
   juoksu:{name:'Juoksu / kävely',focus:'Hölkkä tai reipas kävely',ex:[]},
   lepo:{name:'Lepopäivä',focus:'Palautuminen',ex:[]},
@@ -221,7 +226,7 @@ function saveSet(o,d,e,s,f,v){
   syncSet(o,d,e,s);
 }
 async function syncSet(o,d,e,s){
-  const st=SCHED[d],sess=SESS[st];
+  const st=getActiveSession(o,d),sess=SESS[st];
   if(!sess||!sess.ex[e])return;
   const ex=sess.ex[e],ed=getED(o,d,e),sd=ed.sets[s]||{};
   if(!sd.kg&&!sd.reps)return;
@@ -236,7 +241,7 @@ async function syncSet(o,d,e,s){
 function getPrev(exName){
   for(let w=wOff-1;w>=wOff-8;w--){
     for(let d=0;d<7;d++){
-      const st=SCHED[d],sess=SESS[st];
+      const st=getActiveSession(w,d),sess=SESS[st];
       if(!sess||!sess.ex)continue;
       const ei=sess.ex.findIndex(x=>x.n===exName);
       if(ei===-1)continue;
@@ -268,15 +273,42 @@ function renderTreeni(){
   renderSession();
 }
 
+function getSessionKey(o,d){return'w'+o+'_d'+d+'_sess';}
+function getActiveSession(o,d){
+  const stored=LD[getSessionKey(o,d)];
+  if(stored)return stored;
+  const def=SCHED[d];
+  return['kiekko','juoksu','lepo'].includes(def)?def:def;
+}
+function setActiveSession(o,d,st){LD[getSessionKey(o,d)]=st;saveLD();renderTreeni();}
+
 function renderSession(){
-  const st=SCHED[aDay],sess=SESS[st],el=document.getElementById('session-content');
-  if(!sess.ex||sess.ex.length===0){
-    el.innerHTML=`<div class="card" style="text-align:center;padding:22px">
-      <div style="font-size:16px;font-weight:600;margin-bottom:6px">${sess.name}</div>
-      <div style="font-size:13px;color:var(--text3)">${sess.focus}</div></div>`;return;
+  const st=getActiveSession(wOff,aDay),sess=SESS[st],el=document.getElementById('session-content');
+
+  const allSessions=['t1','t2','t3','t4','kiekko','juoksu','lepo'];
+  const sessionLabels={t1:'T1 Työntävät',t2:'T2 Vetävät',t3:'T3 Hartiat',t4:'T4 Power',kiekko:'Jääkiekko',juoksu:'Juoksu',lepo:'Lepo'};
+  let pickerHtml=`<div class="card" style="margin-bottom:8px">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Valitse päivän tyyppi</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;">`;
+  allSessions.forEach(s=>{
+    const active=s===st;
+    pickerHtml+=`<button onclick="setActiveSession(${wOff},${aDay},'${s}')"
+      style="flex:1;min-width:64px;padding:7px 3px;background:${active?'var(--teal-bg)':'var(--surface2)'};
+      border:1px solid ${active?'var(--teal)':'var(--border)'};border-radius:var(--rs);
+      color:${active?'var(--teal)':'var(--text2)'};font-size:11px;cursor:pointer;white-space:nowrap;">
+      ${sessionLabels[s]}</button>`;
+  });
+  pickerHtml+=`</div></div>`;
+
+  if(!sess||!sess.ex||sess.ex.length===0){
+    const defaultSt=SCHED[aDay];
+    const isRest=['kiekko','juoksu','lepo'].includes(defaultSt);
+    el.innerHTML=pickerHtml+(isRest?`<div class="card" style="text-align:center;padding:22px">
+      <div style="font-size:16px;font-weight:600;margin-bottom:6px">${sess?sess.name:'—'}</div>
+      <div style="font-size:13px;color:var(--text3)">${sess?sess.focus:''}</div></div>`:'');return;
   }
   const done=isDone(wOff,aDay);
-  let h=`<div class="card" style="margin-bottom:8px"><div style="font-size:16px;font-weight:600">${sess.name}</div>
+  let h=pickerHtml+`<div class="card" style="margin-bottom:8px"><div style="font-size:16px;font-weight:600">${sess.name}</div>
     <div style="font-size:13px;color:var(--text3);margin-top:2px">${sess.focus}</div></div>`;
   sess.ex.forEach((ex,ei)=>{
     const ed=getED(wOff,aDay,ei);
@@ -433,4 +465,3 @@ renderTreeni();
 </script>
 </body>
 </html>
-
