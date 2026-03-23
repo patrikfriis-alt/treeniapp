@@ -364,14 +364,20 @@ async function loadBodyMetrics(){
   }
 }
 
+function parseNum(id){
+  const v=document.getElementById(id).value.replace(',','.');
+  const n=parseFloat(v);
+  return isNaN(n)?null:n;
+}
+
 async function saveBodyMetrics(){
   const date=document.getElementById('body-date').value;
   if(!date){showStatus('body-status','Valitse päivämäärä',true);return;}
   const{error}=await sb.from('body_metrics').upsert({
     measured_at:date,
-    weight_kg:parseFloat(document.getElementById('body-weight').value)||null,
-    fat_pct:parseFloat(document.getElementById('body-fat').value)||null,
-    muscle_pct:parseFloat(document.getElementById('body-muscle').value)||null,
+    weight_kg:parseNum('body-weight'),
+    fat_pct:parseNum('body-fat'),
+    muscle_pct:parseNum('body-muscle'),
   },{onConflict:'measured_at'});
   if(error){showStatus('body-status','Virhe: '+error.message,true);return;}
   showStatus('body-status','Tallennettu!',false);loadBodyMetrics();
