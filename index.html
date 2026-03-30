@@ -389,6 +389,19 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <!-- ── HISTORIA ───────────────────────────────────────────────── -->
 <div id="page-historia" class="page">
   <div class="card">
+    <div class="card-title">Liikkeen kehitys</div>
+    <div class="form-row">
+      <label>Liike</label>
+      <select id="ex-select" onchange="loadExerciseChart(this.value)">
+        <option value="">— Valitse liike —</option>
+      </select>
+    </div>
+    <div class="chart-wrap" id="ex-chart-wrap" style="display:none;margin-top:12px">
+      <canvas id="ex-chart"></canvas>
+    </div>
+    <div id="ex-chart-status" style="color:var(--text3);font-size:13px;text-align:center;padding:6px"></div>
+  </div>
+  <div class="card">
     <div class="card-title">Salilokit</div>
     <div id="workout-history"><div style="color:var(--text3);font-size:13px">Ladataan...</div></div>
   </div>
@@ -858,6 +871,88 @@ async function saveSleep() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   EXERCISE PROGRESS CHART
+═══════════════════════════════════════════════════════════════ */
+function populateExerciseDropdown() {
+  const sel = document.getElementById('ex-select');
+  if (sel.options.length > 1) return; // already populated
+  const seen = new Set();
+  Object.values(SESS).forEach(s => {
+    (s.ex || []).forEach(e => {
+      if (!seen.has(e.n)) {
+        seen.add(e.n);
+        const o = document.createElement('option');
+        o.value = o.textContent = e.n;
+        sel.appendChild(o);
+      }
+    });
+  });
+}
+
+async function loadExerciseChart(exName) {
+  const wrap     = document.getElementById('ex-chart-wrap');
+  const statusEl = document.getElementById('ex-chart-status');
+  if (!exName) { wrap.style.display = 'none'; statusEl.textContent = ''; return; }
+
+  statusEl.textContent = 'Ladataan...';
+  wrap.style.display = 'none';
+
+  const { data, error } = await sb
+    .from('workout_sets')
+    .select('workout_date,weight_kg')
+    .eq('exercise_name', exName)
+    .order('workout_date', { ascending: true });
+
+  if (error || !data || !data.length) {
+    statusEl.textContent = 'Ei dataa vielä.';
+    return;
+  }
+
+  // Group by date, take max weight per day
+  const byDate = {};
+  data.forEach(r => {
+    if (r.weight_kg == null) return;
+    if (byDate[r.workout_date] == null || r.weight_kg > byDate[r.workout_date])
+      byDate[r.workout_date] = r.weight_kg;
+  });
+
+  const labels = Object.keys(byDate);
+  const values = Object.values(byDate);
+
+  if (!labels.length) { statusEl.textContent = 'Ei painodataa vielä.'; return; }
+
+  statusEl.textContent = '';
+  wrap.style.display = 'block';
+
+  if (window.exChart) window.exChart.destroy();
+  window.exChart = new Chart(document.getElementById('ex-chart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: exName,
+        data: values,
+        borderColor: '#1D9E75',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: '#1D9E75',
+        tension: .3,
+        fill: false,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks: { color: '#555', font: { size: 10 }, callback: v => v + ' kg' }, grid: { color: '#222' } },
+        x: { ticks: { color: '#555', font: { size: 10 } }, grid: { display: false } },
+      },
+    },
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
    WORKOUT HISTORY
 ═══════════════════════════════════════════════════════════════ */
 async function loadWorkoutHistory() {
@@ -908,7 +1003,7 @@ function showPage(name, btn) {
   if (name === 'keho')         loadBodyMetrics();
   if (name === 'aktiviteetti') loadActivities();
   if (name === 'uni')          loadSleep();
-  if (name === 'historia')     loadWorkoutHistory();
+  if (name === 'historia')     { populateExerciseDropdown(); loadWorkoutHistory(); }
 }
 
 /* ═══════════════════════════════════════════════════════════════
