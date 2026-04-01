@@ -501,6 +501,8 @@ const isDone    = (o, d)    => LD[`${dKey(o,d)}_done`] === true;
 const setDone   = (o, d, v) => { LD[`${dKey(o,d)}_done`] = v; saveLD(); };
 const getED     = (o, d, e) => LD[eKey(o, d, e)] || { sets: [] };
 
+const syncTimers = {};
+
 function saveSet(o, d, e, s, field, value) {
   const k = eKey(o, d, e);
   if (!LD[k]) LD[k] = { sets: [] };
@@ -508,7 +510,10 @@ function saveSet(o, d, e, s, field, value) {
   LD[k].sets[s][field] = value;
   saveLD();
   updateSetBox(o, d, e, s);
-  syncSet(o, d, e, s);
+
+  const timerKey = `${o}-${d}-${e}-${s}`;
+  clearTimeout(syncTimers[timerKey]);
+  syncTimers[timerKey] = setTimeout(() => syncSet(o, d, e, s), 500);
 }
 
 async function syncSet(o, d, e, s) {
@@ -518,13 +523,16 @@ async function syncSet(o, d, e, s) {
   if (!sd.kg && !sd.reps) return;
   const mon = wStart(o), dt = new Date(mon);
   dt.setDate(mon.getDate() + d);
-  await sb.from('workout_sets').upsert({
+  const { error } = await sb.from('workout_sets').upsert({
     workout_date:  dt.toISOString().split('T')[0],
     exercise_name: ex.n,
     set_number:    s + 1,
     weight_kg:     parseFloat(sd.kg)  || null,
     reps:          parseInt(sd.reps)  || null,
   }, { onConflict: 'workout_date,exercise_name,set_number' });
+  if (error) {
+    console.error(`syncSet failed for "${ex.n}" set ${s + 1} on ${dt.toISOString().split('T')[0]}:`, error.message);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
