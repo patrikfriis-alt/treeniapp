@@ -62,7 +62,7 @@ nav::-webkit-scrollbar { display: none; }
 nav button {
   flex: 1;
   min-width: 70px;
-  padding: 14px 6px;
+  padding: 10px 6px;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -73,6 +73,14 @@ nav button {
   cursor: pointer;
   white-space: nowrap;
   transition: color var(--t);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.nav-icon {
+  font-size: 16px;
+  line-height: 1;
 }
 nav button.active { color: var(--teal); border-bottom-color: var(--teal); }
 nav button:not(.active):hover { color: var(--text); }
@@ -209,66 +217,49 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .ex-name { font-size: 14px; font-weight: 500; }
 .ex-prev { font-size: 11px; color: var(--text3); text-align: right; flex-shrink: 0; line-height: 1.5; }
 
-/* ─── Set boxes ──────────────────────────────────────────────── */
-.sets-row { display: flex; gap: 5px; flex-wrap: wrap; }
+/* ─── Set rows ───────────────────────────────────────────────── */
+.sets-col { display: flex; flex-direction: column; gap: 5px; }
 
-.set-box {
-  border: 1px solid var(--border);
-  border-radius: var(--rs);
-  padding: 7px 6px;
+.set-row {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 3px;
-  background: var(--surface);
-  transition: border-color .25s, background .25s;
+  gap: 10px;
+  border-radius: var(--rs);
+  padding: 10px 12px;
+  transition: background .2s, border-color .2s;
 }
+.set-row.s-undone { background: #3a1010; border: 1px solid #7a1f1f; }
+.set-row.s-worse  { background: #332200; border: 1px solid #7a5200; }
+.set-row.s-same   { background: #0d1f3a; border: 1px solid #1e4080; }
+.set-row.s-better { background: #072e1a; border: 1px solid #0f6e45; }
 
-/* 🔴 Undone */
-.set-box.s-undone  { border-color: #7a1f1f; background: #3a1010; }
-.set-box.s-undone .set-label,
-.set-box.s-undone .set-prev-ref,
-.set-box.s-undone .set-sep    { color: #c77; }
-.set-box.s-undone .set-input  { background: #2a0c0c; border-color: #7a1f1f; color: #f0c0c0; }
+.set-row-num { font-size: 11px; font-weight: 600; min-width: 22px; }
+.set-row.s-undone .set-row-num { color: #c77; }
+.set-row.s-worse  .set-row-num { color: #c9922a; }
+.set-row.s-same   .set-row-num { color: #6aabee; }
+.set-row.s-better .set-row-num { color: #4dcca0; }
 
-/* 🟡 Worse */
-.set-box.s-worse  { border-color: #7a5200; background: #332200; }
-.set-box.s-worse .set-label,
-.set-box.s-worse .set-prev-ref,
-.set-box.s-worse .set-sep    { color: #c9922a; }
-.set-box.s-worse .set-input  { background: #221700; border-color: #7a5200; color: #f5d08a; }
-
-/* 🔵 Same */
-.set-box.s-same  { border-color: #1e4080; background: #0d1f3a; }
-.set-box.s-same .set-label,
-.set-box.s-same .set-prev-ref,
-.set-box.s-same .set-sep    { color: #6aabee; }
-.set-box.s-same .set-input  { background: #091629; border-color: #1e4080; color: #b0d4f5; }
-
-/* 🟢 Better */
-.set-box.s-better  { border-color: #0f6e45; background: #072e1a; }
-.set-box.s-better .set-label,
-.set-box.s-better .set-prev-ref,
-.set-box.s-better .set-sep    { color: #4dcca0; }
-.set-box.s-better .set-input  { background: #041f11; border-color: #0f6e45; color: #a0f0d0; }
-
-.set-label    { font-size: 9px; color: var(--text3); font-weight: 600; letter-spacing: .04em; }
-.set-prev-ref { font-size: 9px; color: var(--text3); margin-top: 1px; white-space: nowrap; }
-.set-inputs   { display: flex; gap: 3px; align-items: center; }
-.set-input {
-  width: 48px;
-  padding: 5px 3px;
-  font-size: 13px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
+.set-row-inputs { display: flex; gap: 4px; align-items: center; flex: 1; }
+.set-row-input {
+  width: 60px;
+  padding: 6px 8px;
+  font-size: 15px;
+  font-weight: 500;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
   color: var(--text);
   text-align: center;
   outline: none;
-  transition: border-color var(--t);
 }
-.set-input:focus { border-color: var(--teal); }
-.set-sep { font-size: 11px; color: var(--text3); }
+.set-row-input:focus { border-color: var(--teal); }
+.set-row-sep { font-size: 12px; color: var(--text3); }
+
+.set-row-status { font-size: 10px; min-width: 60px; text-align: right; }
+.set-row.s-undone .set-row-status { color: #c77; }
+.set-row.s-worse  .set-row-status { color: #c9922a; }
+.set-row.s-same   .set-row-status { color: #6aabee; }
+.set-row.s-better .set-row-status { color: #4dcca0; }
 
 /* ─── PR badge ───────────────────────────────────────────────── */
 .pr-badge {
@@ -323,12 +314,27 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <body>
 
 <nav>
-  <button class="active" onclick="showPage('treeni',this)">Treeni</button>
-  <button onclick="showPage('keho',this)">Keho</button>
-  <button onclick="showPage('aktiviteetti',this)">Aktiviteetti</button>
-  <button onclick="showPage('uni',this)">Uni</button>
-  <button onclick="showPage('historia',this)">Historia</button>
-  <span class="version">v1.4</span>
+  <button class="active" onclick="showPage('treeni',this)">
+    <span class="nav-icon">💪</span>
+    <span>Treeni</span>
+  </button>
+  <button onclick="showPage('keho',this)">
+    <span class="nav-icon">📊</span>
+    <span>Keho</span>
+  </button>
+  <button onclick="showPage('aktiviteetti',this)">
+    <span class="nav-icon">🏃</span>
+    <span>Aktiv.</span>
+  </button>
+  <button onclick="showPage('uni',this)">
+    <span class="nav-icon">😴</span>
+    <span>Uni</span>
+  </button>
+  <button onclick="showPage('historia',this)">
+    <span class="nav-icon">📈</span>
+    <span>Historia</span>
+  </button>
+  <span class="version">v1.5</span>
 </nav>
 
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
@@ -337,6 +343,20 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <div class="metric"><div class="metric-label">Sali</div><div class="metric-value" style="color:var(--teal)" id="ws-gym">—</div></div>
     <div class="metric"><div class="metric-label">Aktiviteetti</div><div class="metric-value" style="color:var(--blue)" id="ws-act">—</div></div>
     <div class="metric"><div class="metric-label">Uni ka</div><div class="metric-value" style="color:var(--amber)" id="ws-sleep">—</div></div>
+  </div>
+  <div class="metric-grid" id="motivation-summary" style="margin-bottom:12px">
+    <div class="metric">
+      <div class="metric-label">🔥 Streak</div>
+      <div class="metric-value" style="color:var(--amber)" id="ms-streak">—</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">📅 Kuukausi</div>
+      <div class="metric-value" style="color:var(--teal)" id="ms-month">—</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">✅ Viikko</div>
+      <div class="metric-value" style="color:var(--blue)" id="ms-week">—</div>
+    </div>
   </div>
   <div class="prog-wrap">
     <div class="prog-bg"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
@@ -675,7 +695,7 @@ function updateSetBox(o, d, e, s) {
   const sess = SESS[getActiveSession(o, d)];
   const exName = sess && sess.ex && sess.ex[e] ? sess.ex[e].n : null;
   const prev = exName ? getPrevSet(exName, s) : null;
-  box.className = `set-box s-${setStatus(sd, prev)}`;
+  box.className = `set-row s-${setStatus(sd, prev)}`;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -720,6 +740,44 @@ async function loadWeekSummary() {
   }
 }
 
+async function loadMotivationSummary() {
+  // Kuukauden aktiviteettikertoja
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+  const { data: actMonth } = await sb.from('activity_data').select('id')
+    .gte('activity_date', monthStart).lte('activity_date', monthEnd);
+  const monthCount = actMonth ? actMonth.length : 0;
+  document.getElementById('ms-month').textContent = monthCount + ' krt';
+
+  // Viikon saliprosentti
+  const saliDays = [0, 2, 3];
+  const weekDone = saliDays.filter(d => {
+    const st = getActiveSession(wOff, d);
+    return ['t1','t2','t3','t4'].includes(st) && isDone(wOff, d);
+  }).length;
+  const weekPct = Math.round(weekDone / saliDays.length * 100);
+  document.getElementById('ms-week').textContent = weekPct + '%';
+
+  // Streak: peräkkäiset päivät taaksepäin joina jokin treeni merkitty tehdyksi
+  let streak = 0;
+  const checkDate = new Date();
+  for (let i = 0; i < 60; i++) {
+    if (i > 0) checkDate.setDate(checkDate.getDate() - 1);
+    const dy = checkDate.getDay() === 0 ? 6 : checkDate.getDay() - 1;
+    const daysDiff = Math.floor((new Date() - checkDate) / 86400000);
+    const todayDy = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+    const wOffset = -Math.floor((daysDiff + todayDy - dy + 7) / 7);
+    if (isDone(wOffset, dy)) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+  document.getElementById('ms-streak').textContent = streak + ' pv';
+}
+
 async function renderTreeni() {
   const ws = wStart(wOff), wk = isoWeek(ws);
   document.getElementById('week-label').textContent = `Viikko ${wk} / ${ws.getFullYear()}`;
@@ -744,6 +802,7 @@ async function renderTreeni() {
   document.getElementById('prog-text').textContent  = `${done}/${saliDays.length} salikerrasta tehty`;
 
   loadWeekSummary();
+  loadMotivationSummary();
   await renderSession();
 }
 
@@ -821,28 +880,31 @@ async function renderSession() {
           ${prev ? `<button onclick="prefillExercise(${wOff},${aDay},${ei})" style="font-size:10px;padding:2px 7px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;white-space:nowrap">↓ Käytä edellisiä</button>` : ''}
         </span>
       </div>
-      <div class="sets-row">`;
+      <div class="sets-col">`;
 
     for (let s = 0; s < ex.s; s++) {
-      const sd      = (ed.sets && ed.sets[s]) || {};
+      const sd = (ed.sets && ed.sets[s]) || {};
       const prevSet = getPrevSet(ex.n, s);
-      const status  = setStatus(sd, prevSet);
-      const prevRef = prevSet
-        ? `ed: ${prevSet.weight_kg || '?'}×${prevSet.reps || '?'}`
-        : '';
+      const status = setStatus(sd, prevSet);
+      const statusText = {
+        undone: 'tekemättä',
+        worse:  '↓ heikompi',
+        same:   '= sama',
+        better: '↑ parempi',
+      }[status];
 
-      html += `<div class="set-box s-${status}" id="set-${wOff}-${aDay}-${ei}-${s}">
-        <span class="set-label">S${s+1}</span>
-        <div class="set-inputs">
-          <input class="set-input" type="number" min="0" step=".5" placeholder="kg"
+      html += `<div class="set-row s-${status}" id="set-${wOff}-${aDay}-${ei}-${s}">
+        <span class="set-row-num">S${s+1}</span>
+        <div class="set-row-inputs">
+          <input class="set-row-input" type="number" min="0" step=".5" placeholder="kg"
             value="${sd.kg || ''}"
             onchange="saveSet(${wOff},${aDay},${ei},${s},'kg',this.value)">
-          <span class="set-sep">×</span>
-          <input class="set-input" type="number" min="0" step="1" placeholder="tr"
+          <span class="set-row-sep">×</span>
+          <input class="set-row-input" type="number" min="0" step="1" placeholder="tr"
             value="${sd.reps || ''}"
             onchange="saveSet(${wOff},${aDay},${ei},${s},'reps',this.value)">
         </div>
-        ${prevRef ? `<span class="set-prev-ref">${prevRef}</span>` : ''}
+        <span class="set-row-status">${statusText}</span>
       </div>`;
     }
 
