@@ -76,6 +76,14 @@ nav button {
 }
 nav button.active { color: var(--teal); border-bottom-color: var(--teal); }
 nav button:not(.active):hover { color: var(--text); }
+nav .version {
+  align-self: center;
+  font-size: 10px;
+  color: var(--text3);
+  padding: 0 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 
 /* ─── Pages ─────────────────────────────────────────────────── */
 .page { display: none; padding: 14px; max-width: 600px; margin: 0 auto; }
@@ -320,6 +328,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <button onclick="showPage('aktiviteetti',this)">Aktiviteetti</button>
   <button onclick="showPage('uni',this)">Uni</button>
   <button onclick="showPage('historia',this)">Historia</button>
+  <span class="version">v1.4</span>
 </nav>
 
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
