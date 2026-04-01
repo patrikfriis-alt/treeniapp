@@ -589,7 +589,7 @@ function setStatus(sd, prev) {
   const reps = parseInt(sd && sd.reps)   || null;
 
   if (kg === null && reps === null) return 'undone';
-  if (!prev || (!prev.weight_kg && !prev.reps)) return 'same';
+  if (!prev || (prev.weight_kg === null && prev.reps === null)) return 'same';
 
   const pKg = prev.weight_kg || 0, pReps = prev.reps || 0;
   const cKg = kg || 0,             cReps = reps || 0;
@@ -700,7 +700,7 @@ async function renderSession() {
     const prev = prevCache[ex.n];
 
     // PR detection
-    const cWeights = (ed.sets || []).map(s => parseFloat(s && s.kg)).filter(n => !isNaN(n) && n > 0);
+    const cWeights = (ed.sets || []).map(s => parseFloat(s && s.kg)).filter(n => !isNaN(n) && n !== null);
     const pWeights = prev ? prev.map(s => s.weight_kg || 0) : [];
     const isPR = pWeights.length > 0 && cWeights.length > 0 && Math.max(...cWeights) > Math.max(...pWeights);
 
@@ -756,8 +756,9 @@ function changeWeek(dir) { wOff += dir; renderTreeni(); }
    BODY METRICS
 ═══════════════════════════════════════════════════════════════ */
 async function loadBodyMetrics() {
-  const { data: latest } = await sb.from('body_metrics').select('*')
+  const { data: latest, error: latestErr } = await sb.from('body_metrics').select('*')
     .order('measured_at', { ascending: false }).limit(1);
+  if (latestErr) { console.error('loadBodyMetrics (latest) failed:', latestErr.message); }
 
   if (latest && latest[0]) {
     const m = latest[0];
@@ -766,7 +767,8 @@ async function loadBodyMetrics() {
     document.getElementById('m-muscle').textContent = m.muscle_pct ? `${m.muscle_pct}%`  : '—';
   }
 
-  const { data: hist } = await sb.from('body_metrics').select('*').order('measured_at').limit(20);
+  const { data: hist, error: histErr } = await sb.from('body_metrics').select('*').order('measured_at').limit(20);
+  if (histErr) { console.error('loadBodyMetrics (hist) failed:', histErr.message); }
   if (hist && hist.length > 1) {
     if (window.bc) window.bc.destroy();
     window.bc = new Chart(document.getElementById('body-chart'), {
@@ -795,15 +797,21 @@ async function loadBodyMetrics() {
 async function saveBodyMetrics() {
   const date = document.getElementById('body-date').value;
   if (!date) { showStatus('body-status','Valitse päivämäärä',true); return; }
-  const { error } = await sb.from('body_metrics').upsert({
-    measured_at: date,
-    weight_kg:   parseNum('body-weight'),
-    fat_pct:     parseNum('body-fat'),
-    muscle_pct:  parseNum('body-muscle'),
-  }, { onConflict:'measured_at' });
-  if (error) { showStatus('body-status','Virhe: '+error.message,true); return; }
-  showStatus('body-status','Tallennettu!',false);
-  loadBodyMetrics();
+  const btn = document.querySelector('#page-keho .btn-primary');
+  btn.disabled = true;
+  try {
+    const { error } = await sb.from('body_metrics').upsert({
+      measured_at: date,
+      weight_kg:   parseNum('body-weight'),
+      fat_pct:     parseNum('body-fat'),
+      muscle_pct:  parseNum('body-muscle'),
+    }, { onConflict:'measured_at' });
+    if (error) { showStatus('body-status','Virhe: '+error.message,true); return; }
+    showStatus('body-status','Tallennettu!',false);
+    loadBodyMetrics();
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -859,7 +867,8 @@ async function loadSleep() {
   if (data && data[0] && data[0].duration_min !== null)
     document.getElementById('sleep-last').textContent = (data[0].duration_min/60).toFixed(1)+'h';
   if (data && data.length) {
-    const avg = data.reduce((s,d)=>s+(d.duration_min||0),0)/data.length;
+    const withDur = data.filter(d => d.duration_min !== null);
+    const avg = withDur.length ? withDur.reduce((s,d)=>s+d.duration_min,0)/withDur.length : 0;
     document.getElementById('sleep-avg').textContent = (avg/60).toFixed(1)+'h';
     document.getElementById('sleep-history').innerHTML = data.map(s => `
       <div class="hist-item">
@@ -875,16 +884,22 @@ async function loadSleep() {
 async function saveSleep() {
   const date = document.getElementById('sleep-date').value;
   if (!date) { showStatus('sleep-status','Valitse päivämäärä',true); return; }
-  const { error } = await sb.from('sleep_data').upsert({
-    sleep_date:     date,
-    duration_min:   parseInt(document.getElementById('sleep-dur').value)  || null,
-    deep_sleep_min: parseInt(document.getElementById('sleep-deep').value) || null,
-    rem_sleep_min:  parseInt(document.getElementById('sleep-rem').value)  || null,
-    awakenings:     parseInt(document.getElementById('sleep-awk').value)  || null,
-  }, { onConflict:'sleep_date' });
-  if (error) { showStatus('sleep-status','Virhe',true); return; }
-  showStatus('sleep-status','Tallennettu!',false);
-  loadSleep();
+  const btn = document.querySelector('#page-uni .btn-primary');
+  btn.disabled = true;
+  try {
+    const { error } = await sb.from('sleep_data').upsert({
+      sleep_date:     date,
+      duration_min:   parseInt(document.getElementById('sleep-dur').value)  || null,
+      deep_sleep_min: parseInt(document.getElementById('sleep-deep').value) || null,
+      rem_sleep_min:  parseInt(document.getElementById('sleep-rem').value)  || null,
+      awakenings:     parseInt(document.getElementById('sleep-awk').value)  || null,
+    }, { onConflict:'sleep_date' });
+    if (error) { showStatus('sleep-status','Virhe',true); return; }
+    showStatus('sleep-status','Tallennettu!',false);
+    loadSleep();
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
