@@ -217,13 +217,32 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 }
 
 /* 🔴 Undone */
-.set-box.s-undone  { border-color: #E24B4A; background: rgba(226,75,74,.08); }
+.set-box.s-undone  { border-color: #7a1f1f; background: #3a1010; }
+.set-box.s-undone .set-label,
+.set-box.s-undone .set-prev-ref,
+.set-box.s-undone .set-sep    { color: #c77; }
+.set-box.s-undone .set-input  { background: #2a0c0c; border-color: #7a1f1f; color: #f0c0c0; }
+
 /* 🟡 Worse */
-.set-box.s-worse   { border-color: #EF9F27; background: rgba(239,159,39,.08); }
+.set-box.s-worse  { border-color: #7a5200; background: #332200; }
+.set-box.s-worse .set-label,
+.set-box.s-worse .set-prev-ref,
+.set-box.s-worse .set-sep    { color: #c9922a; }
+.set-box.s-worse .set-input  { background: #221700; border-color: #7a5200; color: #f5d08a; }
+
 /* 🔵 Same */
-.set-box.s-same    { border-color: #378ADD; background: rgba(55,138,221,.08); }
+.set-box.s-same  { border-color: #1e4080; background: #0d1f3a; }
+.set-box.s-same .set-label,
+.set-box.s-same .set-prev-ref,
+.set-box.s-same .set-sep    { color: #6aabee; }
+.set-box.s-same .set-input  { background: #091629; border-color: #1e4080; color: #b0d4f5; }
+
 /* 🟢 Better */
-.set-box.s-better  { border-color: #1D9E75; background: rgba(29,158,117,.08); }
+.set-box.s-better  { border-color: #0f6e45; background: #072e1a; }
+.set-box.s-better .set-label,
+.set-box.s-better .set-prev-ref,
+.set-box.s-better .set-sep    { color: #4dcca0; }
+.set-box.s-better .set-input  { background: #041f11; border-color: #0f6e45; color: #a0f0d0; }
 
 .set-label    { font-size: 9px; color: var(--text3); font-weight: 600; letter-spacing: .04em; }
 .set-prev-ref { font-size: 9px; color: var(--text3); margin-top: 1px; white-space: nowrap; }
@@ -305,6 +324,11 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
 <div id="page-treeni" class="page active">
+  <div class="metric-grid" id="week-summary" style="margin-bottom:12px">
+    <div class="metric"><div class="metric-label">Sali</div><div class="metric-value" style="color:var(--teal)" id="ws-gym">—</div></div>
+    <div class="metric"><div class="metric-label">Aktiviteetti</div><div class="metric-value" style="color:var(--blue)" id="ws-act">—</div></div>
+    <div class="metric"><div class="metric-label">Uni ka</div><div class="metric-value" style="color:var(--amber)" id="ws-sleep">—</div></div>
+  </div>
   <div class="prog-wrap">
     <div class="prog-bg"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
     <div class="prog-text" id="prog-text"></div>
@@ -535,6 +559,37 @@ async function syncSet(o, d, e, s) {
   }
 }
 
+function prefillExercise(o, d, ei) {
+  const sess = SESS[getActiveSession(o, d)];
+  if (!sess || !sess.ex[ei]) return;
+  const ex = sess.ex[ei];
+  const prev = prevCache[ex.n];
+  if (!prev) return;
+
+  const k = eKey(o, d, ei);
+  if (!LD[k]) LD[k] = { sets: [] };
+
+  for (let s = 0; s < ex.s; s++) {
+    const prevSet = getPrevSet(ex.n, s);
+    if (!prevSet) continue;
+    if (!LD[k].sets[s]) LD[k].sets[s] = {};
+    LD[k].sets[s].kg   = prevSet.weight_kg !== null ? String(prevSet.weight_kg) : '';
+    LD[k].sets[s].reps = prevSet.reps       !== null ? String(prevSet.reps)      : '';
+
+    const box = document.getElementById(`set-${o}-${d}-${ei}-${s}`);
+    if (box) {
+      const inputs = box.querySelectorAll('input[type="number"]');
+      if (inputs[0]) inputs[0].value = LD[k].sets[s].kg;
+      if (inputs[1]) inputs[1].value = LD[k].sets[s].reps;
+    }
+
+    updateSetBox(o, d, ei, s);
+    syncSet(o, d, ei, s);
+  }
+
+  saveLD();
+}
+
 /* ═══════════════════════════════════════════════════════════════
    PREVIOUS SESSION  (Supabase cache)
    prevCache[exerciseName] = [ {set_number, weight_kg, reps}, … ]
@@ -617,6 +672,45 @@ function updateSetBox(o, d, e, s) {
 /* ═══════════════════════════════════════════════════════════════
    RENDER — WEEK
 ═══════════════════════════════════════════════════════════════ */
+async function loadWeekSummary() {
+  const mon = wStart(wOff);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  const from = mon.toISOString().split('T')[0];
+  const to   = sun.toISOString().split('T')[0];
+
+  // Gym: count from localStorage
+  const gymDone = [0,1,2,3,4,5,6].filter(d => {
+    const st = getActiveSession(wOff, d);
+    return ['t1','t2','t3','t4'].includes(st) && isDone(wOff, d);
+  }).length;
+  document.getElementById('ws-gym').textContent = gymDone;
+
+  // Activities: count rows in date range
+  const { data: actData, error: actErr } = await sb
+    .from('activity_data')
+    .select('id')
+    .gte('activity_date', from)
+    .lte('activity_date', to);
+  if (actErr) { console.error('loadWeekSummary (act) failed:', actErr.message); }
+  document.getElementById('ws-act').textContent = actData ? actData.length : '—';
+
+  // Sleep average for the week
+  const { data: sleepData, error: sleepErr } = await sb
+    .from('sleep_data')
+    .select('duration_min')
+    .gte('sleep_date', from)
+    .lte('sleep_date', to);
+  if (sleepErr) { console.error('loadWeekSummary (sleep) failed:', sleepErr.message); }
+  const withDur = sleepData ? sleepData.filter(r => r.duration_min !== null) : [];
+  if (withDur.length) {
+    const avg = withDur.reduce((s, r) => s + r.duration_min, 0) / withDur.length;
+    document.getElementById('ws-sleep').textContent = (avg / 60).toFixed(1) + 'h';
+  } else {
+    document.getElementById('ws-sleep').textContent = '—';
+  }
+}
+
 async function renderTreeni() {
   const ws = wStart(wOff), wk = isoWeek(ws);
   document.getElementById('week-label').textContent = `Viikko ${wk} / ${ws.getFullYear()}`;
@@ -640,6 +734,7 @@ async function renderTreeni() {
   document.getElementById('prog-fill').style.width = Math.round(done / saliDays.length * 100) + '%';
   document.getElementById('prog-text').textContent  = `${done}/${saliDays.length} salikerrasta tehty`;
 
+  loadWeekSummary();
   await renderSession();
 }
 
@@ -712,7 +807,10 @@ async function renderSession() {
     html += `<div class="ex-item">
       <div class="ex-header">
         <span class="ex-name">${ex.n}${isPR ? '<span class="pr-badge">PR</span>' : ''}</span>
-        <span class="ex-prev">ed:<br>${prevSummary}</span>
+        <span style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+          <span class="ex-prev">ed:<br>${prevSummary}</span>
+          ${prev ? `<button onclick="prefillExercise(${wOff},${aDay},${ei})" style="font-size:10px;padding:2px 7px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;white-space:nowrap">↓ Käytä edellisiä</button>` : ''}
+        </span>
       </div>
       <div class="sets-row">`;
 
