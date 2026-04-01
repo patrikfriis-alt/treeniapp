@@ -551,7 +551,7 @@ async function loadPrevSession(o, d) {
   dt.setDate(mon.getDate() + d);
   const todayStr = dt.toISOString().split('T')[0];
 
-  const { data } = await sb
+  const { data, error } = await sb
     .from('workout_sets')
     .select('workout_date,exercise_name,set_number,weight_kg,reps')
     .in('exercise_name', names)
@@ -560,6 +560,7 @@ async function loadPrevSession(o, d) {
     .order('set_number',   { ascending: true  })
     .limit(300);
 
+  if (error) { console.error('loadPrevSession failed:', error.message); return; }
   if (!data) return;
 
   // Keep only the most recent date per exercise
@@ -587,7 +588,7 @@ function setStatus(sd, prev) {
   const kg   = parseFloat(sd && sd.kg)   || null;
   const reps = parseInt(sd && sd.reps)   || null;
 
-  if (!kg && !reps) return 'undone';
+  if (kg === null && reps === null) return 'undone';
   if (!prev || (!prev.weight_kg && !prev.reps)) return 'same';
 
   const pKg = prev.weight_kg || 0, pReps = prev.reps || 0;
@@ -616,7 +617,7 @@ function updateSetBox(o, d, e, s) {
 /* ═══════════════════════════════════════════════════════════════
    RENDER — WEEK
 ═══════════════════════════════════════════════════════════════ */
-function renderTreeni() {
+async function renderTreeni() {
   const ws = wStart(wOff), wk = isoWeek(ws);
   document.getElementById('week-label').textContent = `Viikko ${wk} / ${ws.getFullYear()}`;
 
@@ -639,7 +640,7 @@ function renderTreeni() {
   document.getElementById('prog-fill').style.width = Math.round(done / saliDays.length * 100) + '%';
   document.getElementById('prog-text').textContent  = `${done}/${saliDays.length} salikerrasta tehty`;
 
-  renderSession();
+  await renderSession();
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -809,8 +810,9 @@ async function saveBodyMetrics() {
    ACTIVITIES
 ═══════════════════════════════════════════════════════════════ */
 async function loadActivities() {
-  const { data } = await sb.from('activity_data').select('*')
+  const { data, error } = await sb.from('activity_data').select('*')
     .order('activity_date',{ ascending:false }).limit(10);
+  if (error) { console.error('loadActivities failed:', error.message); return; }
   const el = document.getElementById('act-history');
   if (!data || !data.length) {
     el.innerHTML = '<div style="color:var(--text3);font-size:13px">Ei aktiviteetteja vielä</div>';
@@ -829,25 +831,32 @@ async function loadActivities() {
 async function saveActivity() {
   const date = document.getElementById('act-date').value;
   if (!date) { showStatus('act-status','Valitse päivämäärä',true); return; }
-  const { error } = await sb.from('activity_data').insert({
-    activity_date:  date,
-    activity_type:  document.getElementById('act-type').value,
-    duration_min:   parseInt(document.getElementById('act-duration').value) || null,
-    calories:       parseInt(document.getElementById('act-calories').value) || null,
-    avg_heart_rate: parseInt(document.getElementById('act-hr').value)       || null,
-  });
-  if (error) { showStatus('act-status','Virhe',true); return; }
-  showStatus('act-status','Tallennettu!',false);
-  loadActivities();
+  const btn = document.querySelector('#page-aktiviteetti .btn-primary');
+  btn.disabled = true;
+  try {
+    const { error } = await sb.from('activity_data').insert({
+      activity_date:  date,
+      activity_type:  document.getElementById('act-type').value,
+      duration_min:   parseInt(document.getElementById('act-duration').value) || null,
+      calories:       parseInt(document.getElementById('act-calories').value) || null,
+      avg_heart_rate: parseInt(document.getElementById('act-hr').value)       || null,
+    });
+    if (error) { showStatus('act-status','Virhe',true); return; }
+    showStatus('act-status','Tallennettu!',false);
+    loadActivities();
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
    SLEEP
 ═══════════════════════════════════════════════════════════════ */
 async function loadSleep() {
-  const { data } = await sb.from('sleep_data').select('*')
+  const { data, error } = await sb.from('sleep_data').select('*')
     .order('sleep_date',{ ascending:false }).limit(7);
-  if (data && data[0])
+  if (error) { console.error('loadSleep failed:', error.message); return; }
+  if (data && data[0] && data[0].duration_min !== null)
     document.getElementById('sleep-last').textContent = (data[0].duration_min/60).toFixed(1)+'h';
   if (data && data.length) {
     const avg = data.reduce((s,d)=>s+(d.duration_min||0),0)/data.length;
@@ -964,10 +973,11 @@ async function loadExerciseChart(exName) {
    WORKOUT HISTORY
 ═══════════════════════════════════════════════════════════════ */
 async function loadWorkoutHistory() {
-  const { data } = await sb.from('workout_sets').select('*')
+  const { data, error } = await sb.from('workout_sets').select('*')
     .order('workout_date',  { ascending:false })
     .order('exercise_name', { ascending:true  })
     .limit(100);
+  if (error) { console.error('loadWorkoutHistory failed:', error.message); return; }
   const el = document.getElementById('workout-history');
   if (!data || !data.length) {
     el.innerHTML = '<div style="color:var(--text3);font-size:13px">Ei lokeja vielä</div>';
