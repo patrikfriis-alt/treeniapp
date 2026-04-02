@@ -344,7 +344,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="nav-icon">📈</span>
     <span>Historia</span>
   </button>
-  <div class="version-chip">v1.7</div>
+  <div class="version-chip">v1.8</div>
 </nav>
 
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
@@ -395,9 +395,9 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <div class="card">
     <div class="card-title">Kirjaa mittaus</div>
     <div class="form-row"><label>Päivämäärä</label><input type="date" id="body-date"></div>
-    <div class="form-row"><label>Paino (kg)</label><input type="number" id="body-weight" step="0.1" placeholder="114.8"></div>
-    <div class="form-row"><label>Rasva%</label><input type="number" id="body-fat" step="0.1" placeholder="37.7"></div>
-    <div class="form-row"><label>Lihas%</label><input type="number" id="body-muscle" step="0.1" placeholder="29.3"></div>
+    <div class="form-row"><label>Paino (kg)</label><input type="text" inputmode="decimal" id="body-weight" placeholder="114,8"></div>
+    <div class="form-row"><label>Rasva%</label><input type="text" inputmode="decimal" id="body-fat" placeholder="37,7"></div>
+    <div class="form-row"><label>Lihas%</label><input type="text" inputmode="decimal" id="body-muscle" placeholder="29,3"></div>
     <button class="btn btn-primary" onclick="saveBodyMetrics()">Tallenna</button>
     <div class="status" id="body-status"></div>
   </div>
@@ -414,14 +414,22 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <div class="form-row"><label>Päivämäärä</label><input type="date" id="act-date"></div>
     <div class="form-row">
       <label>Laji</label>
-      <select id="act-type">
+      <select id="act-type" onchange="toggleKmField()">
         <option>Jääkiekko</option><option>Juoksu</option>
         <option>Kävely</option><option>Sali</option><option>Muu</option>
       </select>
     </div>
-    <div class="form-row"><label>Kesto (min)</label><input type="number" id="act-duration" placeholder="60"></div>
-    <div class="form-row"><label>Kalorit</label><input type="number" id="act-calories" placeholder="450"></div>
-    <div class="form-row"><label>Syke (avg)</label><input type="number" id="act-hr" placeholder="145"></div>
+    <div class="form-row"><label>Kesto (min)</label><input type="text" inputmode="numeric" id="act-duration" placeholder="60" oninput="calcPace()"></div>
+    <div class="form-row"><label>Kalorit</label><input type="text" inputmode="numeric" id="act-calories" placeholder="450"></div>
+    <div class="form-row"><label>Syke (avg)</label><input type="text" inputmode="numeric" id="act-hr" placeholder="145"></div>
+    <div class="form-row" id="km-row" style="display:none">
+      <label>Matka (km)</label>
+      <input type="text" inputmode="decimal" id="act-km" placeholder="5,2" oninput="calcPace()">
+    </div>
+    <div class="form-row" id="pace-row" style="display:none">
+      <label>Vauhti</label>
+      <div id="pace-display" style="flex:1; font-size:14px; color:var(--teal); padding: 8px 0;">—</div>
+    </div>
     <button class="btn btn-primary" onclick="saveActivity()">Tallenna</button>
     <div class="status" id="act-status"></div>
   </div>
@@ -440,10 +448,10 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <div class="card">
     <div class="card-title">Kirjaa uni</div>
     <div class="form-row"><label>Päivämäärä</label><input type="date" id="sleep-date"></div>
-    <div class="form-row"><label>Kesto (min)</label><input type="number" id="sleep-dur" placeholder="450" step="5"></div>
-    <div class="form-row"><label>Syvä uni (min)</label><input type="number" id="sleep-deep" placeholder="90"></div>
-    <div class="form-row"><label>REM (min)</label><input type="number" id="sleep-rem" placeholder="100"></div>
-    <div class="form-row"><label>Heräilyt</label><input type="number" id="sleep-awk" placeholder="2"></div>
+    <div class="form-row"><label>Kesto (min)</label><input type="text" inputmode="numeric" id="sleep-dur" placeholder="450"></div>
+    <div class="form-row"><label>Syvä uni (min)</label><input type="text" inputmode="numeric" id="sleep-deep" placeholder="90"></div>
+    <div class="form-row"><label>REM (min)</label><input type="text" inputmode="numeric" id="sleep-rem" placeholder="100"></div>
+    <div class="form-row"><label>Heräilyt</label><input type="text" inputmode="numeric" id="sleep-awk" placeholder="2"></div>
     <button class="btn btn-primary" onclick="saveSleep()">Tallenna</button>
     <div class="status" id="sleep-status"></div>
   </div>
@@ -467,6 +475,20 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
       <canvas id="ex-chart"></canvas>
     </div>
     <div id="ex-chart-status" style="color:var(--text3);font-size:13px;text-align:center;padding:6px"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Juoksun kehitys</div>
+    <div class="form-row">
+      <label>Näytä</label>
+      <select id="run-chart-type" onchange="loadRunChart()">
+        <option value="distance">Matka (km)</option>
+        <option value="pace">Vauhti (min/km)</option>
+      </select>
+    </div>
+    <div class="chart-wrap" id="run-chart-wrap" style="margin-top:12px">
+      <canvas id="run-chart"></canvas>
+    </div>
+    <div id="run-chart-status" style="color:var(--text3);font-size:13px;text-align:center;padding:6px"></div>
   </div>
   <div class="card">
     <div class="card-title">Salilokit</div>
@@ -713,6 +735,45 @@ function updateSetBox(o, d, e, s) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   ACTIVE DAYS HELPER
+═══════════════════════════════════════════════════════════════ */
+async function fetchActiveDays(fromDate, toDate) {
+  const [{ data: actData }, { data: workoutData }] = await Promise.all([
+    sb.from('activity_data').select('activity_date').gte('activity_date', fromDate).lte('activity_date', toDate),
+    sb.from('workout_sets').select('workout_date').gte('workout_date', fromDate).lte('workout_date', toDate),
+  ]);
+  const days = new Set();
+  (actData || []).forEach(r => days.add(r.activity_date));
+  (workoutData || []).forEach(r => days.add(r.workout_date));
+  return days;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   KM / PACE HELPERS
+═══════════════════════════════════════════════════════════════ */
+function toggleKmField() {
+  const type = document.getElementById('act-type').value;
+  const show = ['Juoksu', 'Kävely'].includes(type);
+  document.getElementById('km-row').style.display = show ? 'flex' : 'none';
+  document.getElementById('pace-row').style.display = show ? 'flex' : 'none';
+  calcPace();
+}
+
+function calcPace() {
+  const dur = parseFloat((document.getElementById('act-duration').value || '').replace(',','.')) || 0;
+  const km  = parseFloat((document.getElementById('act-km').value || '').replace(',','.')) || 0;
+  const el  = document.getElementById('pace-display');
+  if (!el) return;
+  if (dur > 0 && km > 0) {
+    const paceMin = Math.floor(dur / km);
+    const paceSec = Math.round((dur / km - paceMin) * 60);
+    el.textContent = `${paceMin}:${String(paceSec).padStart(2,'0')} min/km`;
+  } else {
+    el.textContent = '—';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
    RENDER — WEEK
 ═══════════════════════════════════════════════════════════════ */
 async function loadWeekSummary() {
@@ -765,27 +826,35 @@ async function loadMotivationSummary() {
   const monthCount = actMonth ? actMonth.length : 0;
   document.getElementById('ms-month').textContent = monthCount + ' krt';
 
-  // Viikon saliprosentti
-  const saliDays = [0, 2, 3];
-  const weekDone = saliDays.filter(d => {
-    const st = getActiveSession(wOff, d);
-    return ['t1','t2','t3','t4'].includes(st) && isDone(wOff, d);
-  }).length;
-  const weekPct = Math.round(weekDone / saliDays.length * 100);
+  // Viikko% — tavoite 6 aktiviteettia viikossa, lasketaan Supabasesta
+  const now2 = new Date();
+  const mon2 = wStart(wOff);
+  const sun2 = new Date(mon2);
+  sun2.setDate(mon2.getDate() + 6);
+  const weekFrom = mon2.toISOString().split('T')[0];
+  const weekTo   = sun2.toISOString().split('T')[0];
+  const activeDaysThisWeek = await fetchActiveDays(weekFrom, weekTo);
+  const weekPct = Math.min(100, Math.round(activeDaysThisWeek.size / 6 * 100));
   document.getElementById('ms-week').textContent = weekPct + '%';
 
-  // Streak: peräkkäiset päivät taaksepäin joina jokin treeni merkitty tehdyksi
+  // Streak — yksi kysely 90 päivälle, lasketaan lokaalisti
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const ninetyAgo = new Date(today);
+  ninetyAgo.setDate(today.getDate() - 89);
+  const streakFrom = ninetyAgo.toISOString().split('T')[0];
+  const streakTo   = today.toISOString().split('T')[0];
+  const activeDays90 = await fetchActiveDays(streakFrom, streakTo);
+
   let streak = 0;
-  const checkDate = new Date();
-  for (let i = 0; i < 60; i++) {
-    if (i > 0) checkDate.setDate(checkDate.getDate() - 1);
-    const dy = checkDate.getDay() === 0 ? 6 : checkDate.getDay() - 1;
-    const daysDiff = Math.floor((new Date() - checkDate) / 86400000);
-    const todayDy = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
-    const wOffset = -Math.floor((daysDiff + todayDy - dy + 7) / 7);
-    if (isDone(wOffset, dy)) {
+  for (let i = 0; i < 90; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    if (activeDays90.has(dateStr)) {
       streak++;
     } else {
+      if (i === 0) continue; // tänään voi olla vielä tekemättä
       break;
     }
   }
@@ -917,11 +986,11 @@ async function renderSession() {
       html += `<div class="set-row s-${status}" id="set-${wOff}-${aDay}-${ei}-${s}">
         <span class="set-row-num">S${s+1}</span>
         <div class="set-row-inputs">
-          <input class="set-row-input" type="number" min="0" step=".5" placeholder="kg"
+          <input class="set-row-input" type="text" inputmode="decimal" placeholder="kg"
             value="${sd.kg || ''}"
-            onchange="saveSet(${wOff},${aDay},${ei},${s},'kg',this.value)">
+            onchange="saveSet(${wOff},${aDay},${ei},${s},'kg',this.value.replace(',','.'))">
           <span class="set-row-sep">×</span>
-          <input class="set-row-input" type="number" min="0" step="1" placeholder="tr"
+          <input class="set-row-input" type="text" inputmode="numeric" placeholder="tr"
             value="${sd.reps || ''}"
             onchange="saveSet(${wOff},${aDay},${ei},${s},'reps',this.value)">
         </div>
@@ -1016,14 +1085,22 @@ async function loadActivities() {
     el.innerHTML = '<div style="color:var(--text3);font-size:13px">Ei aktiviteetteja vielä</div>';
     return;
   }
-  el.innerHTML = data.map(a => `
+  el.innerHTML = data.map(a => {
+    let paceStr = '';
+    if (a.distance_km && a.duration_min) {
+      const pMin = Math.floor(a.duration_min / a.distance_km);
+      const pSec = Math.round((a.duration_min / a.distance_km - pMin) * 60);
+      paceStr = ` · ${pMin}:${String(pSec).padStart(2,'0')} min/km`;
+    }
+    return `
     <div class="hist-item">
       <div><div class="hist-label">${a.activity_type}</div><div class="hist-date">${a.activity_date}</div></div>
       <div style="text-align:right">
         <div class="hist-val">${a.duration_min ? a.duration_min+' min' : '—'}</div>
-        <div style="font-size:11px;color:var(--text3)">${a.calories?a.calories+' kcal':''}${a.avg_heart_rate?' · '+a.avg_heart_rate+' bpm':''}</div>
+        <div style="font-size:11px;color:var(--text3)">${a.calories?a.calories+' kcal':''}${a.avg_heart_rate?' · '+a.avg_heart_rate+' bpm':''}${a.distance_km?' · '+a.distance_km+' km'+paceStr:''}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 async function saveActivity() {
@@ -1035,9 +1112,10 @@ async function saveActivity() {
     const { error } = await sb.from('activity_data').insert({
       activity_date:  date,
       activity_type:  document.getElementById('act-type').value,
-      duration_min:   parseInt(document.getElementById('act-duration').value) || null,
-      calories:       parseInt(document.getElementById('act-calories').value) || null,
-      avg_heart_rate: parseInt(document.getElementById('act-hr').value)       || null,
+      duration_min:   parseNum('act-duration'),
+      calories:       parseNum('act-calories'),
+      avg_heart_rate: parseNum('act-hr'),
+      distance_km:    parseFloat((document.getElementById('act-km').value || '').replace(',','.')) || null,
     });
     if (error) { showStatus('act-status','Virhe',true); return; }
     showStatus('act-status','Tallennettu!',false);
@@ -1079,10 +1157,10 @@ async function saveSleep() {
   try {
     const { error } = await sb.from('sleep_data').upsert({
       sleep_date:     date,
-      duration_min:   parseInt(document.getElementById('sleep-dur').value)  || null,
-      deep_sleep_min: parseInt(document.getElementById('sleep-deep').value) || null,
-      rem_sleep_min:  parseInt(document.getElementById('sleep-rem').value)  || null,
-      awakenings:     parseInt(document.getElementById('sleep-awk').value)  || null,
+      duration_min:   parseNum('sleep-dur'),
+      deep_sleep_min: parseNum('sleep-deep'),
+      rem_sleep_min:  parseNum('sleep-rem'),
+      awakenings:     parseNum('sleep-awk'),
     }, { onConflict:'sleep_date' });
     if (error) { showStatus('sleep-status','Virhe',true); return; }
     showStatus('sleep-status','Tallennettu!',false);
@@ -1175,6 +1253,66 @@ async function loadExerciseChart(exName) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   RUN CHART
+═══════════════════════════════════════════════════════════════ */
+async function loadRunChart() {
+  const type = document.getElementById('run-chart-type')?.value || 'distance';
+  const { data, error } = await sb
+    .from('activity_data')
+    .select('activity_date, duration_min, distance_km')
+    .in('activity_type', ['Juoksu', 'Kävely'])
+    .not('distance_km', 'is', null)
+    .order('activity_date', { ascending: true })
+    .limit(30);
+
+  const statusEl = document.getElementById('run-chart-status');
+  if (error || !data || !data.length) {
+    if (statusEl) statusEl.textContent = 'Ei juoksudataa vielä';
+    return;
+  }
+  if (statusEl) statusEl.textContent = '';
+
+  const labels = data.map(d => d.activity_date.slice(5));
+  const values = type === 'distance'
+    ? data.map(d => d.distance_km)
+    : data.map(d => {
+        if (!d.distance_km || !d.duration_min) return null;
+        return Math.round((d.duration_min / d.distance_km) * 10) / 10;
+      });
+
+  if (window.runChart) window.runChart.destroy();
+  window.runChart = new Chart(document.getElementById('run-chart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: type === 'distance' ? 'km' : 'min/km',
+        data: values,
+        borderColor: '#378ADD',
+        borderWidth: 2,
+        pointRadius: 4,
+        pointBackgroundColor: '#378ADD',
+        tension: 0.3,
+        fill: false,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: {
+          reverse: type === 'pace',
+          ticks: { color: '#555', font: { size: 10 } },
+          grid: { color: '#222' },
+        },
+        x: { ticks: { color: '#555', font: { size: 10 } }, grid: { display: false } },
+      },
+    },
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
    WORKOUT HISTORY
 ═══════════════════════════════════════════════════════════════ */
 async function loadWorkoutHistory() {
@@ -1226,7 +1364,7 @@ function showPage(name, btn) {
   if (name === 'keho')         loadBodyMetrics();
   if (name === 'aktiviteetti') loadActivities();
   if (name === 'uni')          loadSleep();
-  if (name === 'historia')     { populateExerciseDropdown(); loadWorkoutHistory(); }
+  if (name === 'historia')     { populateExerciseDropdown(); loadWorkoutHistory(); loadRunChart(); }
 }
 
 /* ═══════════════════════════════════════════════════════════════
