@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Treeniapp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
@@ -40,7 +43,7 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
@@ -84,13 +87,19 @@ nav button {
 }
 nav button.active { color: var(--teal); border-bottom-color: var(--teal); }
 nav button:not(.active):hover { color: var(--text); }
-nav .version {
+.version-chip {
   align-self: center;
   font-size: 10px;
-  color: var(--text3);
-  padding: 0 10px;
+  font-weight: 600;
+  color: var(--teal);
+  background: var(--teal-bg);
+  border: 1px solid var(--teal-dim);
+  border-radius: 20px;
+  padding: 3px 10px;
+  margin: 0 8px;
   white-space: nowrap;
   flex-shrink: 0;
+  letter-spacing: 0.04em;
 }
 
 /* ─── Pages ─────────────────────────────────────────────────── */
@@ -102,8 +111,8 @@ nav .version {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  padding: 14px;
-  margin-bottom: 12px;
+  padding: 18px;
+  margin-bottom: 16px;
 }
 .card-title {
   font-size: 10px;
@@ -127,8 +136,8 @@ nav .version {
   border-radius: var(--rs);
   padding: 12px;
 }
-.metric-label { font-size: 10px; color: var(--text3); margin-bottom: 4px; }
-.metric-value { font-size: 20px; font-weight: 600; line-height: 1; }
+.metric-label { font-size: 10px; color: var(--text3); margin-bottom: 6px; letter-spacing: 0.06em; text-transform: uppercase; }
+.metric-value { font-size: 26px; font-weight: 600; line-height: 1; letter-spacing: -0.02em; }
 
 /* ─── Forms ──────────────────────────────────────────────────── */
 .form-row { display: flex; gap: 8px; align-items: center; margin-bottom: 9px; }
@@ -204,8 +213,8 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--rs);
-  padding: 12px;
-  margin-bottom: 8px;
+  padding: 16px;
+  margin-bottom: 10px;
 }
 .ex-header {
   display: flex;
@@ -214,8 +223,8 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   margin-bottom: 10px;
   gap: 8px;
 }
-.ex-name { font-size: 14px; font-weight: 500; }
-.ex-prev { font-size: 11px; color: var(--text3); text-align: right; flex-shrink: 0; line-height: 1.5; }
+.ex-name { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
+.ex-prev { font-size: 11px; color: var(--text3); text-align: right; flex-shrink: 0; line-height: 1.5; letter-spacing: 0.01em; }
 
 /* ─── Set rows ───────────────────────────────────────────────── */
 .sets-col { display: flex; flex-direction: column; gap: 5px; }
@@ -277,13 +286,14 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .complete-btn {
   width: 100%;
   margin-top: 12px;
-  padding: 12px;
+  padding: 15px;
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: var(--rs);
+  border-radius: 12px;
   color: var(--text2);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   cursor: pointer;
   transition: all var(--t);
 }
@@ -334,11 +344,15 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="nav-icon">📈</span>
     <span>Historia</span>
   </button>
-  <span class="version">v1.6</span>
+  <div class="version-chip">v1.7</div>
 </nav>
 
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
 <div id="page-treeni" class="page active">
+  <div id="greeting-header" style="margin-bottom: 20px;">
+    <div style="font-size: 11px; color: var(--text3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px;" id="greeting-time">HYVÄÄ PÄIVÄÄ</div>
+    <div style="font-size: 22px; font-weight: 600; color: var(--text); letter-spacing: -0.02em;" id="greeting-week">Viikko —</div>
+  </div>
   <div class="metric-grid" id="week-summary" style="margin-bottom:12px">
     <div class="metric"><div class="metric-label">Sali</div><div class="metric-value" style="color:var(--teal)" id="ws-gym">—</div></div>
     <div class="metric"><div class="metric-label">Aktiviteetti</div><div class="metric-value" style="color:var(--blue)" id="ws-act">—</div></div>
@@ -779,6 +793,13 @@ async function loadMotivationSummary() {
 }
 
 async function renderTreeni() {
+  const hr = new Date().getHours();
+  const greet = hr < 12 ? 'HYVÄÄ HUOMENTA' : hr < 17 ? 'HYVÄÄ PÄIVÄÄ' : 'HYVÄÄ ILTAA';
+  const greetEl = document.getElementById('greeting-time');
+  const weekEl = document.getElementById('greeting-week');
+  if (greetEl) greetEl.textContent = greet;
+  if (weekEl) weekEl.textContent = `Viikko ${isoWeek(wStart(wOff))}`;
+
   const ws = wStart(wOff), wk = isoWeek(ws);
   document.getElementById('week-label').textContent = `Viikko ${wk} / ${ws.getFullYear()}`;
 
