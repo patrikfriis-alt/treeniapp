@@ -202,6 +202,25 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .day-tab.done   { border-color: var(--teal-dim); color: var(--teal-dim); }
 .day-tab.rest   { color: var(--text3); }
 
+.day-done-btn {
+  width: 100%;
+  margin-top: 4px;
+  padding: 3px 4px;
+  background: var(--teal-bg);
+  border: 1px solid var(--teal-dim);
+  border-radius: var(--rs);
+  color: var(--teal);
+  font-size: 9px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all var(--t);
+}
+.day-done-btn:hover { background: var(--teal); color: #fff; }
+
 /* ─── Progress ───────────────────────────────────────────────── */
 .prog-wrap { margin-bottom: 12px; }
 .prog-bg   { height: 2px; background: var(--surface2); border-radius: 2px; }
@@ -344,7 +363,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="nav-icon">📈</span>
     <span>Historia</span>
   </button>
-  <div class="version-chip">v1.8</div>
+  <div class="version-chip">v1.9</div>
 </nav>
 
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
@@ -703,6 +722,47 @@ async function loadPrevSession(o, d) {
   });
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   WEEK ACTIVITY CACHE
+═══════════════════════════════════════════════════════════════ */
+let weekActivityCache = {};
+
+async function loadWeekActivityData(o) {
+  weekActivityCache = {};
+  const mon = wStart(o);
+  const sun = new Date(mon.date);
+  sun.setDate(mon.date.getDate() + 6);
+  const fromDate = mon.iso;
+  const toDate   = sun.toISOString().split('T')[0];
+
+  const [workoutRes, actRes] = await Promise.all([
+    sb.from('workout_sets')
+      .select('workout_date, exercise_name, set_number, weight_kg, reps')
+      .gte('workout_date', fromDate)
+      .lte('workout_date', toDate)
+      .order('exercise_name')
+      .order('set_number'),
+    sb.from('activity_data')
+      .select('activity_date, activity_type, duration_min, calories, avg_heart_rate, distance_km')
+      .gte('activity_date', fromDate)
+      .lte('activity_date', toDate),
+  ]);
+
+  (workoutRes.data || []).forEach(row => {
+    if (!weekActivityCache[row.workout_date])
+      weekActivityCache[row.workout_date] = { workout: {}, activities: [] };
+    if (!weekActivityCache[row.workout_date].workout[row.exercise_name])
+      weekActivityCache[row.workout_date].workout[row.exercise_name] = [];
+    weekActivityCache[row.workout_date].workout[row.exercise_name].push(row);
+  });
+
+  (actRes.data || []).forEach(row => {
+    if (!weekActivityCache[row.activity_date])
+      weekActivityCache[row.activity_date] = { workout: {}, activities: [] };
+    weekActivityCache[row.activity_date].activities.push(row);
+  });
+}
+
 const getPrevSet = (exName, setIdx) => {
   const sets = prevCache[exName];
   if (!sets) return null;
@@ -795,12 +855,14 @@ async function loadWeekSummary() {
   const sunDay   = String(sun.getDate()).padStart(2, '0');
   const to = `${sunYear}-${sunMonth}-${sunDay}`;
 
-  // Gym: count from localStorage
-  const gymDone = [0,1,2,3,4,5,6].filter(d => {
-    const st = getActiveSession(wOff, d);
-    return ['t1','t2','t3','t4'].includes(st) && isDone(wOff, d);
-  }).length;
-  document.getElementById('ws-gym').textContent = gymDone;
+  // Gym: uniikit päivät joilla on workout_sets Supabasessa
+  const { data: gymData } = await sb
+    .from('workout_sets')
+    .select('workout_date')
+    .gte('workout_date', from)
+    .lte('workout_date', to);
+  const gymDays = new Set((gymData || []).map(r => r.workout_date));
+  document.getElementById('ws-gym').textContent = gymDays.size;
 
   // Activities: count rows in date range
   const { data: actData, error: actErr } = await sb
@@ -884,6 +946,8 @@ async function renderTreeni() {
   if (greetEl) greetEl.textContent = greet;
   if (weekEl) weekEl.textContent = `Viikko ${isoWeek(wStart(wOff).date)}`;
 
+  await loadWeekActivityData(wOff);
+
   const ws = wStart(wOff), wk = isoWeek(ws.date);
   document.getElementById('week-label').textContent = `Viikko ${wk} / ${ws.date.getFullYear()}`;
 
@@ -896,8 +960,37 @@ async function renderTreeni() {
     if (i === aDay)           btn.classList.add('active');
     else if (isDone(wOff, i)) btn.classList.add('done');
     else if (!isSali)         btn.classList.add('rest');
-    btn.innerHTML = `${lb}<br><span style="font-size:9px;opacity:.6">${st.toUpperCase()}</span>`;
+    btn.style.cssText = 'display:flex;flex-direction:column;align-items:center;';
+    btn.innerHTML = `<span>${lb}</span><span style="font-size:9px;opacity:.6">${st.toUpperCase()}</span>`;
     btn.onclick = () => { aDay = i; renderTreeni(); };
+
+    // Laske päivän ISO-päivämäärä
+    const dayDate = new Date(ws.date);
+    dayDate.setDate(ws.date.getDate() + i);
+    const dayIso = dayDate.toISOString().split('T')[0];
+    const dayData = weekActivityCache[dayIso];
+
+    if (dayData) {
+      const hasWorkout  = Object.keys(dayData.workout).length > 0;
+      const hasActivity = dayData.activities.length > 0;
+      if (hasWorkout || hasActivity) {
+        const indicator = document.createElement('button');
+        indicator.className = 'day-done-btn';
+        if (hasWorkout) {
+          const exCount = Object.keys(dayData.workout).length;
+          indicator.textContent = `💪 ${exCount} liik.`;
+        } else {
+          const act = dayData.activities[0];
+          const icon = act.activity_type === 'Jääkiekko' ? '🏒' :
+                       act.activity_type === 'Juoksu'    ? '🏃' :
+                       act.activity_type === 'Kävely'    ? '🚶' : '⚡';
+          indicator.textContent = `${icon} ${act.activity_type}`;
+        }
+        indicator.onclick = (e) => { e.stopPropagation(); openDayPopup(dayIso, dayData); };
+        btn.appendChild(indicator);
+      }
+    }
+
     tabs.appendChild(btn);
   });
 
@@ -1354,6 +1447,74 @@ async function loadWorkoutHistory() {
         ${x.sets.map(s=>`${s.weight_kg||'?'}×${s.reps||'?'}`).join(' | ')}
       </div>
     </div>`).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DAY POPUP
+═══════════════════════════════════════════════════════════════ */
+function openDayPopup(dateIso, dayData) {
+  const hasWorkout  = Object.keys(dayData.workout).length > 0;
+  const hasActivity = dayData.activities.length > 0;
+  let title = dateIso;
+  let body  = '';
+
+  if (hasWorkout) {
+    title = `💪 Saliharjoitus — ${dateIso}`;
+    body = Object.entries(dayData.workout).map(([exName, sets]) => {
+      const setStr = sets
+        .sort((a, b) => a.set_number - b.set_number)
+        .map(s => `${s.weight_kg || '?'}kg×${s.reps || '?'}`)
+        .join(' · ');
+      return `${exName}\n${setStr}`;
+    }).join('\n\n');
+  }
+
+  if (hasActivity) {
+    dayData.activities.forEach(act => {
+      const icon = act.activity_type === 'Jääkiekko' ? '🏒' :
+                   act.activity_type === 'Juoksu'    ? '🏃' :
+                   act.activity_type === 'Kävely'    ? '🚶' : '⚡';
+      if (!hasWorkout) title = `${icon} ${act.activity_type} — ${dateIso}`;
+      const parts = [];
+      if (act.duration_min)  parts.push(`Kesto: ${act.duration_min} min`);
+      if (act.distance_km)   parts.push(`Matka: ${act.distance_km} km`);
+      if (act.distance_km && act.duration_min) {
+        const pace = act.duration_min / act.distance_km;
+        const pMin = Math.floor(pace);
+        const pSec = Math.round((pace - pMin) * 60);
+        parts.push(`Vauhti: ${pMin}:${String(pSec).padStart(2,'0')} min/km`);
+      }
+      if (act.calories)       parts.push(`Kalorit: ${act.calories} kcal`);
+      if (act.avg_heart_rate) parts.push(`Syke: ${act.avg_heart_rate} bpm`);
+      body += (body ? '\n\n' : '') + `${icon} ${act.activity_type}\n` + parts.join('\n');
+    });
+  }
+
+  showDayModal(title, body);
+}
+
+function showDayModal(title, body) {
+  const existing = document.getElementById('day-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'day-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:400px;width:100%;max-height:80vh;overflow-y:auto;';
+  modal.innerHTML = `
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">${title}</div>
+    <pre style="font-size:13px;color:var(--text2);white-space:pre-wrap;line-height:1.8;font-family:inherit">${body}</pre>
+    <button onclick="document.getElementById('day-modal-overlay').remove()"
+      style="width:100%;margin-top:16px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);color:var(--text2);font-size:14px;cursor:pointer;">
+      Sulje
+    </button>
+  `;
+
+  overlay.appendChild(modal);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
 }
 
 /* ═══════════════════════════════════════════════════════════════
