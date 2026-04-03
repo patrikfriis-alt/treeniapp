@@ -570,8 +570,10 @@ function wStart(o) {
   const diff = dy === 0 ? -6 : 1 - dy;
   const m = new Date(n);
   m.setDate(n.getDate() + diff + o * 7);
-  m.setHours(0, 0, 0, 0);
-  return m;
+  const year  = m.getFullYear();
+  const month = String(m.getMonth() + 1).padStart(2, '0');
+  const day   = String(m.getDate()).padStart(2, '0');
+  return { date: m, iso: `${year}-${month}-${day}` };
 }
 function isoWeek(d) {
   const x = new Date(d);
@@ -610,17 +612,21 @@ async function syncSet(o, d, e, s) {
   if (!sess || !sess.ex[e]) return;
   const ex = sess.ex[e], ed = getED(o, d, e), sd = ed.sets[s] || {};
   if (!sd.kg && !sd.reps) return;
-  const mon = wStart(o), dt = new Date(mon);
-  dt.setDate(mon.getDate() + d);
+  const mon = wStart(o), dt = new Date(mon.date);
+  dt.setDate(mon.date.getDate() + d);
+  const dtYear  = dt.getFullYear();
+  const dtMonth = String(dt.getMonth() + 1).padStart(2, '0');
+  const dtDay   = String(dt.getDate()).padStart(2, '0');
+  const dtIso   = `${dtYear}-${dtMonth}-${dtDay}`;
   const { error } = await sb.from('workout_sets').upsert({
-    workout_date:  dt.toISOString().split('T')[0],
+    workout_date:  dtIso,
     exercise_name: ex.n,
     set_number:    s + 1,
     weight_kg:     parseFloat(sd.kg)  || null,
     reps:          parseInt(sd.reps)  || null,
   }, { onConflict: 'workout_date,exercise_name,set_number' });
   if (error) {
-    console.error(`syncSet failed for "${ex.n}" set ${s + 1} on ${dt.toISOString().split('T')[0]}:`, error.message);
+    console.error(`syncSet failed for "${ex.n}" set ${s + 1} on ${dtIso}:`, error.message);
   }
 }
 
@@ -667,9 +673,12 @@ async function loadPrevSession(o, d) {
   if (!sess || !sess.ex || !sess.ex.length) return;
 
   const names = sess.ex.map(e => e.n);
-  const mon = wStart(o), dt = new Date(mon);
-  dt.setDate(mon.getDate() + d);
-  const todayStr = dt.toISOString().split('T')[0];
+  const mon = wStart(o), dt = new Date(mon.date);
+  dt.setDate(mon.date.getDate() + d);
+  const dtYear2  = dt.getFullYear();
+  const dtMonth2 = String(dt.getMonth() + 1).padStart(2, '0');
+  const dtDay2   = String(dt.getDate()).padStart(2, '0');
+  const todayStr = `${dtYear2}-${dtMonth2}-${dtDay2}`;
 
   const { data, error } = await sb
     .from('workout_sets')
@@ -778,10 +787,13 @@ function calcPace() {
 ═══════════════════════════════════════════════════════════════ */
 async function loadWeekSummary() {
   const mon = wStart(wOff);
-  const sun = new Date(mon);
-  sun.setDate(mon.getDate() + 6);
-  const from = mon.toISOString().split('T')[0];
-  const to   = sun.toISOString().split('T')[0];
+  const sun = new Date(mon.date);
+  sun.setDate(mon.date.getDate() + 6);
+  const from = mon.iso;
+  const sunYear  = sun.getFullYear();
+  const sunMonth = String(sun.getMonth() + 1).padStart(2, '0');
+  const sunDay   = String(sun.getDate()).padStart(2, '0');
+  const to = `${sunYear}-${sunMonth}-${sunDay}`;
 
   // Gym: count from localStorage
   const gymDone = [0,1,2,3,4,5,6].filter(d => {
@@ -829,10 +841,13 @@ async function loadMotivationSummary() {
   // Viikko% — tavoite 6 aktiviteettia viikossa, lasketaan Supabasesta
   const now2 = new Date();
   const mon2 = wStart(wOff);
-  const sun2 = new Date(mon2);
-  sun2.setDate(mon2.getDate() + 6);
-  const weekFrom = mon2.toISOString().split('T')[0];
-  const weekTo   = sun2.toISOString().split('T')[0];
+  const sun2 = new Date(mon2.date);
+  sun2.setDate(mon2.date.getDate() + 6);
+  const weekFrom = mon2.iso;
+  const sun2Year  = sun2.getFullYear();
+  const sun2Month = String(sun2.getMonth() + 1).padStart(2, '0');
+  const sun2Day   = String(sun2.getDate()).padStart(2, '0');
+  const weekTo = `${sun2Year}-${sun2Month}-${sun2Day}`;
   const activeDaysThisWeek = await fetchActiveDays(weekFrom, weekTo);
   const weekPct = Math.min(100, Math.round(activeDaysThisWeek.size / 6 * 100));
   document.getElementById('ms-week').textContent = weekPct + '%';
@@ -867,10 +882,10 @@ async function renderTreeni() {
   const greetEl = document.getElementById('greeting-time');
   const weekEl = document.getElementById('greeting-week');
   if (greetEl) greetEl.textContent = greet;
-  if (weekEl) weekEl.textContent = `Viikko ${isoWeek(wStart(wOff))}`;
+  if (weekEl) weekEl.textContent = `Viikko ${isoWeek(wStart(wOff).date)}`;
 
-  const ws = wStart(wOff), wk = isoWeek(ws);
-  document.getElementById('week-label').textContent = `Viikko ${wk} / ${ws.getFullYear()}`;
+  const ws = wStart(wOff), wk = isoWeek(ws.date);
+  document.getElementById('week-label').textContent = `Viikko ${wk} / ${ws.date.getFullYear()}`;
 
   const tabs = document.getElementById('day-tabs');
   tabs.innerHTML = '';
