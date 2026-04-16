@@ -363,7 +363,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="nav-icon">📈</span>
     <span>Historia</span>
   </button>
-  <div class="version-chip">v1.9</div>
+  <div class="version-chip">v1.9.1</div>
 </nav>
 
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
@@ -674,7 +674,6 @@ function prefillExercise(o, d, ei) {
     }
 
     updateSetBox(o, d, ei, s);
-    syncSet(o, d, ei, s);
   }
 
   saveLD();
@@ -1067,7 +1066,10 @@ async function renderSession() {
 
     // Previous session summary for header
     const prevSummary = prev && prev.length
-      ? prev.map(s => `${s.weight_kg || '?'}×${s.reps || '?'}`).join('  ')
+      ? Array.from({ length: ex.s }, (_, s) => {
+          const ps = getPrevSet(ex.n, s);
+          return ps ? `${ps.weight_kg || '?'}×${ps.reps || '?'}` : '—';
+        }).join('  ')
       : ex.t;
 
     html += `<div class="ex-item">
