@@ -363,7 +363,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="nav-icon">📈</span>
     <span>Historia</span>
   </button>
-  <div class="version-chip">v1.9.3</div>
+  <div class="version-chip">v1.9.4</div>
 </nav>
 
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
@@ -626,7 +626,10 @@ function saveSet(o, d, e, s, field, value) {
 
   const timerKey = `${o}-${d}-${e}-${s}`;
   clearTimeout(syncTimers[timerKey]);
-  syncTimers[timerKey] = setTimeout(() => syncSet(o, d, e, s), 500);
+  syncTimers[timerKey] = setTimeout(() => {
+    syncSet(o, d, e, s);
+    delete syncTimers[timerKey];
+  }, 500);
 }
 
 async function syncSet(o, d, e, s) {
