@@ -363,7 +363,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="nav-icon">📈</span>
     <span>Historia</span>
   </button>
-  <div class="version-chip">v1.9.1</div>
+  <div class="version-chip">v1.9.3</div>
 </nav>
 
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
@@ -601,6 +601,9 @@ function isoWeek(d) {
   const w1 = new Date(x.getFullYear(), 0, 4);
   return 1 + Math.round(((x - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7);
 }
+function localIso(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 
 /* ═══════════════════════════════════════════════════════════════
    LOCAL DATA HELPERS
@@ -649,7 +652,7 @@ async function syncSet(o, d, e, s) {
   }
 }
 
-function prefillExercise(o, d, ei) {
+function prefillExercise(o, d, ei, btnEl) {
   const sess = SESS[getActiveSession(o, d)];
   if (!sess || !sess.ex[ei]) return;
   const ex = sess.ex[ei];
@@ -668,7 +671,7 @@ function prefillExercise(o, d, ei) {
 
     const box = document.getElementById(`set-${o}-${d}-${ei}-${s}`);
     if (box) {
-      const inputs = box.querySelectorAll('input[type="number"]');
+      const inputs = box.querySelectorAll('input[type="text"]');
       if (inputs[0]) inputs[0].value = LD[k].sets[s].kg;
       if (inputs[1]) inputs[1].value = LD[k].sets[s].reps;
     }
@@ -677,6 +680,12 @@ function prefillExercise(o, d, ei) {
   }
 
   saveLD();
+  if (btnEl) {
+    const orig = btnEl.textContent;
+    btnEl.textContent = '✓ Täytetty';
+    btnEl.style.color = 'var(--teal)';
+    setTimeout(() => { btnEl.textContent = orig; btnEl.style.color = ''; }, 1500);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -732,7 +741,7 @@ async function loadWeekActivityData(o) {
   const sun = new Date(mon.date);
   sun.setDate(mon.date.getDate() + 6);
   const fromDate = mon.iso;
-  const toDate   = sun.toISOString().split('T')[0];
+  const toDate   = localIso(sun);
 
   const [workoutRes, actRes] = await Promise.all([
     sb.from('workout_sets')
@@ -891,8 +900,8 @@ async function loadWeekSummary() {
 async function loadMotivationSummary() {
   // Kuukauden aktiviteettikertoja
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  const monthStart = localIso(new Date(now.getFullYear(), now.getMonth(), 1));
+  const monthEnd   = localIso(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 
   const { data: actMonth } = await sb.from('activity_data').select('id')
     .gte('activity_date', monthStart).lte('activity_date', monthEnd);
@@ -900,7 +909,6 @@ async function loadMotivationSummary() {
   document.getElementById('ms-month').textContent = monthCount + ' krt';
 
   // Viikko% — tavoite 6 aktiviteettia viikossa, lasketaan Supabasesta
-  const now2 = new Date();
   const mon2 = wStart(wOff);
   const sun2 = new Date(mon2.date);
   sun2.setDate(mon2.date.getDate() + 6);
@@ -918,15 +926,15 @@ async function loadMotivationSummary() {
   today.setHours(0, 0, 0, 0);
   const ninetyAgo = new Date(today);
   ninetyAgo.setDate(today.getDate() - 89);
-  const streakFrom = ninetyAgo.toISOString().split('T')[0];
-  const streakTo   = today.toISOString().split('T')[0];
+  const streakFrom = localIso(ninetyAgo);
+  const streakTo   = localIso(today);
   const activeDays90 = await fetchActiveDays(streakFrom, streakTo);
 
   let streak = 0;
   for (let i = 0; i < 90; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = localIso(d);
     if (activeDays90.has(dateStr)) {
       streak++;
     } else {
@@ -966,7 +974,7 @@ async function renderTreeni() {
     // Laske päivän ISO-päivämäärä
     const dayDate = new Date(ws.date);
     dayDate.setDate(ws.date.getDate() + i);
-    const dayIso = dayDate.toISOString().split('T')[0];
+    const dayIso = localIso(dayDate);
     const dayData = weekActivityCache[dayIso];
 
     if (dayData) {
@@ -1077,7 +1085,7 @@ async function renderSession() {
         <span class="ex-name">${ex.n}${isPR ? '<span class="pr-badge">PR</span>' : ''}</span>
         <span style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
           <span class="ex-prev">ed:<br>${prevSummary}</span>
-          ${prev ? `<button onclick="prefillExercise(${wOff},${aDay},${ei})" style="font-size:10px;padding:2px 7px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;white-space:nowrap">↓ Käytä edellisiä</button>` : ''}
+          ${prev ? `<button onclick="prefillExercise(${wOff},${aDay},${ei},this)" style="font-size:10px;padding:2px 7px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;white-space:nowrap">↓ Käytä edellisiä</button>` : ''}
         </span>
       </div>
       <div class="sets-col">`;
@@ -1550,7 +1558,7 @@ function showPage(name, btn) {
 ═══════════════════════════════════════════════════════════════ */
 ['body-date','act-date','sleep-date'].forEach(id => {
   const el = document.getElementById(id);
-  if (el) el.value = new Date().toISOString().split('T')[0];
+  if (el) el.value = localIso(new Date());
 });
 
 renderTreeni();
