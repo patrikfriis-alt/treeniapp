@@ -363,7 +363,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="nav-icon">📈</span>
     <span>Historia</span>
   </button>
-  <div class="version-chip">v1.9.5</div>
+  <div class="version-chip">v1.9.6</div>
 </nav>
 
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
@@ -649,6 +649,7 @@ async function syncSet(o, d, e, s) {
     set_number:    s + 1,
     weight_kg:     parseFloat(sd.kg)  || null,
     reps:          parseInt(sd.reps)  || null,
+    session_type:  st,
   }, { onConflict: 'workout_date,exercise_name,set_number' });
   if (error) {
     console.error(`syncSet failed for "${ex.n}" set ${s + 1} on ${dtIso}:`, error.message);
@@ -715,6 +716,7 @@ async function loadPrevSession(o, d) {
     .from('workout_sets')
     .select('workout_date,exercise_name,set_number,weight_kg,reps')
     .in('exercise_name', names)
+    .eq('session_type', st)
     .lt('workout_date', todayStr)
     .order('workout_date', { ascending: false })
     .order('set_number',   { ascending: true  })
