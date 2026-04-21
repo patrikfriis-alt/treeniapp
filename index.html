@@ -363,7 +363,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="nav-icon">📈</span>
     <span>Historia</span>
   </button>
-  <div class="version-chip">v1.9.6</div>
+  <div class="version-chip">v1.9.7</div>
 </nav>
 
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
@@ -716,7 +716,7 @@ async function loadPrevSession(o, d) {
     .from('workout_sets')
     .select('workout_date,exercise_name,set_number,weight_kg,reps')
     .in('exercise_name', names)
-    .eq('session_type', st)
+    .or(`session_type.eq.${st},session_type.is.null`)
     .lt('workout_date', todayStr)
     .order('workout_date', { ascending: false })
     .order('set_number',   { ascending: true  })
