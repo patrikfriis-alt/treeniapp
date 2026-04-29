@@ -363,7 +363,11 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="nav-icon">📈</span>
     <span>Historia</span>
   </button>
-  <div class="version-chip">v1.9.9</div>
+  <button onclick="showPage('ohjelma',this)">
+    <span class="nav-icon">📋</span>
+    <span>Ohjelma</span>
+  </button>
+  <div class="version-chip">v1.9.10</div>
 </nav>
 
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
@@ -513,6 +517,11 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <div class="card-title">Salilokit</div>
     <div id="workout-history"><div style="color:var(--text3);font-size:13px">Ladataan...</div></div>
   </div>
+</div>
+
+<!-- ── OHJELMA ─────────────────────────────────────────────────── -->
+<div id="page-ohjelma" class="page">
+  <div id="ohjelma-content"></div>
 </div>
 
 <script>
@@ -1564,6 +1573,40 @@ function showPage(name, btn) {
   if (name === 'aktiviteetti') loadActivities();
   if (name === 'uni')          loadSleep();
   if (name === 'historia')     { populateExerciseDropdown(); loadWorkoutHistory(); loadRunChart(); }
+  if (name === 'ohjelma')      renderOhjelma();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   OHJELMA
+═══════════════════════════════════════════════════════════════ */
+function renderOhjelma(selected) {
+  const saliKeys = ['t1','t2','t3','t4'];
+  const defaultKey = saliKeys.includes(SCHED[aDay]) ? SCHED[aDay] : 't1';
+  const key  = selected || defaultKey;
+  const sess = SESS[key];
+  const el   = document.getElementById('ohjelma-content');
+
+  let html = `<div class="card" style="margin-bottom:8px">
+    <div class="card-title">Harjoitus</div>
+    <select onchange="renderOhjelma(this.value)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);color:var(--text);padding:8px 11px;font-size:14px;outline:none;">`;
+  saliKeys.forEach(k => {
+    html += `<option value="${k}" ${k === key ? 'selected' : ''}>${SESS[k].name}</option>`;
+  });
+  html += `</select></div>`;
+
+  html += `<div class="card">
+    <div style="font-size:16px;font-weight:600;margin-bottom:4px">${sess.name}</div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:16px">${sess.focus}</div>`;
+
+  sess.ex.forEach((ex, i) => {
+    html += `<div class="hist-item">
+      <div class="hist-label">${i + 1}. ${ex.n}</div>
+      <div class="hist-val" style="font-size:13px">${ex.t}</div>
+    </div>`;
+  });
+
+  html += `</div>`;
+  el.innerHTML = html;
 }
 
 /* ═══════════════════════════════════════════════════════════════
