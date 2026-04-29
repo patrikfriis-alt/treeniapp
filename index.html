@@ -363,7 +363,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="nav-icon">📈</span>
     <span>Historia</span>
   </button>
-  <div class="version-chip">v1.9.7</div>
+  <div class="version-chip">v1.9.9</div>
 </nav>
 
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
@@ -612,6 +612,8 @@ const dKey  = (o, d)    => `w${o}_d${d}`;
 const eKey  = (o, d, e) => `${dKey(o,d)}_e${e}`;
 const isDone    = (o, d)    => LD[`${dKey(o,d)}_done`] === true;
 const setDone   = (o, d, v) => { LD[`${dKey(o,d)}_done`] = v; saveLD(); };
+const isStarted  = (o, d)    => LD[`${dKey(o,d)}_started`] === true;
+const setStarted = (o, d, v) => { LD[`${dKey(o,d)}_started`] = v; saveLD(); };
 const getED     = (o, d, e) => LD[eKey(o, d, e)] || { sets: [] };
 
 const syncTimers = {};
@@ -716,7 +718,6 @@ async function loadPrevSession(o, d) {
     .from('workout_sets')
     .select('workout_date,exercise_name,set_number,weight_kg,reps')
     .in('exercise_name', names)
-    .or(`session_type.eq.${st},session_type.is.null`)
     .lt('workout_date', todayStr)
     .order('workout_date', { ascending: false })
     .order('set_number',   { ascending: true  })
@@ -1062,7 +1063,9 @@ async function renderSession() {
   // Fetch previous session data
   await loadPrevSession(wOff, aDay);
 
-  const done = isDone(wOff, aDay);
+  const done    = isDone(wOff, aDay);
+  const started = isStarted(wOff, aDay);
+  const locked  = !started || done;
 
   html += `<div class="card" style="margin-bottom:8px">
     <div style="font-size:16px;font-weight:600">${sess.name}</div>
@@ -1091,7 +1094,7 @@ async function renderSession() {
         <span class="ex-name">${ex.n}${isPR ? '<span class="pr-badge">PR</span>' : ''}</span>
         <span style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
           <span class="ex-prev">ed:<br>${prevSummary}</span>
-          ${prev ? `<button onclick="prefillExercise(${wOff},${aDay},${ei},this)" style="font-size:10px;padding:2px 7px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;white-space:nowrap">↓ Käytä edellisiä</button>` : ''}
+          ${prev && started && !done ? `<button onclick="prefillExercise(${wOff},${aDay},${ei},this)" style="font-size:10px;padding:2px 7px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;white-space:nowrap">↓ Käytä edellisiä</button>` : ''}
         </span>
       </div>
       <div class="sets-col">`;
@@ -1111,11 +1114,11 @@ async function renderSession() {
         <span class="set-row-num">S${s+1}</span>
         <div class="set-row-inputs">
           <input class="set-row-input" type="text" inputmode="decimal" placeholder="kg"
-            value="${sd.kg || ''}"
+            value="${sd.kg || ''}" ${locked ? 'disabled' : ''}
             onchange="saveSet(${wOff},${aDay},${ei},${s},'kg',this.value.replace(',','.'))">
           <span class="set-row-sep">×</span>
           <input class="set-row-input" type="text" inputmode="numeric" placeholder="tr"
-            value="${sd.reps || ''}"
+            value="${sd.reps || ''}" ${locked ? 'disabled' : ''}
             onchange="saveSet(${wOff},${aDay},${ei},${s},'reps',this.value)">
         </div>
         <span class="set-row-status">${statusText}</span>
@@ -1125,14 +1128,18 @@ async function renderSession() {
     html += `</div></div>`;
   });
 
-  html += `<button class="complete-btn ${done ? 'done' : ''}" onclick="toggleDone()">
-    ${done ? 'Treeni tehty ✓' : 'Merkitse tehdyksi'}
-  </button>`;
+  const bottomBtn = !started
+    ? `<button class="complete-btn" onclick="startSession()">Aloita treeni</button>`
+    : `<button class="complete-btn ${done ? 'done' : ''}" onclick="toggleDone()">
+         ${done ? 'Treeni tehty ✓' : 'Merkitse tehdyksi'}
+       </button>`;
+  html += bottomBtn;
 
   el.innerHTML = html;
 }
 
 function toggleDone()    { setDone(wOff, aDay, !isDone(wOff, aDay)); renderTreeni(); }
+function startSession()  { setStarted(wOff, aDay, true); renderTreeni(); }
 function changeWeek(dir) { wOff += dir; renderTreeni(); }
 
 /* ═══════════════════════════════════════════════════════════════
