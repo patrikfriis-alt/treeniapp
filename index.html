@@ -557,7 +557,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.10.1</div>
+    <div class="version-chip" style="margin:0">v1.11.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('historia',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
@@ -664,18 +664,19 @@ function localIso(d) {
 /* ═══════════════════════════════════════════════════════════════
    LOCAL DATA HELPERS
 ═══════════════════════════════════════════════════════════════ */
-const dKey  = (o, d)    => `w${o}_d${d}`;
-const eKey  = (o, d, e) => `${dKey(o,d)}_e${e}`;
-const isDone    = (o, d)    => LD[`${dKey(o,d)}_done`] === true;
-const setDone   = (o, d, v) => { LD[`${dKey(o,d)}_done`] = v; saveLD(); };
-const isStarted  = (o, d)    => LD[`${dKey(o,d)}_started`] === true;
-const setStarted = (o, d, v) => { LD[`${dKey(o,d)}_started`] = v; saveLD(); };
-const getED     = (o, d, e) => LD[eKey(o, d, e)] || { sets: [] };
+const dKey  = (o, d, st) => `w${o}_d${d}_${st}`;
+const eKey  = (o, d, st, e) => `${dKey(o,d,st)}_e${e}`;
+const isDone     = (o, d, st) => LD[`${dKey(o,d,st)}_done`] === true;
+const setDone    = (o, d, st, v) => { LD[`${dKey(o,d,st)}_done`] = v; saveLD(); };
+const isStarted  = (o, d, st) => LD[`${dKey(o,d,st)}_started`] === true;
+const setStarted = (o, d, st, v) => { LD[`${dKey(o,d,st)}_started`] = v; saveLD(); };
+const getED      = (o, d, st, e) => LD[eKey(o, d, st, e)] || { sets: [] };
 
 const syncTimers = {};
 
 function saveSet(o, d, e, s, field, value) {
-  const k = eKey(o, d, e);
+  const st = getActiveSession(o, d);
+  const k = eKey(o, d, st, e);
   if (!LD[k]) LD[k] = { sets: [] };
   if (!LD[k].sets[s]) LD[k].sets[s] = {};
   LD[k].sets[s][field] = value;
@@ -693,7 +694,7 @@ function saveSet(o, d, e, s, field, value) {
 async function syncSet(o, d, e, s) {
   const st = getActiveSession(o, d), sess = SESS[st];
   if (!sess || !sess.ex[e]) return;
-  const ex = sess.ex[e], ed = getED(o, d, e), sd = ed.sets[s] || {};
+  const ex = sess.ex[e], ed = getED(o, d, st, e), sd = ed.sets[s] || {};
   if (!sd.kg && !sd.reps) return;
   const mon = wStart(o), dt = new Date(mon.date);
   dt.setDate(mon.date.getDate() + d);
@@ -715,13 +716,14 @@ async function syncSet(o, d, e, s) {
 }
 
 function prefillExercise(o, d, ei, btnEl) {
-  const sess = SESS[getActiveSession(o, d)];
+  const st = getActiveSession(o, d);
+  const sess = SESS[st];
   if (!sess || !sess.ex[ei]) return;
   const ex = sess.ex[ei];
   const prev = prevCache[ex.n];
   if (!prev) return;
 
-  const k = eKey(o, d, ei);
+  const k = eKey(o, d, st, ei);
   if (!LD[k]) LD[k] = { sets: [] };
 
   for (let s = 0; s < ex.s; s++) {
@@ -866,9 +868,10 @@ function setStatus(sd, prev) {
 function updateSetBox(o, d, e, s) {
   const box = document.getElementById(`set-${o}-${d}-${e}-${s}`);
   if (!box) return;
-  const ed   = getED(o, d, e);
+  const st   = getActiveSession(o, d);
+  const ed   = getED(o, d, st, e);
   const sd   = (ed.sets && ed.sets[s]) || {};
-  const sess = SESS[getActiveSession(o, d)];
+  const sess = SESS[st];
   const exName = sess && sess.ex && sess.ex[e] ? sess.ex[e].n : null;
   const prev = exName ? getPrevSet(exName, s) : null;
   box.className = `set-row s-${setStatus(sd, prev)}`;
@@ -1024,11 +1027,11 @@ async function renderTreeni() {
   const tabs = document.getElementById('day-tabs');
   tabs.innerHTML = '';
   DAYS.forEach((lb, i) => {
-    const st = SCHED[i], isSali = ['t1','t2','t3'].includes(st);
+    const st = getActiveSession(wOff, i), isSali = ['t1','t2','t3'].includes(st);
     const btn = document.createElement('button');
     btn.className = 'day-tab';
-    if (i === aDay)           btn.classList.add('active');
-    else if (isDone(wOff, i)) btn.classList.add('done');
+    if (i === aDay)               btn.classList.add('active');
+    else if (isDone(wOff, i, st)) btn.classList.add('done');
     else if (!isSali)         btn.classList.add('rest');
     btn.style.cssText = 'display:flex;flex-direction:column;align-items:center;';
     btn.innerHTML = `<span>${lb}</span><span style="font-size:9px;opacity:.6">${st.toUpperCase()}</span>`;
@@ -1065,7 +1068,7 @@ async function renderTreeni() {
   });
 
   const saliDays = [0, 2, 3];
-  const done = saliDays.filter(d => isDone(wOff, d)).length;
+  const done = saliDays.filter(d => isDone(wOff, d, getActiveSession(wOff, d))).length;
   document.getElementById('prog-fill').style.width = Math.round(done / saliDays.length * 100) + '%';
   document.getElementById('prog-text').textContent  = `${done}/${saliDays.length} salikerrasta tehty`;
 
@@ -1119,8 +1122,8 @@ async function renderSession() {
   // Fetch previous session data
   await loadPrevSession(wOff, aDay);
 
-  const done    = isDone(wOff, aDay);
-  const started = isStarted(wOff, aDay);
+  const done    = isDone(wOff, aDay, st);
+  const started = isStarted(wOff, aDay, st);
   const locked  = !started || done;
 
   html += `<div class="card" style="margin-bottom:8px">
@@ -1129,7 +1132,7 @@ async function renderSession() {
   </div>`;
 
   sess.ex.forEach((ex, ei) => {
-    const ed   = getED(wOff, aDay, ei);
+    const ed   = getED(wOff, aDay, st, ei);
     const prev = prevCache[ex.n];
 
     // PR detection
@@ -1194,8 +1197,8 @@ async function renderSession() {
   el.innerHTML = html;
 }
 
-function toggleDone()    { setDone(wOff, aDay, !isDone(wOff, aDay)); renderTreeni(); }
-function startSession()  { setStarted(wOff, aDay, true); renderTreeni(); }
+function toggleDone()   { const st = getActiveSession(wOff, aDay); setDone(wOff, aDay, st, !isDone(wOff, aDay, st)); renderTreeni(); }
+function startSession() { const st = getActiveSession(wOff, aDay); setStarted(wOff, aDay, st, true); renderTreeni(); }
 function changeWeek(dir) { wOff += dir; renderTreeni(); }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1679,6 +1682,34 @@ function renderOhjelma(selected) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   MIGRATION
+═══════════════════════════════════════════════════════════════ */
+function migrateLD_v2() {
+  if (localStorage.getItem('ld_migration_v2')) return;
+  const doneRe    = /^w(-?\d+)_d(\d)_done$/;
+  const startedRe = /^w(-?\d+)_d(\d)_started$/;
+  const eRe       = /^w(-?\d+)_d(\d)_e(\d+)$/;
+  Object.keys(LD).forEach(k => {
+    let m;
+    if ((m = doneRe.exec(k))) {
+      const [, o, d] = m;
+      const st = LD[`w${o}_d${d}_sess`] || SCHED[Number(d)];
+      LD[`w${o}_d${d}_${st}_done`] = LD[k]; delete LD[k];
+    } else if ((m = startedRe.exec(k))) {
+      const [, o, d] = m;
+      const st = LD[`w${o}_d${d}_sess`] || SCHED[Number(d)];
+      LD[`w${o}_d${d}_${st}_started`] = LD[k]; delete LD[k];
+    } else if ((m = eRe.exec(k))) {
+      const [, o, d, e] = m;
+      const st = LD[`w${o}_d${d}_sess`] || SCHED[Number(d)];
+      LD[`w${o}_d${d}_${st}_e${e}`] = LD[k]; delete LD[k];
+    }
+  });
+  saveLD();
+  localStorage.setItem('ld_migration_v2', '1');
+}
+
+/* ═══════════════════════════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════════════════════════ */
 ['body-date','act-date','sleep-date'].forEach(id => {
@@ -1686,6 +1717,7 @@ function renderOhjelma(selected) {
   if (el) el.value = localIso(new Date());
 });
 
+migrateLD_v2();
 renderTreeni();
 </script>
 </body>
