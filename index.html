@@ -387,14 +387,6 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="nav-icon">📊</span>
     <span>Seuranta</span>
   </button>
-  <button onclick="showPage('historia',this)">
-    <span class="nav-icon">📈</span>
-    <span>Historia</span>
-  </button>
-  <button onclick="showPage('ohjelma',this)">
-    <span class="nav-icon">📋</span>
-    <span>Ohjelma</span>
-  </button>
   <button id="hamburger-btn" onclick="toggleSidebar()">
     <span class="nav-icon">≡</span>
     <span>Valikko</span>
@@ -565,10 +557,16 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.10.0</div>
+    <div class="version-chip" style="margin:0">v1.10.1</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
-  <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Asetukset</div>
+  <button onclick="showPage('historia',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
+    <span style="font-size:18px;">📈</span> Historia
+  </button>
+  <button onclick="showPage('ohjelma',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
+    <span style="font-size:18px;">📋</span> Ohjelma
+  </button>
+  <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:20px;margin-bottom:12px;">Asetukset</div>
   <div style="font-size:13px;color:var(--text3);">Tulossa pian...</div>
 </div>
 
