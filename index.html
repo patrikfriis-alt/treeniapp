@@ -364,6 +364,15 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 }
 .stab.active { background: var(--accent-bg); color: var(--accent); }
 
+/* ─── Session components ─────────────────────────────────────── */
+.sess-btn { font-size:11px; font-weight:400; padding:7px 3px; flex:1; min-width:64px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text2); cursor:pointer; white-space:nowrap; }
+.sess-btn.active { background:var(--accent-bg); border-color:var(--accent); color:var(--accent); font-weight:600; }
+.sess-name { font-size:16px; font-weight:600; color:var(--text); }
+.sess-focus { font-size:13px; color:var(--text3); margin-top:3px; }
+.rest-card { text-align:center; padding:22px; }
+.prefill-btn { font-size:11px; padding:4px 10px; background:var(--surface3); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--accent); cursor:pointer; white-space:nowrap; margin-top:6px; display:inline-block; }
+.ex-header-right { display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0; }
+
 /* ─── Sidebar ────────────────────────────────────────────────── */
 #sidebar {
   position: fixed;
@@ -566,7 +575,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.12.0</div>
+    <div class="version-chip" style="margin:0">v1.12.1</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('historia',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
@@ -1109,11 +1118,7 @@ async function renderSession() {
   Object.entries(SESSION_LABELS).forEach(([key, lbl]) => {
     const active = key === st;
     html += `<button onclick="setActiveSession(${wOff},${aDay},'${key}')"
-      style="flex:1;min-width:64px;padding:7px 3px;
-      background:${active ? 'var(--teal-bg)' : 'var(--surface2)'};
-      border:1px solid ${active ? 'var(--teal)' : 'var(--border)'};
-      border-radius:var(--rs);color:${active ? 'var(--teal)' : 'var(--text2)'};
-      font-size:11px;font-weight:${active ? '600' : '400'};cursor:pointer;white-space:nowrap;">
+      class="sess-btn${active ? ' active' : ''}">
       ${lbl}</button>`;
   });
   html += `</div></div>`;
@@ -1121,9 +1126,9 @@ async function renderSession() {
   // Rest / activity day (no exercises)
   if (!sess || !sess.ex || !sess.ex.length) {
     const isRest = ['kiekko','juoksu','lepo'].includes(SCHED[aDay]);
-    el.innerHTML = html + (isRest ? `<div class="card" style="text-align:center;padding:22px">
-      <div style="font-size:16px;font-weight:600;margin-bottom:6px">${sess ? sess.name : '—'}</div>
-      <div style="font-size:13px;color:var(--text3)">${sess ? sess.focus : ''}</div>
+    el.innerHTML = html + (isRest ? `<div class="card rest-card">
+      <div class="sess-name" style="margin-bottom:6px">${sess ? sess.name : '—'}</div>
+      <div class="sess-focus">${sess ? sess.focus : ''}</div>
     </div>` : '');
     return;
   }
@@ -1136,8 +1141,8 @@ async function renderSession() {
   const locked  = !started || done;
 
   html += `<div class="card" style="margin-bottom:8px">
-    <div style="font-size:16px;font-weight:600">${sess.name}</div>
-    <div style="font-size:13px;color:var(--text3);margin-top:3px">${sess.focus}</div>
+    <div class="sess-name">${sess.name}</div>
+    <div class="sess-focus">${sess.focus}</div>
   </div>`;
 
   sess.ex.forEach((ex, ei) => {
@@ -1160,9 +1165,9 @@ async function renderSession() {
     html += `<div class="ex-item">
       <div class="ex-header">
         <span class="ex-name">${ex.n}${isPR ? '<span class="pr-badge">PR</span>' : ''}</span>
-        <span style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+        <span class="ex-header-right">
           <span class="ex-prev">ed:<br>${prevSummary}</span>
-          ${prev && started && !done ? `<button onclick="prefillExercise(${wOff},${aDay},${ei},this)" style="font-size:10px;padding:2px 7px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;white-space:nowrap">↓ Käytä edellisiä</button>` : ''}
+          ${prev && started && !done ? `<button onclick="prefillExercise(${wOff},${aDay},${ei},this)" class="prefill-btn">↓ Käytä edellisiä</button>` : ''}
         </span>
       </div>
       <div class="sets-col">`;
