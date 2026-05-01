@@ -581,7 +581,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.12.3</div>
+    <div class="version-chip" style="margin:0">v1.13.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('historia',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
@@ -954,36 +954,24 @@ async function loadWeekSummary() {
   const mon = wStart(wOff);
   const sun = new Date(mon.date);
   sun.setDate(mon.date.getDate() + 6);
-  const from = mon.iso;
-  const sunYear  = sun.getFullYear();
-  const sunMonth = String(sun.getMonth() + 1).padStart(2, '0');
-  const sunDay   = String(sun.getDate()).padStart(2, '0');
-  const to = `${sunYear}-${sunMonth}-${sunDay}`;
+  const from = mon.iso, to = localIso(sun);
 
-  // Gym: uniikit päivät joilla on workout_sets Supabasessa
-  const { data: gymData } = await sb
-    .from('workout_sets')
-    .select('workout_date')
-    .gte('workout_date', from)
-    .lte('workout_date', to);
+  const [
+    { data: gymData },
+    { data: actData, error: actErr },
+    { data: sleepData, error: sleepErr },
+  ] = await Promise.all([
+    sb.from('workout_sets').select('workout_date').gte('workout_date', from).lte('workout_date', to),
+    sb.from('activity_data').select('id').gte('activity_date', from).lte('activity_date', to),
+    sb.from('sleep_data').select('duration_min').gte('sleep_date', from).lte('sleep_date', to),
+  ]);
+
   const gymDays = new Set((gymData || []).map(r => r.workout_date));
   document.getElementById('ws-gym').textContent = gymDays.size;
 
-  // Activities: count rows in date range
-  const { data: actData, error: actErr } = await sb
-    .from('activity_data')
-    .select('id')
-    .gte('activity_date', from)
-    .lte('activity_date', to);
   if (actErr) { console.error('loadWeekSummary (act) failed:', actErr.message); }
   document.getElementById('ws-act').textContent = actData ? actData.length : '—';
 
-  // Sleep average for the week
-  const { data: sleepData, error: sleepErr } = await sb
-    .from('sleep_data')
-    .select('duration_min')
-    .gte('sleep_date', from)
-    .lte('sleep_date', to);
   if (sleepErr) { console.error('loadWeekSummary (sleep) failed:', sleepErr.message); }
   const withDur = sleepData ? sleepData.filter(r => r.duration_min !== null) : [];
   if (withDur.length) {
@@ -1005,20 +993,7 @@ async function loadMotivationSummary() {
   const monthCount = actMonth ? actMonth.length : 0;
   document.getElementById('ms-month').textContent = monthCount + ' krt';
 
-  // Viikko% — tavoite 6 aktiviteettia viikossa, lasketaan Supabasesta
-  const mon2 = wStart(wOff);
-  const sun2 = new Date(mon2.date);
-  sun2.setDate(mon2.date.getDate() + 6);
-  const weekFrom = mon2.iso;
-  const sun2Year  = sun2.getFullYear();
-  const sun2Month = String(sun2.getMonth() + 1).padStart(2, '0');
-  const sun2Day   = String(sun2.getDate()).padStart(2, '0');
-  const weekTo = `${sun2Year}-${sun2Month}-${sun2Day}`;
-  const activeDaysThisWeek = await fetchActiveDays(weekFrom, weekTo);
-  const weekPct = Math.min(100, Math.round(activeDaysThisWeek.size / 6 * 100));
-  document.getElementById('ms-week').textContent = weekPct + '%';
-
-  // Streak — yksi kysely 90 päivälle, lasketaan lokaalisti
+  // Streak + viikko% — yksi kysely 90 päivälle kattaa molemmat
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const ninetyAgo = new Date(today);
@@ -1026,6 +1001,14 @@ async function loadMotivationSummary() {
   const streakFrom = localIso(ninetyAgo);
   const streakTo   = localIso(today);
   const activeDays90 = await fetchActiveDays(streakFrom, streakTo);
+
+  const mon2 = wStart(wOff);
+  const sun2 = new Date(mon2.date);
+  sun2.setDate(mon2.date.getDate() + 6);
+  const weekFrom = mon2.iso, weekTo = localIso(sun2);
+  const activeDaysThisWeek = new Set([...activeDays90].filter(d => d >= weekFrom && d <= weekTo));
+  const weekPct = Math.min(100, Math.round(activeDaysThisWeek.size / 6 * 100));
+  document.getElementById('ms-week').textContent = weekPct + '%';
 
   let streak = 0;
   for (let i = 0; i < 90; i++) {
@@ -1102,7 +1085,9 @@ async function renderTreeni() {
     tabs.appendChild(btn);
   });
 
-  const saliDays = [0, 2, 3];
+  const saliDays = Object.entries(SCHED)
+    .filter(([, st]) => ['t1','t2','t3','t4'].includes(st))
+    .map(([i]) => Number(i));
   const done = saliDays.filter(d => isDone(wOff, d, getActiveSession(wOff, d))).length;
   document.getElementById('prog-fill').style.width = Math.round(done / saliDays.length * 100) + '%';
   document.getElementById('prog-text').textContent  = `${done}/${saliDays.length} salikerrasta tehty`;
@@ -1541,7 +1526,8 @@ async function loadRunChart() {
    WORKOUT HISTORY
 ═══════════════════════════════════════════════════════════════ */
 async function loadWorkoutHistory() {
-  const { data, error } = await sb.from('workout_sets').select('*')
+  const { data, error } = await sb.from('workout_sets')
+    .select('workout_date,exercise_name,set_number,weight_kg,reps')
     .order('workout_date',  { ascending:false })
     .order('exercise_name', { ascending:true  })
     .limit(100);
