@@ -370,6 +370,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .sess-name { font-size:16px; font-weight:600; color:var(--text); }
 .sess-focus { font-size:13px; color:var(--text3); margin-top:3px; }
 .rest-card { text-align:center; padding:22px; }
+.state-pill { display:inline-block; font-size:11px; font-weight:600; padding:3px 10px; border-radius:20px; margin-top:6px; }
+.state-pill.active { background:var(--accent-bg); color:var(--accent); }
+.state-pill.done   { background:var(--green-bg);  color:var(--green); }
+.day-state-dot { width:5px; height:5px; border-radius:50%; margin:3px auto 0; }
+.day-state-dot.active { background:var(--accent); }
+.day-state-dot.done   { background:var(--green); }
 .prefill-btn { font-size:11px; padding:4px 10px; background:var(--surface3); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--accent); cursor:pointer; white-space:nowrap; margin-top:6px; display:inline-block; }
 .ex-header-right { display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0; }
 
@@ -575,7 +581,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.12.2</div>
+    <div class="version-chip" style="margin:0">v1.12.3</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('historia',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
@@ -1059,7 +1065,11 @@ async function renderTreeni() {
     else if (isDone(wOff, i, st)) btn.classList.add('done');
     else if (!isSali)         btn.classList.add('rest');
     btn.style.cssText = 'display:flex;flex-direction:column;align-items:center;';
-    btn.innerHTML = `<span>${lb}</span><span style="font-size:9px;opacity:.6">${st.toUpperCase()}</span>`;
+    const dotDone    = isDone(wOff, i, st);
+    const dotStarted = isStarted(wOff, i, st);
+    const dotCls     = dotDone ? 'done' : dotStarted ? 'active' : '';
+    const dotHtml    = dotCls ? `<div class="day-state-dot ${dotCls}"></div>` : '';
+    btn.innerHTML = `<span>${lb}</span><span style="font-size:9px;opacity:.6">${st.toUpperCase()}</span>${dotHtml}`;
     btn.onclick = () => { aDay = i; renderTreeni(); };
 
     // Laske päivän ISO-päivämäärä
@@ -1147,9 +1157,13 @@ async function renderSession() {
   const started = isStarted(wOff, aDay, st);
   const locked  = !started || done;
 
+  const pillHtml = done    ? `<div class="state-pill done">Treeni tehty ✓</div>`
+                 : started ? `<div class="state-pill active">Käynnissä</div>`
+                 : '';
   html += `<div class="card" style="margin-bottom:8px">
     <div class="sess-name">${sess.name}</div>
     <div class="sess-focus">${sess.focus}</div>
+    ${pillHtml}
   </div>`;
 
   sess.ex.forEach((ex, ei) => {
