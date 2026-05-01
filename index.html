@@ -575,7 +575,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.12.1</div>
+    <div class="version-chip" style="margin:0">v1.12.2</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('historia',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
@@ -682,7 +682,14 @@ function localIso(d) {
 /* ═══════════════════════════════════════════════════════════════
    LOCAL DATA HELPERS
 ═══════════════════════════════════════════════════════════════ */
-const dKey  = (o, d, st) => `w${o}_d${d}_${st}`;
+function getISOWeekKey(o) {
+  const mon = wStart(o);
+  const x = new Date(mon.date);
+  x.setHours(0,0,0,0);
+  x.setDate(x.getDate() + 3 - (x.getDay() + 6) % 7);
+  return `${x.getFullYear()}-${String(isoWeek(mon.date)).padStart(2,'0')}`;
+}
+const dKey  = (o, d, st) => `${getISOWeekKey(o)}_d${d}_${st}`;
 const eKey  = (o, d, st, e) => `${dKey(o,d,st)}_e${e}`;
 const isDone     = (o, d, st) => LD[`${dKey(o,d,st)}_done`] === true;
 const setDone    = (o, d, st, v) => { LD[`${dKey(o,d,st)}_done`] = v; saveLD(); };
@@ -1723,6 +1730,15 @@ function migrateLD_v2() {
   localStorage.setItem('ld_migration_v2', '1');
 }
 
+function migrateLD_v3() {
+  if (localStorage.getItem('ld_migration_v3')) return;
+  // Vanhat suhteelliset avaimet: alkavat "w", sisältävät "_d", mutta EIVÄT sisällä "-"
+  const oldKeyRe = /^w-?\d+_d/;
+  Object.keys(LD).forEach(k => { if (oldKeyRe.test(k)) delete LD[k]; });
+  saveLD();
+  localStorage.setItem('ld_migration_v3', '1');
+}
+
 /* ═══════════════════════════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════════════════════════ */
@@ -1732,6 +1748,7 @@ function migrateLD_v2() {
 });
 
 migrateLD_v2();
+migrateLD_v3();
 renderTreeni();
 </script>
 </body>
