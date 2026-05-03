@@ -581,7 +581,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.13.0</div>
+    <div class="version-chip" style="margin:0">v1.14.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('historia',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
@@ -697,13 +697,27 @@ function getISOWeekKey(o) {
 }
 const dKey  = (o, d, st) => `${getISOWeekKey(o)}_d${d}_${st}`;
 const eKey  = (o, d, st, e) => `${dKey(o,d,st)}_e${e}`;
-const isDone     = (o, d, st) => LD[`${dKey(o,d,st)}_done`] === true;
-const setDone    = (o, d, st, v) => { LD[`${dKey(o,d,st)}_done`] = v; saveLD(); };
+const isDone  = (o, d, st) => LD[`${dKey(o,d,st)}_done`] === true;
+const setDone = (o, d, st, v) => { LD[`${dKey(o,d,st)}_done`] = v; saveLD(); syncDone(o, d, st, v); };
+
+async function syncDone(o, d, st, value) {
+  const mon = wStart(o), dt = new Date(mon.date);
+  dt.setDate(mon.date.getDate() + d);
+  const workout_date = localIso(dt);
+  const { error } = await sb.from('workout_sessions').upsert({
+    workout_date,
+    session_type: st,
+    is_done:      value,
+    done_at:      value ? new Date().toISOString() : null,
+  }, { onConflict: 'workout_date,session_type' });
+  if (error) console.error('syncDone failed:', error.message);
+}
 const isStarted  = (o, d, st) => LD[`${dKey(o,d,st)}_started`] === true;
 const setStarted = (o, d, st, v) => { LD[`${dKey(o,d,st)}_started`] = v; saveLD(); };
 const getED      = (o, d, st, e) => LD[eKey(o, d, st, e)] || { sets: [] };
 
 const syncTimers = {};
+const charts = {};
 
 function saveSet(o, d, e, s, field, value) {
   const st = getActiveSession(o, d);
@@ -714,6 +728,15 @@ function saveSet(o, d, e, s, field, value) {
   saveLD();
   updateSetBox(o, d, e, s);
 
+  const timerKey = `${o}-${d}-${e}-${s}`;
+  clearTimeout(syncTimers[timerKey]);
+  syncTimers[timerKey] = setTimeout(() => {
+    syncSet(o, d, e, s);
+    delete syncTimers[timerKey];
+  }, 500);
+}
+
+function scheduleSyncSet(o, d, e, s) {
   const timerKey = `${o}-${d}-${e}-${s}`;
   clearTimeout(syncTimers[timerKey]);
   syncTimers[timerKey] = setTimeout(() => {
@@ -772,7 +795,7 @@ function prefillExercise(o, d, ei, btnEl) {
     }
 
     updateSetBox(o, d, ei, s);
-    syncSet(o, d, ei, s);
+    scheduleSyncSet(o, d, ei, s);
   }
 
   saveLD();
@@ -1239,8 +1262,8 @@ async function loadBodyMetrics() {
   const { data: hist, error: histErr } = await sb.from('body_metrics').select('*').order('measured_at').limit(20);
   if (histErr) { console.error('loadBodyMetrics (hist) failed:', histErr.message); }
   if (hist && hist.length > 1) {
-    if (window.bc) window.bc.destroy();
-    window.bc = new Chart(document.getElementById('body-chart'), {
+    if (charts.body) charts.body.destroy();
+    charts.body = new Chart(document.getElementById('body-chart'), {
       type: 'line',
       data: {
         labels: hist.map(d => d.measured_at.slice(5)),
@@ -1434,8 +1457,8 @@ async function loadExerciseChart(exName) {
   statusEl.textContent = '';
   wrap.style.display = 'block';
 
-  if (window.exChart) window.exChart.destroy();
-  window.exChart = new Chart(document.getElementById('ex-chart'), {
+  if (charts.ex) charts.ex.destroy();
+  charts.ex = new Chart(document.getElementById('ex-chart'), {
     type: 'line',
     data: {
       labels,
@@ -1490,8 +1513,8 @@ async function loadRunChart() {
         return Math.round((d.duration_min / d.distance_km) * 10) / 10;
       });
 
-  if (window.runChart) window.runChart.destroy();
-  window.runChart = new Chart(document.getElementById('run-chart'), {
+  if (charts.run) charts.run.destroy();
+  charts.run = new Chart(document.getElementById('run-chart'), {
     type: 'line',
     data: {
       labels,
