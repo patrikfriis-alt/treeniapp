@@ -250,7 +250,6 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   gap: 8px;
 }
 .ex-name { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
-.ex-prev { font-size: 11px; color: var(--text3); text-align: right; flex-shrink: 0; line-height: 1.5; letter-spacing: 0.01em; }
 
 /* ─── Set rows ───────────────────────────────────────────────── */
 .sets-col { display: flex; flex-direction: column; gap: 5px; }
@@ -1108,7 +1107,7 @@ async function renderTreeni() {
   const tabs = document.getElementById('day-tabs');
   tabs.innerHTML = '';
   DAYS.forEach((lb, i) => {
-    const st = getActiveSession(wOff, i), isSali = ['t1','t2','t3'].includes(st);
+    const st = getActiveSession(wOff, i), isSali = ['t1','t2','t3','t4'].includes(st);
     const btn = document.createElement('button');
     btn.className = 'day-tab';
     if (i === aDay)               btn.classList.add('active');
@@ -1194,7 +1193,7 @@ async function renderSession() {
 
   // Rest / activity day (no exercises)
   if (!sess || !sess.ex || !sess.ex.length) {
-    const isRest = ['kiekko','juoksu','lepo'].includes(SCHED[aDay]);
+    const isRest = ['kiekko','juoksu','lepo'].includes(st);
     el.innerHTML = html + (isRest ? `<div class="card rest-card">
       <div class="sess-name" style="margin-bottom:6px">${sess ? sess.name : '—'}</div>
       <div class="sess-focus">${sess ? sess.focus : ''}</div>
@@ -1380,14 +1379,14 @@ async function saveActivity() {
   const btn = document.querySelector('#seuranta-aktiviteetti .btn-primary');
   btn.disabled = true;
   try {
-    const { error } = await sb.from('activity_data').insert({
+    const { error } = await sb.from('activity_data').upsert({
       activity_date:  date,
       activity_type:  document.getElementById('act-type').value,
       duration_min:   parseNum('act-duration'),
       calories:       parseNum('act-calories'),
       avg_heart_rate: parseNum('act-hr'),
       distance_km:    parseFloat((document.getElementById('act-km').value || '').replace(',','.')) || null,
-    });
+    }, { onConflict: 'activity_date,activity_type' });
     if (error) { showStatus('act-status','Virhe',true); return; }
     showStatus('act-status','Tallennettu!',false);
     loadActivities();
@@ -1408,7 +1407,7 @@ async function loadSleep() {
   if (data && data.length) {
     const withDur = data.filter(d => d.duration_min !== null);
     const avg = withDur.length ? withDur.reduce((s,d)=>s+d.duration_min,0)/withDur.length : 0;
-    document.getElementById('sleep-avg').textContent = (avg/60).toFixed(1)+'h';
+    document.getElementById('sleep-avg').textContent = withDur.length ? (avg/60).toFixed(1)+'h' : '—';
     document.getElementById('sleep-history').innerHTML = data.map(s => `
       <div class="hist-item">
         <div><div class="hist-label">${s.sleep_date}</div></div>
@@ -1718,15 +1717,23 @@ function showDayModal(title, body) {
 
   const modal = document.createElement('div');
   modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:400px;width:100%;max-height:80vh;overflow-y:auto;';
-  modal.innerHTML = `
-    <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">${title}</div>
-    <pre style="font-size:13px;color:var(--text2);white-space:pre-wrap;line-height:1.8;font-family:inherit">${body}</pre>
-    <button onclick="document.getElementById('day-modal-overlay').remove()"
-      style="width:100%;margin-top:16px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);color:var(--text2);font-size:14px;cursor:pointer;">
-      Sulje
-    </button>
-  `;
 
+  const titleEl = document.createElement('div');
+  titleEl.style.cssText = 'font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)';
+  titleEl.textContent = title;
+
+  const bodyEl = document.createElement('pre');
+  bodyEl.style.cssText = 'font-size:13px;color:var(--text2);white-space:pre-wrap;line-height:1.8;font-family:inherit';
+  bodyEl.textContent = body;
+
+  const closeBtn = document.createElement('button');
+  closeBtn.style.cssText = 'width:100%;margin-top:16px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);color:var(--text2);font-size:14px;cursor:pointer;';
+  closeBtn.textContent = 'Sulje';
+  closeBtn.onclick = () => overlay.remove();
+
+  modal.appendChild(titleEl);
+  modal.appendChild(bodyEl);
+  modal.appendChild(closeBtn);
   overlay.appendChild(modal);
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
   document.body.appendChild(overlay);
@@ -1845,7 +1852,7 @@ function migrateLD_v2() {
 function migrateLD_v3() {
   if (localStorage.getItem('ld_migration_v3')) return;
   // Vanhat suhteelliset avaimet: alkavat "w", sisältävät "_d", mutta EIVÄT sisällä "-"
-  const oldKeyRe = /^w-?\d+_d/;
+  const oldKeyRe = /^w-?\d+_d\d+_(?!sess)/;
   Object.keys(LD).forEach(k => { if (oldKeyRe.test(k)) delete LD[k]; });
   saveLD();
   localStorage.setItem('ld_migration_v3', '1');
