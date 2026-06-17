@@ -380,7 +380,18 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   color: var(--text3);
   text-align: right;
   letter-spacing: -0.1px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
 }
+.set-1rm {
+  font-size: 10px;
+  color: var(--amber);
+  font-weight: 600;
+  display: none;
+}
+.set-1rm.visible { display: block; }
 
 .ex-header-right { display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0; }
 
@@ -1144,6 +1155,12 @@ function setStatus(sd, prev) {
   return 'worse';
 }
 
+function calc1RM(kg, reps) {
+  if (!kg || !reps || reps < 1) return null;
+  if (reps === 1) return kg;
+  return Math.round(kg * (1 + reps / 30));
+}
+
 function updateSetBox(o, d, e, s) {
   const box = document.getElementById(`set-${o}-${d}-${e}-${s}`);
   if (!box) return;
@@ -1154,6 +1171,17 @@ function updateSetBox(o, d, e, s) {
   const exName = sess && sess.ex && sess.ex[e] ? sess.ex[e].n : null;
   const prev = exName ? getPrevSet(exName, s) : null;
   box.className = `set-table-row s-${setStatus(sd, prev)}`;
+
+  const ormEl = document.getElementById(`set-1rm-${o}-${d}-${e}-${s}`);
+  if (ormEl) {
+    const orm = calc1RM(parseFloat(sd.kg), parseInt(sd.reps));
+    if (orm) {
+      ormEl.textContent = `1RM ~${orm}kg`;
+      ormEl.classList.add('visible');
+    } else {
+      ormEl.classList.remove('visible');
+    }
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1504,6 +1532,7 @@ async function renderSession() {
       const status  = setStatus(sd, prevSet);
       const prevStr = prevSet ? `${prevSet.weight_kg ?? '?'}×${prevSet.reps ?? '?'}` : '—';
 
+      const orm = calc1RM(parseFloat(sd.kg), parseInt(sd.reps));
       html += `<div class="set-table-row s-${status}" id="set-${wOff}-${aDay}-${ei}-${s}">
         <span class="set-tnum">${s + 1}</span>
         <input class="set-tinput" type="text" inputmode="decimal" placeholder="kg"
@@ -1512,7 +1541,10 @@ async function renderSession() {
         <input class="set-tinput" type="text" inputmode="numeric" placeholder="tr"
           value="${sd.reps || ''}" ${locked ? 'disabled' : ''}
           onchange="saveSet(${wOff},${aDay},${ei},${s},'reps',this.value)">
-        <span class="set-tprev">${prevStr}</span>
+        <span class="set-tprev">
+          <span>${prevStr}</span>
+          <span class="set-1rm${orm ? ' visible' : ''}" id="set-1rm-${wOff}-${aDay}-${ei}-${s}">${orm ? `1RM ~${orm}kg` : ''}</span>
+        </span>
       </div>`;
     }
 
