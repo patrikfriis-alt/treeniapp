@@ -66,25 +66,28 @@ nav {
   left: 0;
   right: 0;
   z-index: 100;
-  background: rgba(0,0,0,.85);
+  background: rgba(18,18,18,0.95);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   border-top: 1px solid var(--border);
   display: flex;
+  padding: 6px 8px 10px;
+  gap: 4px;
 }
 nav button {
   flex: 1;
-  padding: 12px 0;
+  padding: 7px 4px 6px;
   background: none;
   border: none;
-  border-top: 2px solid transparent;
+  border-top: none;
+  border-radius: 20px;
   color: var(--text2);
   font-size: 11px;
   font-weight: 500;
   letter-spacing: .02em;
   cursor: pointer;
   white-space: nowrap;
-  transition: color var(--t);
+  transition: all var(--t);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -94,8 +97,8 @@ nav button {
   font-size: 22px;
   line-height: 1;
 }
-nav button.active { color: var(--accent); border-top-color: var(--accent); }
-nav button:not(.active):hover { color: var(--text); }
+nav button.active { color: #fff; background: var(--accent); }
+nav button:not(.active):hover { color: var(--text); background: var(--surface2); }
 .version-chip {
   align-self: center;
   font-size: 10px;
