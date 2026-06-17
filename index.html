@@ -882,6 +882,27 @@ const charts = {};
 let _restInterval = null;
 const REST_DURATION = 90;
 
+function playRestDone() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const beep = (freq, start, dur) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.4, ctx.currentTime + start);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur);
+    };
+    beep(880, 0,    0.12);
+    beep(880, 0.15, 0.12);
+    beep(1320, 0.3, 0.25);
+  } catch (e) { /* AudioContext ei tuettu tai estetty */ }
+}
+
 function startRestTimer() {
   stopRestTimer();
   let remaining = REST_DURATION;
@@ -900,6 +921,7 @@ function startRestTimer() {
       el.classList.add('done');
       countEl.textContent = '✓';
       document.getElementById('rest-timer-label').textContent = 'Valmis!';
+      playRestDone();
       setTimeout(() => stopRestTimer(), 2000);
     }
   }, 1000);
