@@ -1074,18 +1074,21 @@ async function loadWeekSummary() {
   ]);
 
   const gymDays = new Set((gymData || []).map(r => r.workout_date));
-  document.getElementById('ws-gym').textContent = gymDays.size;
+  const gymEl = document.getElementById('ws-gym');
+  if (gymEl) gymEl.textContent = gymDays.size;
 
   if (actErr) { console.error('loadWeekSummary (act) failed:', actErr.message); }
-  document.getElementById('ws-act').textContent = actData ? actData.length : '—';
+  const actEl = document.getElementById('ws-act');
+  if (actEl) actEl.textContent = actData ? actData.length : '—';
 
   if (sleepErr) { console.error('loadWeekSummary (sleep) failed:', sleepErr.message); }
   const withDur = sleepData ? sleepData.filter(r => r.duration_min !== null) : [];
+  const sleepEl = document.getElementById('ws-sleep');
   if (withDur.length) {
     const avg = withDur.reduce((s, r) => s + r.duration_min, 0) / withDur.length;
-    document.getElementById('ws-sleep').textContent = (avg / 60).toFixed(1) + 'h';
+    if (sleepEl) sleepEl.textContent = (avg / 60).toFixed(1) + 'h';
   } else {
-    document.getElementById('ws-sleep').textContent = '—';
+    if (sleepEl) sleepEl.textContent = '—';
   }
 }
 
@@ -1098,7 +1101,8 @@ async function loadMotivationSummary() {
   const { data: actMonth } = await sb.from('activity_data').select('id')
     .gte('activity_date', monthStart).lte('activity_date', monthEnd);
   const monthCount = actMonth ? actMonth.length : 0;
-  document.getElementById('ms-month').textContent = monthCount + ' krt';
+  const msMonthEl = document.getElementById('ms-month');
+  if (msMonthEl) msMonthEl.textContent = monthCount + ' krt';
 
   // Streak + viikko% — yksi kysely 90 päivälle kattaa molemmat
   const today = new Date();
@@ -1115,7 +1119,8 @@ async function loadMotivationSummary() {
   const weekFrom = mon2.iso, weekTo = localIso(sun2);
   const activeDaysThisWeek = new Set([...activeDays90].filter(d => d >= weekFrom && d <= weekTo));
   const weekPct = Math.min(100, Math.round(activeDaysThisWeek.size / 6 * 100));
-  document.getElementById('ms-week').textContent = weekPct + '%';
+  const msWeekEl = document.getElementById('ms-week');
+  if (msWeekEl) msWeekEl.textContent = weekPct + '%';
 
   let streak = 0;
   for (let i = 0; i < 90; i++) {
@@ -1129,45 +1134,108 @@ async function loadMotivationSummary() {
       break;
     }
   }
-  document.getElementById('ms-streak').textContent = streak + ' pv';
+  const msStreakEl = document.getElementById('ms-streak');
+  if (msStreakEl) msStreakEl.textContent = streak + ' pv';
 }
 
 async function renderTreeni() {
-  const hr = new Date().getHours();
-  const greet = hr < 12 ? 'HYVÄÄ HUOMENTA' : hr < 17 ? 'HYVÄÄ PÄIVÄÄ' : 'HYVÄÄ ILTAA';
-  const greetEl = document.getElementById('greeting-time');
-  const weekEl = document.getElementById('greeting-week');
-  if (greetEl) greetEl.textContent = greet;
-  if (weekEl) weekEl.textContent = `Viikko ${isoWeek(wStart(wOff).date)}`;
-
   await loadWeekActivityData(wOff);
 
   const ws = wStart(wOff), wk = isoWeek(ws.date);
   document.getElementById('week-label').textContent = `Viikko ${wk} / ${ws.date.getFullYear()}`;
 
+  const st   = getActiveSession(wOff, aDay);
+  const sess = SESS[st];
+  const started = isStarted(wOff, aDay, st);
+  const done    = isDone(wOff, aDay, st);
+
+  // Päivän nimi suomeksi
+  const dayNames = ['Maanantai','Tiistai','Keskiviikko','Torstai','Perjantai','Lauantai','Sunnuntai'];
+  const dayDate  = new Date(ws.date);
+  dayDate.setDate(ws.date.getDate() + aDay);
+  const isToday  = localIso(dayDate) === localIso(new Date());
+  const dayLabel = (isToday ? 'Tänään' : dayNames[aDay]) + ' · ' + dayDate.toLocaleDateString('fi-FI',{day:'numeric',month:'long'}).toUpperCase();
+
+  // Hero CTA
+  let ctaLabel, ctaClass, ctaOnclick;
+  if (done) {
+    ctaLabel = 'Treeni tehty ✓'; ctaClass = 'hero-cta done';
+    ctaOnclick = `toggleDone()`;
+  } else if (started) {
+    ctaLabel = 'Jatka treeniä →'; ctaClass = 'hero-cta';
+    ctaOnclick = `document.getElementById('session-content').scrollIntoView({behavior:'smooth'})`;
+  } else if (sess && sess.ex && sess.ex.length) {
+    ctaLabel = 'Aloita treeni →'; ctaClass = 'hero-cta';
+    ctaOnclick = `startSession()`;
+  } else {
+    ctaLabel = null;
+  }
+
+  // Hero stats (liikkeitä, sarjoja, est. min)
+  let heroStatsHtml = '';
+  if (sess && sess.ex && sess.ex.length) {
+    const exCount  = sess.ex.length;
+    const setCount = sess.ex.reduce((sum, e) => sum + e.s, 0);
+    const estMin   = Math.round(setCount * 2.5);
+    heroStatsHtml = `
+      <div class="hero-stats-row">
+        <div class="hero-stat"><div class="hero-stat-val">${exCount}</div><div class="hero-stat-label">liikettä</div></div>
+        <div class="hero-stat-sep"></div>
+        <div class="hero-stat"><div class="hero-stat-val">~${estMin}</div><div class="hero-stat-label">min</div></div>
+        <div class="hero-stat-sep"></div>
+        <div class="hero-stat"><div class="hero-stat-val">${setCount}</div><div class="hero-stat-label">sarjaa</div></div>
+      </div>`;
+  }
+
+  document.getElementById('hero-section').innerHTML = `
+    <div class="hero-card">
+      <div class="hero-glow"></div>
+      <div class="hero-day">${dayLabel}</div>
+      <div class="hero-name">${sess ? sess.name : '—'}</div>
+      <div class="hero-focus">${sess ? sess.focus : ''}</div>
+      ${heroStatsHtml}
+      ${ctaLabel ? `<button class="${ctaClass}" onclick="${ctaOnclick}">${ctaLabel}</button>` : ''}
+    </div>
+    <div class="hero-metrics">
+      <div class="hero-metric">
+        <div class="hero-metric-icon">🔥</div>
+        <div class="hero-metric-val" style="color:#ff9f0a" id="ms-streak">—</div>
+        <div class="hero-metric-label">streak</div>
+      </div>
+      <div class="hero-metric">
+        <div class="hero-metric-icon">💪</div>
+        <div class="hero-metric-val" style="color:#0a84ff" id="ws-gym">—</div>
+        <div class="hero-metric-label">viikon sali</div>
+      </div>
+      <div class="hero-metric">
+        <div class="hero-metric-icon">😴</div>
+        <div class="hero-metric-val" style="color:#30d158" id="ws-sleep">—</div>
+        <div class="hero-metric-label">uni ka</div>
+      </div>
+    </div>`;
+
+  // Päivätabit
   const tabs = document.getElementById('day-tabs');
   tabs.innerHTML = '';
   DAYS.forEach((lb, i) => {
-    const st = getActiveSession(wOff, i), isSali = ['t1','t2','t3','t4'].includes(st);
+    const ist = getActiveSession(wOff, i), isSali = ['t1','t2','t3','t4'].includes(ist);
     const btn = document.createElement('button');
     btn.className = 'day-tab';
-    if (i === aDay)               btn.classList.add('active');
-    else if (isDone(wOff, i, st)) btn.classList.add('done');
-    else if (!isSali)         btn.classList.add('rest');
+    if (i === aDay)                btn.classList.add('active');
+    else if (isDone(wOff, i, ist)) btn.classList.add('done');
+    else if (!isSali)              btn.classList.add('rest');
     btn.style.cssText = 'display:flex;flex-direction:column;align-items:center;';
-    const dotDone    = isDone(wOff, i, st);
-    const dotStarted = isStarted(wOff, i, st);
+    const dotDone    = isDone(wOff, i, ist);
+    const dotStarted = isStarted(wOff, i, ist);
     const dotCls     = dotDone ? 'done' : dotStarted ? 'active' : '';
     const dotHtml    = dotCls ? `<div class="day-state-dot ${dotCls}"></div>` : '';
-    btn.innerHTML = `<span>${lb}</span><span style="font-size:9px;opacity:.6">${st.toUpperCase()}</span>${dotHtml}`;
+    btn.innerHTML = `<span>${lb}</span><span style="font-size:9px;opacity:.6">${ist.toUpperCase()}</span>${dotHtml}`;
     btn.onclick = () => { aDay = i; renderTreeni(); };
 
-    // Laske päivän ISO-päivämäärä
-    const dayDate = new Date(ws.date);
-    dayDate.setDate(ws.date.getDate() + i);
-    const dayIso = localIso(dayDate);
+    const dayD = new Date(ws.date);
+    dayD.setDate(ws.date.getDate() + i);
+    const dayIso = localIso(dayD);
     const dayData = weekActivityCache[dayIso];
-
     if (dayData) {
       const hasWorkout  = Object.keys(dayData.workout).length > 0;
       const hasActivity = dayData.activities.length > 0;
@@ -1175,8 +1243,7 @@ async function renderTreeni() {
         const indicator = document.createElement('button');
         indicator.className = 'day-done-btn';
         if (hasWorkout) {
-          const exCount = Object.keys(dayData.workout).length;
-          indicator.textContent = `💪 ${exCount} liik.`;
+          indicator.textContent = `💪 ${Object.keys(dayData.workout).length} liik.`;
         } else {
           const act = dayData.activities[0];
           const icon = act.activity_type === 'Jääkiekko' ? '🏒' :
@@ -1188,16 +1255,8 @@ async function renderTreeni() {
         btn.appendChild(indicator);
       }
     }
-
     tabs.appendChild(btn);
   });
-
-  const saliDays = Object.entries(SCHED)
-    .filter(([, st]) => ['t1','t2','t3','t4'].includes(st))
-    .map(([i]) => Number(i));
-  const done = saliDays.filter(d => isDone(wOff, d, getActiveSession(wOff, d))).length;
-  document.getElementById('prog-fill').style.width = Math.round(done / saliDays.length * 100) + '%';
-  document.getElementById('prog-text').textContent  = `${done}/${saliDays.length} salikerrasta tehty`;
 
   loadWeekSummary();
   loadMotivationSummary();
