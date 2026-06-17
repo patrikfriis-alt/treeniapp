@@ -165,6 +165,70 @@ input[type=number], input[type=date], select {
 }
 input:focus, select:focus { border-color: var(--accent); }
 input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
+
+/* ─── Hero card (Fitness+ -tyyli) ──────────────────────────── */
+.hero-card {
+  margin: 12px;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #0d1b4b 0%, #0a2a6e 40%, #0a84ff 100%);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.hero-glow {
+  position: absolute;
+  top: -30px; right: -30px;
+  width: 160px; height: 160px;
+  background: radial-gradient(circle, rgba(10,132,255,0.4) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.hero-day   { font-size:10px; font-weight:700; color:rgba(255,255,255,0.5); text-transform:uppercase; letter-spacing:.12em; margin-bottom:10px; }
+.hero-name  { font-size:30px; font-weight:800; color:#fff; letter-spacing:-0.03em; line-height:1.1; margin-bottom:4px; }
+.hero-focus { font-size:14px; color:rgba(255,255,255,0.6); margin-bottom:20px; }
+.hero-stats-row { display:flex; align-items:center; margin-bottom:20px; }
+.hero-stat-val   { font-size:22px; font-weight:700; color:#fff; line-height:1; }
+.hero-stat-label { font-size:10px; color:rgba(255,255,255,0.5); margin-top:2px; }
+.hero-stat-sep   { width:1px; background:rgba(255,255,255,0.15); height:32px; margin:0 20px; }
+.hero-cta {
+  width:100%;
+  background:rgba(255,255,255,0.15);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,0.2);
+  border-radius:12px;
+  color:#fff;
+  font-size:15px;
+  font-weight:600;
+  padding:12px;
+  cursor:pointer;
+  letter-spacing:-0.01em;
+  transition:all var(--t);
+}
+.hero-cta:hover { background:rgba(255,255,255,0.25); }
+.hero-cta.done  { background:rgba(48,209,88,0.2); border-color:rgba(48,209,88,0.4); color:#30d158; }
+
+/* ─── Hero metrics (streak/sali/uni) ────────────────────────── */
+.hero-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin: 0 12px 10px;
+}
+.hero-metric { background:var(--surface); border-radius:14px; padding:12px; }
+.hero-metric-icon  { font-size:20px; margin-bottom:4px; }
+.hero-metric-val   { font-size:20px; font-weight:700; line-height:1; }
+.hero-metric-label { font-size:10px; color:var(--text3); margin-top:2px; }
+
+/* ─── Sessiotyypin valitsin (pill-tyyli) ────────────────────── */
+.sess-picker { display:flex; gap:5px; flex-wrap:wrap; }
+.sess-btn {
+  font-size:11px; font-weight:500; padding:6px 10px; flex:1; min-width:64px;
+  background:var(--surface2); border:none; border-radius:20px;
+  color:var(--text2); cursor:pointer; white-space:nowrap; transition:all var(--t);
+}
+.sess-btn.active { background:var(--accent); color:#fff; font-weight:600; }
+.sess-btn:not(.active):hover { background:var(--surface3); color:var(--text); }
 .btn {
   padding: 10px 20px;
   border-radius: var(--radius-md);
