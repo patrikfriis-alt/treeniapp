@@ -1070,7 +1070,7 @@ function updateSetBox(o, d, e, s) {
   const sess = SESS[st];
   const exName = sess && sess.ex && sess.ex[e] ? sess.ex[e].n : null;
   const prev = exName ? getPrevSet(exName, s) : null;
-  box.className = `set-row s-${setStatus(sd, prev)}`;
+  box.className = `set-table-row s-${setStatus(sd, prev)}`;
 }
 
 /* ═══════════════════════════════════════════════════════════════
