@@ -295,29 +295,6 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 }
 .day-done-btn:hover { background: var(--green); color: #fff; }
 
-/* ─── Progress ───────────────────────────────────────────────── */
-.prog-wrap { margin-bottom: 12px; }
-.prog-bg   { height: 4px; background: var(--surface2); border-radius: 4px; }
-.prog-fill { height: 4px; background: var(--accent); border-radius: 4px; transition: width .5s ease; }
-.prog-text { font-size: 11px; color: var(--text3); margin-top: 4px; }
-
-/* ─── Exercise items ─────────────────────────────────────────── */
-.ex-item {
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  padding: 16px;
-  margin-bottom: 10px;
-  overflow: hidden;
-}
-.ex-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 10px;
-  gap: 8px;
-}
-.ex-name { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
-
 /* ─── Set rows (taulukkorakenne) ────────────────────────────── */
 .ex-block { margin-bottom: 10px; }
 
@@ -511,7 +488,6 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .day-state-dot.active { background:var(--accent); }
 .day-state-dot.done   { background:var(--green); }
 .prefill-btn { font-size:11px; padding:4px 10px; background:var(--surface3); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--accent); cursor:pointer; white-space:nowrap; margin-top:6px; display:inline-block; }
-.ex-header-right { display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0; }
 
 /* ─── Sidebar ────────────────────────────────────────────────── */
 #sidebar {
