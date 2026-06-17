@@ -1282,7 +1282,7 @@ async function renderSession() {
   // Session type picker
   let html = `<div class="card" style="margin-bottom:8px">
     <div class="card-title">Päivän tyyppi</div>
-    <div style="display:flex;gap:5px;flex-wrap:wrap;">`;
+    <div class="sess-picker">`;
   Object.entries(SESSION_LABELS).forEach(([key, lbl]) => {
     const active = key === st;
     html += `<button onclick="setActiveSession(${wOff},${aDay},'${key}')"
