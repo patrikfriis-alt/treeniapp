@@ -505,6 +505,38 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   z-index: 150;
   background: rgba(0,0,0,0.6);
 }
+
+/* ─── Rest timer ─────────────────────────────────────────────── */
+#rest-timer {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  cursor: pointer;
+  user-select: none;
+  transition: opacity .2s;
+}
+#rest-timer.hidden { display: none !important; }
+#rest-timer-icon { font-size: 18px; }
+#rest-timer-label { font-size: 13px; color: var(--text3); font-weight: 500; }
+#rest-timer-count {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 36px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+#rest-timer.done #rest-timer-count { color: var(--green); }
 </style>
 </head>
 <body>
@@ -523,6 +555,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span>Valikko</span>
   </button>
 </nav>
+
+<div id="rest-timer" class="hidden" onclick="stopRestTimer()">
+  <span id="rest-timer-icon">⏱</span>
+  <span id="rest-timer-label">Lepo</span>
+  <span id="rest-timer-count">90</span>
+</div>
 
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
 <div id="page-treeni" class="page active">
@@ -834,6 +872,46 @@ const getED      = (o, d, st, e) => LD[eKey(o, d, st, e)] || { sets: [] };
 const syncTimers = {};
 const charts = {};
 
+/* ─── Rest timer ────────────────────────────────────────────── */
+let _restInterval = null;
+const REST_DURATION = 90;
+
+function startRestTimer() {
+  stopRestTimer();
+  let remaining = REST_DURATION;
+  const el     = document.getElementById('rest-timer');
+  const countEl = document.getElementById('rest-timer-count');
+  if (!el || !countEl) return;
+  el.classList.remove('hidden', 'done');
+  countEl.textContent = remaining;
+
+  _restInterval = setInterval(() => {
+    remaining--;
+    countEl.textContent = remaining;
+    if (remaining <= 0) {
+      clearInterval(_restInterval);
+      _restInterval = null;
+      el.classList.add('done');
+      countEl.textContent = '✓';
+      document.getElementById('rest-timer-label').textContent = 'Valmis!';
+      setTimeout(() => stopRestTimer(), 2000);
+    }
+  }, 1000);
+}
+
+function stopRestTimer() {
+  if (_restInterval) { clearInterval(_restInterval); _restInterval = null; }
+  const el = document.getElementById('rest-timer');
+  if (el) {
+    el.classList.add('hidden');
+    el.classList.remove('done');
+    const countEl = document.getElementById('rest-timer-count');
+    if (countEl) countEl.textContent = REST_DURATION;
+    const lbl = document.getElementById('rest-timer-label');
+    if (lbl) lbl.textContent = 'Lepo';
+  }
+}
+
 function saveSet(o, d, e, s, field, value) {
   const st = getActiveSession(o, d);
   const k = eKey(o, d, st, e);
@@ -842,6 +920,10 @@ function saveSet(o, d, e, s, field, value) {
   LD[k].sets[s][field] = value;
   saveLD();
   updateSetBox(o, d, e, s);
+
+  // Käynnistä lepoajastin kun sarja on täysin tallennettu (kg + toistot)
+  const sd = LD[k].sets[s];
+  if (sd && sd.kg && sd.reps) startRestTimer();
 
   const timerKey = `${o}-${d}-${e}-${s}`;
   clearTimeout(syncTimers[timerKey]);
