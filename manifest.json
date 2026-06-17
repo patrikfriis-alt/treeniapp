@@ -1,0 +1,18 @@
+{
+  "name": "Treeniapp",
+  "short_name": "Treeni",
+  "description": "Henkilökohtainen treenikirjanpito",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230a84ff' rx='22'/><text y='68' x='50' text-anchor='middle' font-size='60'>🏋️</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
