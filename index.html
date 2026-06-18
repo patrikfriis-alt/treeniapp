@@ -554,6 +554,80 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   font-variant-numeric: tabular-nums;
 }
 #rest-timer.done #rest-timer-count { color: var(--green); }
+/* ─── Seuranta hero cards ────────────────────────────────────── */
+.seuranta-hero {
+  position: relative;
+  border-radius: 20px;
+  padding: 18px;
+  margin: 12px 12px 10px;
+  overflow: hidden;
+}
+.seuranta-hero--keho  { background: linear-gradient(145deg,#1a0d4b 0%,#2a0a6e 40%,#8a2be2 100%); }
+.seuranta-hero--akt   { background: linear-gradient(145deg,#3b0d00 0%,#5a1a00 40%,#ff6b00 100%); }
+.seuranta-hero--uni   { background: linear-gradient(145deg,#0a1a3b 0%,#0a2060 40%,#005c9e 100%); }
+.seuranta-hero-glow {
+  position: absolute; top: -20px; right: -20px;
+  width: 140px; height: 140px; border-radius: 50%;
+  pointer-events: none;
+}
+.seuranta-hero-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .12em;
+  color: rgba(255,255,255,0.5); text-transform: uppercase; margin-bottom: 6px;
+}
+.seuranta-hero-main {
+  font-size: 26px; font-weight: 800; color: #fff; letter-spacing: -0.03em; line-height: 1.1;
+}
+.seuranta-hero-sub {
+  font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 4px; min-height: 18px;
+}
+.seuranta-hero-stats {
+  display: flex; align-items: center; gap: 16px; margin-top: 14px;
+}
+.seuranta-hero-divider {
+  width: 1px; height: 28px; background: rgba(255,255,255,0.15); flex-shrink: 0;
+}
+.seuranta-hero-stat-val   { font-size: 18px; font-weight: 700; color: #fff; }
+.seuranta-hero-stat-label { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+/* ─── Exercise history modal ─────────────────────────────────── */
+.ex-modal-overlay {
+  position: fixed; inset: 0; z-index: 999;
+  background: #000; overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+.ex-modal-header {
+  background: linear-gradient(145deg,#0d1b4b 0%,#0a2a6e 40%,#0a84ff 100%);
+  padding: 16px 16px 24px; flex-shrink: 0;
+}
+.ex-modal-nav {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+}
+.ex-modal-back {
+  background: none; border: none; color: rgba(255,255,255,0.5);
+  font-size: 13px; cursor: pointer; padding: 0;
+}
+.ex-modal-title {
+  font-size: 20px; font-weight: 800; color: #fff; letter-spacing: -0.02em; margin-bottom: 10px;
+}
+.ex-modal-stat-row {
+  display: flex; align-items: center; gap: 16px;
+}
+.ex-modal-stat-val   { font-size: 22px; font-weight: 700; color: #fff; }
+.ex-modal-stat-label { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+.ex-modal-divider    { width: 1px; height: 32px; background: rgba(255,255,255,0.15); flex-shrink: 0; }
+.ex-modal-body       { padding: 12px; flex: 1; }
+.ex-modal-chart-card { background: #1c1c1e; border-radius: 16px; padding: 12px; margin-bottom: 10px; }
+.ex-modal-range-btns { display: flex; gap: 6px; margin-bottom: 10px; }
+.ex-modal-range-btns .stab { flex: none; padding: 4px 12px; }
+.ex-modal-sessions-card { background: #1c1c1e; border-radius: 16px; overflow: hidden; }
+.ex-modal-session-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; border-bottom: 1px solid var(--border2);
+}
+.ex-modal-session-row:last-child { border-bottom: none; }
+.ex-modal-session-date { font-size: 13px; color: rgba(255,255,255,0.5); }
+.ex-modal-session-val  { font-size: 13px; color: #fff; font-weight: 600; }
+.ex-modal-pr-badge     { font-size: 11px; color: var(--green); margin-left: 6px; }
+.ex-modal-status       { color: rgba(255,255,255,0.5); font-size: 13px; text-align: center; padding: 16px; }
 </style>
 </head>
 <body>
@@ -600,10 +674,16 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   </div>
 
   <div id="seuranta-keho">
-    <div class="metric-grid">
-      <div class="metric"><div class="metric-label">Paino</div><div class="metric-value" style="color:var(--teal)" id="m-weight">—</div></div>
-      <div class="metric"><div class="metric-label">Rasva%</div><div class="metric-value" style="color:var(--blue)" id="m-fat">—</div></div>
-      <div class="metric"><div class="metric-label">Lihas%</div><div class="metric-value" style="color:var(--amber)" id="m-muscle">—</div></div>
+    <div class="seuranta-hero seuranta-hero--keho">
+      <div class="seuranta-hero-glow" style="background:radial-gradient(circle,rgba(138,43,226,0.5) 0%,transparent 70%)"></div>
+      <div class="seuranta-hero-label">TÄNÄÄN · KEHO</div>
+      <div class="seuranta-hero-main" id="m-weight">—</div>
+      <div class="seuranta-hero-sub" id="m-weight-delta"></div>
+      <div class="seuranta-hero-stats">
+        <div><div class="seuranta-hero-stat-val" id="m-fat">—</div><div class="seuranta-hero-stat-label">rasva%</div></div>
+        <div class="seuranta-hero-divider"></div>
+        <div><div class="seuranta-hero-stat-val" id="m-muscle">—</div><div class="seuranta-hero-stat-label">lihas%</div></div>
+      </div>
     </div>
     <div class="card">
       <div class="card-title">Kirjaa mittaus</div>
@@ -621,6 +701,17 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   </div>
 
   <div id="seuranta-aktiviteetti" style="display:none">
+    <div class="seuranta-hero seuranta-hero--akt">
+      <div class="seuranta-hero-glow" style="background:radial-gradient(circle,rgba(255,107,0,0.5) 0%,transparent 70%)"></div>
+      <div class="seuranta-hero-label">VIIMEISIN · AKTIVITEETTI</div>
+      <div class="seuranta-hero-main" id="hero-act-type">—</div>
+      <div class="seuranta-hero-sub" id="hero-act-sub"></div>
+      <div class="seuranta-hero-stats">
+        <div><div class="seuranta-hero-stat-val" id="hero-act-dur">—</div><div class="seuranta-hero-stat-label">min</div></div>
+        <div class="seuranta-hero-divider"></div>
+        <div><div class="seuranta-hero-stat-val" id="hero-act-cal">—</div><div class="seuranta-hero-stat-label">kcal</div></div>
+      </div>
+    </div>
     <div class="card">
       <div class="card-title">Kirjaa aktiviteetti</div>
       <div class="form-row"><label>Päivämäärä</label><input type="date" id="act-date"></div>
@@ -652,9 +743,16 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   </div>
 
   <div id="seuranta-uni" style="display:none">
-    <div class="metric-grid" style="grid-template-columns:1fr 1fr;">
-      <div class="metric"><div class="metric-label">Viime yö</div><div class="metric-value" style="color:var(--teal)" id="sleep-last">—</div></div>
-      <div class="metric"><div class="metric-label">Viikon ka</div><div class="metric-value" style="color:var(--blue)" id="sleep-avg">—</div></div>
+    <div class="seuranta-hero seuranta-hero--uni">
+      <div class="seuranta-hero-glow" style="background:radial-gradient(circle,rgba(0,92,158,0.5) 0%,transparent 70%)"></div>
+      <div class="seuranta-hero-label">VIIME YÖ · UNI</div>
+      <div class="seuranta-hero-main" id="sleep-last">—</div>
+      <div class="seuranta-hero-sub" id="hero-sleep-sub"></div>
+      <div class="seuranta-hero-stats">
+        <div><div class="seuranta-hero-stat-val" id="hero-sleep-deep">—</div><div class="seuranta-hero-stat-label">syvä uni</div></div>
+        <div class="seuranta-hero-divider"></div>
+        <div><div class="seuranta-hero-stat-val" id="sleep-avg">—</div><div class="seuranta-hero-stat-label">viikon ka</div></div>
+      </div>
     </div>
     <div class="card">
       <div class="card-title">Kirjaa uni</div>
@@ -688,6 +786,10 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
         <select id="ex-select" onchange="loadExerciseChart(this.value)">
           <option value="">— Valitse liike —</option>
         </select>
+      </div>
+      <div style="text-align:right;margin-top:6px">
+        <button class="btn btn-primary" style="width:auto;padding:6px 14px;font-size:13px"
+          onclick="const v=document.getElementById('ex-select').value;if(v)openExerciseModal(v)">Graffi ↗</button>
       </div>
       <div class="stab-bar" style="margin-top:10px;margin-bottom:0">
         <button id="hist-range-1" class="stab active" onclick="setHistRange(1,this)">1 kk</button>
@@ -749,7 +851,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.2.3</div>
+    <div class="version-chip" style="margin:0">v1.3.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('historia',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
@@ -1510,7 +1612,7 @@ async function renderSession() {
     html += `<div class="ex-block">
       <div class="ex-block-header">
         <div>
-          <div class="ex-block-title">${ex.n}${isPR ? '<span class="pr-badge">PR</span>' : ''}</div>
+          <div class="ex-block-title" data-ex="${ex.n.replace(/"/g,'&quot;')}" onclick="openExerciseModal(this.dataset.ex)" style="cursor:pointer">${ex.n}${isPR ? '<span class="pr-badge">PR</span>' : ''}</div>
           <div class="ex-block-sub">${ex.t}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
@@ -1584,6 +1686,8 @@ async function loadBodyMetrics() {
     .order('measured_at', { ascending: false }).limit(1);
   if (latestErr) { console.error('loadBodyMetrics (latest) failed:', latestErr.message); }
 
+  const deltaEl = document.getElementById('m-weight-delta');
+  if (deltaEl) deltaEl.textContent = '';
   if (latest && latest[0]) {
     const m = latest[0];
     document.getElementById('m-weight').textContent = m.weight_kg  ? `${m.weight_kg} kg` : '—';
@@ -1615,6 +1719,13 @@ async function loadBodyMetrics() {
         },
       },
     });
+    if (deltaEl && latest && latest[0] && latest[0].weight_kg) {
+      const prev = hist.length >= 2 ? hist[hist.length - 2] : null;
+      if (prev && prev.weight_kg) {
+        const d = Math.round((latest[0].weight_kg - prev.weight_kg) * 10) / 10;
+        deltaEl.textContent = (d >= 0 ? '+' : '') + d + ' kg ed. mittauksesta';
+      }
+    }
   }
 }
 
@@ -1649,6 +1760,17 @@ async function loadActivities() {
   if (!data || !data.length) {
     el.innerHTML = '<div style="color:var(--text3);font-size:13px">Ei aktiviteetteja vielä</div>';
     return;
+  }
+  const heroType  = document.getElementById('hero-act-type');
+  const heroSub   = document.getElementById('hero-act-sub');
+  const heroDur   = document.getElementById('hero-act-dur');
+  const heroCal   = document.getElementById('hero-act-cal');
+  if (heroType && data[0]) {
+    const a = data[0];
+    heroType.textContent = a.activity_type || '—';
+    if (heroSub) heroSub.textContent = a.activity_date || '';
+    if (heroDur) heroDur.textContent = a.duration_min ? a.duration_min + '' : '—';
+    if (heroCal) heroCal.textContent = a.calories ? a.calories + '' : '—';
   }
   el.innerHTML = data.map(a => {
     let paceStr = '';
@@ -1699,6 +1821,12 @@ async function loadSleep() {
   if (error) { console.error('loadSleep failed:', error.message); return; }
   if (data && data[0] && data[0].duration_min !== null)
     document.getElementById('sleep-last').textContent = (data[0].duration_min/60).toFixed(1)+'h';
+  const heroSleepSubEl = document.getElementById('hero-sleep-sub');
+  const deepEl         = document.getElementById('hero-sleep-deep');
+  if (data && data[0]) {
+    if (heroSleepSubEl) heroSleepSubEl.textContent = data[0].sleep_date || '';
+    if (deepEl)         deepEl.textContent          = data[0].deep_sleep_min ? data[0].deep_sleep_min + ' min' : '—';
+  }
   if (data && data.length) {
     const withDur = data.filter(d => d.duration_min !== null);
     const avg = withDur.length ? withDur.reduce((s,d)=>s+d.duration_min,0)/withDur.length : 0;
@@ -1857,6 +1985,153 @@ async function loadExerciseChart(exName) {
       },
     },
   });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EXERCISE MODAL
+═══════════════════════════════════════════════════════════════ */
+let _modalChart = null;
+let _modalRange = 3;
+let _modalLoading = false;
+let _modalExName = '';
+
+async function openExerciseModal(exName) {
+  if (!exName) return;
+  _modalExName = exName;
+  _modalRange = 3;
+  document.getElementById('ex-modal-title').textContent = exName;
+  document.getElementById('ex-modal-1rm').textContent = '—';
+  document.getElementById('ex-modal-growth').textContent = '—';
+  document.getElementById('ex-modal-sessions').textContent = '—';
+  document.getElementById('ex-modal-sessions-list').innerHTML = '';
+  document.getElementById('ex-modal-chart-status').textContent = 'Ladataan...';
+  document.getElementById('ex-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  await loadModalChart(3);
+}
+
+async function loadModalChart(months) {
+  if (_modalLoading) return;
+  _modalLoading = true;
+  _modalRange = months;
+  ['ex-modal-range-1','ex-modal-range-3','ex-modal-range-0'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+  });
+  const activeId = months === 1 ? 'ex-modal-range-1' : months === 3 ? 'ex-modal-range-3' : 'ex-modal-range-0';
+  const activeEl = document.getElementById(activeId);
+  if (activeEl) activeEl.classList.add('active');
+
+  const statusEl = document.getElementById('ex-modal-chart-status');
+  statusEl.textContent = 'Ladataan...';
+
+  let query = sb.from('workout_sets')
+    .select('workout_date,weight_kg,reps')
+    .eq('exercise_name', _modalExName)
+    .order('workout_date', { ascending: true });
+
+  if (months > 0) {
+    const from = new Date();
+    from.setMonth(from.getMonth() - months);
+    query = query.gte('workout_date', localIso(from));
+  }
+
+  const { data, error } = await query;
+  if (error || !data || !data.length) {
+    statusEl.textContent = 'Ei dataa vielä.';
+    _modalLoading = false;
+    return;
+  }
+
+  const byDate = {};
+  let best1RM = 0, first1RM = 0;
+  const sessionDates = new Set();
+
+  data.forEach(r => {
+    if (r.weight_kg == null) return;
+    sessionDates.add(r.workout_date);
+    const reps = parseInt(r.reps) || 1;
+    const epley = r.weight_kg * (1 + reps / 30);
+    if (epley > best1RM) best1RM = epley;
+    if (!byDate[r.workout_date] || r.weight_kg > byDate[r.workout_date]) {
+      byDate[r.workout_date] = r.weight_kg;
+    }
+  });
+
+  const sortedDates = Object.keys(byDate).sort();
+  if (sortedDates.length) {
+    const firstReps = data.find(r => r.workout_date === sortedDates[0] && r.weight_kg);
+    if (firstReps) first1RM = firstReps.weight_kg * (1 + (parseInt(firstReps.reps)||1) / 30);
+  }
+
+  const growth = best1RM && first1RM ? Math.round(best1RM - first1RM) : null;
+
+  document.getElementById('ex-modal-1rm').textContent    = best1RM ? Math.round(best1RM) + ' kg' : '—';
+  document.getElementById('ex-modal-growth').textContent = growth !== null ? (growth >= 0 ? '+' : '') + growth + ' kg' : '—';
+  document.getElementById('ex-modal-sessions').textContent = sessionDates.size;
+
+  statusEl.textContent = '';
+
+  if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
+  _modalChart = new Chart(document.getElementById('ex-modal-chart'), {
+    type: 'line',
+    data: {
+      labels: sortedDates,
+      datasets: [{
+        label: _modalExName,
+        data: sortedDates.map(d => byDate[d]),
+        borderColor: '#0a84ff',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: '#0a84ff',
+        tension: .3,
+        fill: false,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks: { color: '#555', font: { size: 10 }, callback: v => v + ' kg' }, grid: { color: '#222' } },
+        x: { ticks: { color: '#555', font: { size: 10 } }, grid: { display: false } },
+      },
+    },
+  });
+
+  const listEl = document.getElementById('ex-modal-sessions-list');
+  const sortedForPR = [...sessionDates].sort(); // oldest first
+  const prDates = new Set();
+  let runningMax = 0;
+  sortedForPR.forEach(date => {
+    const setsOnDate = data.filter(r => r.workout_date === date && r.weight_kg);
+    const bestEpley = setsOnDate.reduce((max, r) => {
+      const e = r.weight_kg * (1 + (parseInt(r.reps)||1)/30);
+      return e > max ? e : max;
+    }, 0);
+    if (bestEpley > runningMax) { runningMax = bestEpley; prDates.add(date); }
+  });
+
+  listEl.innerHTML = [...sessionDates].sort().reverse().slice(0, 10).map(date => {
+    const setsOnDate = data.filter(r => r.workout_date === date && r.weight_kg);
+    if (!setsOnDate.length) return '';
+    const best = setsOnDate.reduce((b, r) => {
+      const e = r.weight_kg * (1 + (parseInt(r.reps)||1)/30);
+      return e > (b.weight_kg * (1 + (parseInt(b.reps)||1)/30)) ? r : b;
+    });
+    const prBadge = prDates.has(date) ? '<span class="ex-modal-pr-badge">↑ PR</span>' : '';
+    return `<div class="ex-modal-session-row">
+      <span class="ex-modal-session-date">${date}</span>
+      <span class="ex-modal-session-val">${best.weight_kg} kg × ${best.reps}${prBadge}</span>
+    </div>`;
+  }).join('');
+  _modalLoading = false;
+}
+
+function closeExerciseModal() {
+  const modal = document.getElementById('ex-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+  if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -2169,5 +2444,42 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW rekisteröinti epäonnistui:', e));
 }
 </script>
+<!-- ── EXERCISE MODAL ────────────────────────────────────────── -->
+<div id="ex-modal" class="ex-modal-overlay" style="display:none">
+  <div class="ex-modal-header">
+    <div class="ex-modal-nav">
+      <button class="ex-modal-back" onclick="closeExerciseModal()">← Takaisin</button>
+    </div>
+    <div id="ex-modal-title" class="ex-modal-title">—</div>
+    <div class="ex-modal-stat-row" id="ex-modal-stat-row">
+      <div>
+        <div class="ex-modal-stat-val" id="ex-modal-1rm">—</div>
+        <div class="ex-modal-stat-label">paras 1RM</div>
+      </div>
+      <div class="ex-modal-divider"></div>
+      <div>
+        <div class="ex-modal-stat-val" id="ex-modal-growth">—</div>
+        <div class="ex-modal-stat-label">kasvu</div>
+      </div>
+      <div class="ex-modal-divider"></div>
+      <div>
+        <div class="ex-modal-stat-val" id="ex-modal-sessions">—</div>
+        <div class="ex-modal-stat-label">sessiota</div>
+      </div>
+    </div>
+  </div>
+  <div class="ex-modal-body">
+    <div class="ex-modal-chart-card">
+      <div class="ex-modal-range-btns stab-bar">
+        <button class="stab" id="ex-modal-range-1" onclick="loadModalChart(1)">1 kk</button>
+        <button class="stab active" id="ex-modal-range-3" onclick="loadModalChart(3)">3 kk</button>
+        <button class="stab" id="ex-modal-range-0" onclick="loadModalChart(0)">Kaikki</button>
+      </div>
+      <div class="chart-wrap" style="margin-top:10px"><canvas id="ex-modal-chart"></canvas></div>
+      <div id="ex-modal-chart-status" class="ex-modal-status"></div>
+    </div>
+    <div class="ex-modal-sessions-card" id="ex-modal-sessions-list"></div>
+  </div>
+</div>
 </body>
 </html>
