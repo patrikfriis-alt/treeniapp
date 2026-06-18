@@ -1695,18 +1695,19 @@ async function loadBodyMetrics() {
     document.getElementById('m-muscle').textContent = m.muscle_pct ? `${m.muscle_pct}%`  : '—';
   }
 
-  const { data: hist, error: histErr } = await sb.from('body_metrics').select('*').order('measured_at').limit(20);
+  const { data: hist, error: histErr } = await sb.from('body_metrics').select('*')
+    .order('measured_at', { ascending: false }).limit(20);
   if (histErr) { console.error('loadBodyMetrics (hist) failed:', histErr.message); }
   if (hist && hist.length > 1) {
     if (charts.body) charts.body.destroy();
     charts.body = new Chart(document.getElementById('body-chart'), {
       type: 'line',
       data: {
-        labels: hist.map(d => d.measured_at.slice(5)),
+        labels: [...hist].reverse().map(d => d.measured_at.slice(5)),
         datasets: [
-          { label:'Paino',  data:hist.map(d=>d.weight_kg),  borderColor:'#1D9E75', borderWidth:2, pointRadius:3, pointBackgroundColor:'#1D9E75', tension:.3, fill:false, yAxisID:'y1' },
-          { label:'Rasva%', data:hist.map(d=>d.fat_pct),    borderColor:'#378ADD', borderWidth:2, pointRadius:3, pointBackgroundColor:'#378ADD', tension:.3, fill:false, yAxisID:'y2' },
-          { label:'Lihas%', data:hist.map(d=>d.muscle_pct), borderColor:'#EF9F27', borderWidth:2, pointRadius:3, pointBackgroundColor:'#EF9F27', tension:.3, fill:false, yAxisID:'y2' },
+          { label:'Paino',  data:[...hist].reverse().map(d=>d.weight_kg),  borderColor:'#1D9E75', borderWidth:2, pointRadius:3, pointBackgroundColor:'#1D9E75', tension:.3, fill:false, yAxisID:'y1' },
+          { label:'Rasva%', data:[...hist].reverse().map(d=>d.fat_pct),    borderColor:'#378ADD', borderWidth:2, pointRadius:3, pointBackgroundColor:'#378ADD', tension:.3, fill:false, yAxisID:'y2' },
+          { label:'Lihas%', data:[...hist].reverse().map(d=>d.muscle_pct), borderColor:'#EF9F27', borderWidth:2, pointRadius:3, pointBackgroundColor:'#EF9F27', tension:.3, fill:false, yAxisID:'y2' },
         ],
       },
       options: {
@@ -1719,12 +1720,9 @@ async function loadBodyMetrics() {
         },
       },
     });
-    if (deltaEl && latest && latest[0] && latest[0].weight_kg) {
-      const prev = hist.length >= 2 ? hist[hist.length - 2] : null;
-      if (prev && prev.weight_kg) {
-        const d = Math.round((latest[0].weight_kg - prev.weight_kg) * 10) / 10;
-        deltaEl.textContent = (d >= 0 ? '+' : '') + d + ' kg ed. mittauksesta';
-      }
+    if (deltaEl && hist.length >= 2 && latest && latest[0] && latest[0].weight_kg && hist[1] && hist[1].weight_kg) {
+      const d = Math.round((latest[0].weight_kg - hist[1].weight_kg) * 10) / 10;
+      deltaEl.textContent = (d >= 0 ? '+' : '') + d + ' kg ed. mittauksesta';
     }
   }
 }
@@ -1991,14 +1989,12 @@ async function loadExerciseChart(exName) {
    EXERCISE MODAL
 ═══════════════════════════════════════════════════════════════ */
 let _modalChart = null;
-let _modalRange = 3;
 let _modalLoading = false;
 let _modalExName = '';
 
 async function openExerciseModal(exName) {
   if (!exName) return;
   _modalExName = exName;
-  _modalRange = 3;
   document.getElementById('ex-modal-title').textContent = exName;
   document.getElementById('ex-modal-1rm').textContent = '—';
   document.getElementById('ex-modal-growth').textContent = '—';
@@ -2013,7 +2009,6 @@ async function openExerciseModal(exName) {
 async function loadModalChart(months) {
   if (_modalLoading) return;
   _modalLoading = true;
-  _modalRange = months;
   ['ex-modal-range-1','ex-modal-range-3','ex-modal-range-0'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.remove('active');
@@ -2037,97 +2032,99 @@ async function loadModalChart(months) {
   }
 
   const { data, error } = await query;
-  if (error || !data || !data.length) {
-    statusEl.textContent = 'Ei dataa vielä.';
-    _modalLoading = false;
-    return;
-  }
-
-  const byDate = {};
-  let best1RM = 0, first1RM = 0;
-  const sessionDates = new Set();
-
-  data.forEach(r => {
-    if (r.weight_kg == null) return;
-    sessionDates.add(r.workout_date);
-    const reps = parseInt(r.reps) || 1;
-    const epley = r.weight_kg * (1 + reps / 30);
-    if (epley > best1RM) best1RM = epley;
-    if (!byDate[r.workout_date] || r.weight_kg > byDate[r.workout_date]) {
-      byDate[r.workout_date] = r.weight_kg;
+  try {
+    if (error || !data || !data.length) {
+      statusEl.textContent = 'Ei dataa vielä.';
+      return;
     }
-  });
 
-  const sortedDates = Object.keys(byDate).sort();
-  if (sortedDates.length) {
-    const firstReps = data.find(r => r.workout_date === sortedDates[0] && r.weight_kg);
-    if (firstReps) first1RM = firstReps.weight_kg * (1 + (parseInt(firstReps.reps)||1) / 30);
-  }
+    const byDate = {};
+    let best1RM = 0, first1RM = 0;
+    const sessionDates = new Set();
 
-  const growth = best1RM && first1RM ? Math.round(best1RM - first1RM) : null;
-
-  document.getElementById('ex-modal-1rm').textContent    = best1RM ? Math.round(best1RM) + ' kg' : '—';
-  document.getElementById('ex-modal-growth').textContent = growth !== null ? (growth >= 0 ? '+' : '') + growth + ' kg' : '—';
-  document.getElementById('ex-modal-sessions').textContent = sessionDates.size;
-
-  statusEl.textContent = '';
-
-  if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
-  _modalChart = new Chart(document.getElementById('ex-modal-chart'), {
-    type: 'line',
-    data: {
-      labels: sortedDates,
-      datasets: [{
-        label: _modalExName,
-        data: sortedDates.map(d => byDate[d]),
-        borderColor: '#0a84ff',
-        borderWidth: 2,
-        pointRadius: 3,
-        pointBackgroundColor: '#0a84ff',
-        tension: .3,
-        fill: false,
-      }],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        y: { ticks: { color: '#555', font: { size: 10 }, callback: v => v + ' kg' }, grid: { color: '#222' } },
-        x: { ticks: { color: '#555', font: { size: 10 } }, grid: { display: false } },
-      },
-    },
-  });
-
-  const listEl = document.getElementById('ex-modal-sessions-list');
-  const sortedForPR = [...sessionDates].sort(); // oldest first
-  const prDates = new Set();
-  let runningMax = 0;
-  sortedForPR.forEach(date => {
-    const setsOnDate = data.filter(r => r.workout_date === date && r.weight_kg);
-    const bestEpley = setsOnDate.reduce((max, r) => {
-      const e = r.weight_kg * (1 + (parseInt(r.reps)||1)/30);
-      return e > max ? e : max;
-    }, 0);
-    if (bestEpley > runningMax) { runningMax = bestEpley; prDates.add(date); }
-  });
-
-  listEl.innerHTML = [...sessionDates].sort().reverse().slice(0, 10).map(date => {
-    const setsOnDate = data.filter(r => r.workout_date === date && r.weight_kg);
-    if (!setsOnDate.length) return '';
-    const best = setsOnDate.reduce((b, r) => {
-      const e = r.weight_kg * (1 + (parseInt(r.reps)||1)/30);
-      return e > (b.weight_kg * (1 + (parseInt(b.reps)||1)/30)) ? r : b;
+    data.forEach(r => {
+      if (r.weight_kg == null) return;
+      sessionDates.add(r.workout_date);
+      const reps = parseInt(r.reps) || 1;
+      const epley = r.weight_kg * (1 + reps / 30);
+      if (epley > best1RM) best1RM = epley;
+      if (!byDate[r.workout_date] || epley > byDate[r.workout_date]) {
+        byDate[r.workout_date] = epley;
+      }
     });
-    const prBadge = prDates.has(date) ? '<span class="ex-modal-pr-badge">↑ PR</span>' : '';
-    return `<div class="ex-modal-session-row">
-      <span class="ex-modal-session-date">${date}</span>
-      <span class="ex-modal-session-val">${best.weight_kg} kg × ${best.reps}${prBadge}</span>
-    </div>`;
-  }).join('');
-  _modalLoading = false;
+
+    const sortedDates = Object.keys(byDate).sort();
+    if (sortedDates.length) {
+      first1RM = byDate[sortedDates[0]];
+    }
+
+    const growth = best1RM && first1RM ? Math.round(best1RM - first1RM) : null;
+
+    document.getElementById('ex-modal-1rm').textContent    = best1RM ? Math.round(best1RM) + ' kg' : '—';
+    document.getElementById('ex-modal-growth').textContent = growth !== null ? (growth >= 0 ? '+' : '') + growth + ' kg' : '—';
+    document.getElementById('ex-modal-sessions').textContent = sessionDates.size;
+
+    statusEl.textContent = '';
+
+    if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
+    _modalChart = new Chart(document.getElementById('ex-modal-chart'), {
+      type: 'line',
+      data: {
+        labels: sortedDates,
+        datasets: [{
+          label: _modalExName,
+          data: sortedDates.map(d => byDate[d]),
+          borderColor: '#0a84ff',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointBackgroundColor: '#0a84ff',
+          tension: .3,
+          fill: false,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { ticks: { color: '#555', font: { size: 10 }, callback: v => Math.round(v) + ' kg' }, grid: { color: '#222' } },
+          x: { ticks: { color: '#555', font: { size: 10 } }, grid: { display: false } },
+        },
+      },
+    });
+
+    const listEl = document.getElementById('ex-modal-sessions-list');
+    const sortedForPR = [...sessionDates].sort(); // oldest first
+    const prDates = new Set();
+    let runningMax = 0;
+    sortedForPR.forEach(date => {
+      const setsOnDate = data.filter(r => r.workout_date === date && r.weight_kg);
+      const bestEpley = setsOnDate.reduce((max, r) => {
+        const e = r.weight_kg * (1 + (parseInt(r.reps)||1)/30);
+        return e > max ? e : max;
+      }, 0);
+      if (bestEpley > runningMax) { runningMax = bestEpley; prDates.add(date); }
+    });
+
+    listEl.innerHTML = [...sessionDates].sort().reverse().slice(0, 10).map(date => {
+      const setsOnDate = data.filter(r => r.workout_date === date && r.weight_kg);
+      if (!setsOnDate.length) return '';
+      const best = setsOnDate.reduce((b, r) => {
+        const e = r.weight_kg * (1 + (parseInt(r.reps)||1)/30);
+        return e > (b.weight_kg * (1 + (parseInt(b.reps)||1)/30)) ? r : b;
+      });
+      const prBadge = prDates.has(date) ? '<span class="ex-modal-pr-badge">↑ PR</span>' : '';
+      return `<div class="ex-modal-session-row">
+        <span class="ex-modal-session-date">${date}</span>
+        <span class="ex-modal-session-val">${best.weight_kg} kg × ${best.reps}${prBadge}</span>
+      </div>`;
+    }).join('');
+  } finally {
+    _modalLoading = false;
+  }
 }
 
 function closeExerciseModal() {
+  _modalLoading = false;
   const modal = document.getElementById('ex-modal');
   if (modal) modal.style.display = 'none';
   document.body.style.overflow = '';
@@ -2325,6 +2322,7 @@ function showStatus(id, msg, isErr) {
 }
 
 function showPage(name, btn) {
+  document.body.style.overflow = '';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
