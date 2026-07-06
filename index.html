@@ -2392,6 +2392,85 @@ function showDayModal(title, body) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   RUOKAPÄIVÄKIRJA — data
+═══════════════════════════════════════════════════════════════ */
+const MEAL_DEFS = [
+  { key: 'aamiainen',   icon: '🌅', label: 'Aamiainen' },
+  { key: 'lounas',      icon: '☀️', label: 'Lounas' },
+  { key: 'paivallinen', icon: '🌇', label: 'Päivällinen' },
+  { key: 'valipala',    icon: '🍎', label: 'Välipala' },
+];
+
+let foodDayOffset = 0;
+let foodDayEntries = [];
+let foodGoals = null;
+
+function addDays(base, n) {
+  const d = new Date(base);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+function mondayOf(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function entrySource(entry) {
+  return entry.food_cache || entry.custom_foods || null;
+}
+
+function foodItemName(entry) {
+  const src = entrySource(entry);
+  if (!src) return '—';
+  return entry.food_cache ? src.name_fi : src.name;
+}
+
+function entryCarbs(entry) {
+  const src = entrySource(entry);
+  if (!src) return 0;
+  return src.carbs_per_100g * entry.amount_g / 100;
+}
+
+function entryFat(entry) {
+  const src = entrySource(entry);
+  if (!src) return 0;
+  return src.fat_per_100g * entry.amount_g / 100;
+}
+
+async function loadNutritionGoals() {
+  const { data, error } = await sb.from('nutrition_goals').select('*').eq('id', 1).maybeSingle();
+  if (error) { console.error('loadNutritionGoals failed:', error.message); return null; }
+  return data;
+}
+
+async function loadFoodDayEntries(dateIso) {
+  const { data, error } = await sb.from('food_log_entries')
+    .select(`
+      id, meal_type, amount_g, kcal, protein_g, food_cache_id, custom_food_id,
+      food_cache(name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g),
+      custom_foods(name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g)
+    `)
+    .eq('logged_at', dateIso)
+    .order('created_at', { ascending: true });
+  if (error) { console.error('loadFoodDayEntries failed:', error.message); return []; }
+  return data || [];
+}
+
+async function loadFoodWeekKcal(mondayIso, sundayIso) {
+  const { data, error } = await sb.from('food_log_entries')
+    .select('kcal')
+    .gte('logged_at', mondayIso)
+    .lte('logged_at', sundayIso);
+  if (error) { console.error('loadFoodWeekKcal failed:', error.message); return 0; }
+  return (data || []).reduce((sum, r) => sum + (r.kcal || 0), 0);
+}
+
+/* ═══════════════════════════════════════════════════════════════
    UTILITIES
 ═══════════════════════════════════════════════════════════════ */
 function parseNum(id) {
