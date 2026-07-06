@@ -2548,6 +2548,127 @@ function renderMealCards(entries) {
   }).join('');
 }
 
+let foodModalMeal = null;
+let foodModalSelected = null;
+let foodRecentItems = [];
+let foodSearchItems = [];
+let foodSearchDebounce = null;
+
+async function loadRecentFoods() {
+  const from = new Date();
+  from.setDate(from.getDate() - 30);
+  const { data, error } = await sb.from('food_log_entries')
+    .select(`
+      food_cache_id, custom_food_id,
+      food_cache(id,name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g),
+      custom_foods(id,name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g)
+    `)
+    .gte('logged_at', localIso(from))
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) { console.error('loadRecentFoods failed:', error.message); return []; }
+
+  const counts = new Map();
+  (data || []).forEach(row => {
+    const isCache = !!row.food_cache_id;
+    const food = isCache ? row.food_cache : row.custom_foods;
+    if (!food) return;
+    const key = (isCache ? 'cache:' : 'custom:') + food.id;
+    if (!counts.has(key)) {
+      counts.set(key, {
+        name: isCache ? food.name_fi : food.name,
+        kcalPer100g: food.kcal_per_100g,
+        proteinPer100g: food.protein_per_100g,
+        carbsPer100g: food.carbs_per_100g,
+        fatPer100g: food.fat_per_100g,
+        source: isCache ? 'cache' : 'custom',
+        cacheId: isCache ? food.id : null,
+        customId: isCache ? null : food.id,
+        count: 0,
+      });
+    }
+    counts.get(key).count++;
+  });
+
+  return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 8);
+}
+
+async function searchFineli(query) {
+  const res = await fetch(`https://fineli.fi/fineli/api/v1/foods?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error('Fineli-haku epäonnistui');
+  return res.json();
+}
+
+function renderFoodResultsList(items, label, emptyLabel) {
+  const el = document.getElementById('food-search-results');
+  if (!items.length) {
+    el.innerHTML = `<div class="food-search-empty">${emptyLabel}</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="food-search-section-label">${label}</div>` +
+    items.map((item, i) => `
+      <div class="food-search-result-row" onclick="selectFoodItem(${i})">
+        <span>${item.name}</span>
+        <span class="food-search-result-kcal">${Math.round(item.kcalPer100g)} kcal/100g</span>
+      </div>`).join('');
+}
+
+function onFoodSearchInput() {
+  clearTimeout(foodSearchDebounce);
+  const q = document.getElementById('food-search-input').value.trim();
+  if (q.length < 2) {
+    foodSearchItems = foodRecentItems;
+    renderFoodResultsList(foodSearchItems, 'Viimeksi käytetyt', 'Ei vielä aiempia ruokia');
+    return;
+  }
+  foodSearchDebounce = setTimeout(() => runFoodSearch(q), 300);
+}
+
+async function runFoodSearch(q) {
+  const el = document.getElementById('food-search-results');
+  el.innerHTML = `<div class="food-search-empty">Haetaan...</div>`;
+  try {
+    const results = await searchFineli(q);
+    foodSearchItems = results.map(item => ({
+      name: item.name.fi,
+      kcalPer100g: item.energyKcal,
+      proteinPer100g: item.protein,
+      carbsPer100g: item.carbohydrate,
+      fatPer100g: item.fat,
+      source: 'fineli',
+      fineliId: item.id,
+    }));
+    renderFoodResultsList(foodSearchItems, 'Hakutulokset', 'Ei tuloksia');
+  } catch (err) {
+    console.error('runFoodSearch failed:', err.message);
+    el.innerHTML = `<div class="food-search-empty">Haku epäonnistui, yritä uudelleen</div>`;
+  }
+}
+
+async function openFoodSearch(mealType) {
+  foodModalMeal = mealType;
+  foodModalSelected = null;
+  document.getElementById('food-search-input').value = '';
+  document.getElementById('food-search-step-list').style.display = 'block';
+  document.getElementById('food-search-step-amount').style.display = 'none';
+  document.getElementById('food-search-step-custom').style.display = 'none';
+
+  const meal = MEAL_DEFS.find(m => m.key === mealType);
+  document.getElementById('food-search-title').textContent = `${meal.icon} ${meal.label}`;
+  document.getElementById('food-search-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  document.getElementById('food-search-results').innerHTML = `<div class="food-search-empty">Ladataan...</div>`;
+  foodRecentItems = await loadRecentFoods();
+  foodSearchItems = foodRecentItems;
+  renderFoodResultsList(foodSearchItems, 'Viimeksi käytetyt', 'Ei vielä aiempia ruokia');
+}
+
+function closeFoodSearch() {
+  document.getElementById('food-search-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
 /* ═══════════════════════════════════════════════════════════════
    UTILITIES
 ═══════════════════════════════════════════════════════════════ */
