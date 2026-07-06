@@ -2724,7 +2724,7 @@ async function saveCustomFoodAndContinue() {
   }
   try {
     const id = await createCustomFood({
-      name, kcalPer100g: kcal, proteinPer100g: protein, carbsPer100g: carbs, fatPer100g: fat,
+      name, kcalPer100g: kcal, proteinPer100g: protein || 0, carbsPer100g: carbs || 0, fatPer100g: fat || 0,
     });
     foodModalSelected = {
       name,
