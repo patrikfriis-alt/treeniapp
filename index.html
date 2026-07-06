@@ -2894,6 +2894,74 @@ function openEditEntryDialog(entryId) {
   document.getElementById('edit-entry-cancel-btn').onclick = () => overlay.remove();
 }
 
+async function saveNutritionGoals(goals) {
+  const { error } = await sb.from('nutrition_goals')
+    .upsert({ id: 1, ...goals, updated_at: new Date().toISOString() });
+  if (error) { console.error('saveNutritionGoals failed:', error.message); throw error; }
+}
+
+async function openGoalsModal() {
+  closeSidebar();
+  const goals = (await loadNutritionGoals()) || {};
+
+  const existing = document.getElementById('goals-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'goals-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:400px;width:100%;max-height:85vh;overflow-y:auto;';
+
+  const field = (id, label, val) =>
+    `<div class="form-row"><label>${label}</label><input type="text" inputmode="decimal" id="${id}" value="${val == null ? '' : val}"></div>`;
+
+  modal.innerHTML = `
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Ravintotavoitteet</div>
+    <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Päivä</div>
+    ${field('goal-daily-kcal', 'Kcal', goals.daily_kcal)}
+    ${field('goal-daily-protein', 'Proteiini (g)', goals.daily_protein_g)}
+    ${field('goal-daily-carbs', 'Hiilarit (g)', goals.daily_carbs_g)}
+    ${field('goal-daily-fat', 'Rasva (g)', goals.daily_fat_g)}
+    <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px;">Viikko</div>
+    ${field('goal-weekly-kcal', 'Kcal', goals.weekly_kcal)}
+    ${field('goal-weekly-protein', 'Proteiini (g)', goals.weekly_protein_g)}
+    ${field('goal-weekly-carbs', 'Hiilarit (g)', goals.weekly_carbs_g)}
+    ${field('goal-weekly-fat', 'Rasva (g)', goals.weekly_fat_g)}
+    <button class="btn btn-primary" id="goals-save-btn">Tallenna</button>
+    <button class="btn" id="goals-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Sulje</button>
+    <div class="status" id="goals-status"></div>
+  `;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  document.getElementById('goals-save-btn').onclick = async () => {
+    const saveBtn = document.getElementById('goals-save-btn');
+    saveBtn.disabled = true;
+    try {
+      await saveNutritionGoals({
+        daily_kcal: parseNum('goal-daily-kcal'),
+        daily_protein_g: parseNum('goal-daily-protein'),
+        daily_carbs_g: parseNum('goal-daily-carbs'),
+        daily_fat_g: parseNum('goal-daily-fat'),
+        weekly_kcal: parseNum('goal-weekly-kcal'),
+        weekly_protein_g: parseNum('goal-weekly-protein'),
+        weekly_carbs_g: parseNum('goal-weekly-carbs'),
+        weekly_fat_g: parseNum('goal-weekly-fat'),
+      });
+      foodGoals = null;
+      overlay.remove();
+    } catch (err) {
+      showStatus('goals-status', 'Tallennus epäonnistui', true);
+      saveBtn.disabled = false;
+    }
+  };
+  document.getElementById('goals-cancel-btn').onclick = () => overlay.remove();
+}
+
 /* ═══════════════════════════════════════════════════════════════
    UTILITIES
 ═══════════════════════════════════════════════════════════════ */
