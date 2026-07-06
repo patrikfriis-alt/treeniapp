@@ -678,6 +678,10 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="nav-icon">📊</span>
     <span>Seuranta</span>
   </button>
+  <button onclick="showPage('ruoka',this)">
+    <span class="nav-icon">🍽️</span>
+    <span>Ruoka</span>
+  </button>
   <button id="hamburger-btn" onclick="toggleSidebar()">
     <span class="nav-icon">≡</span>
     <span>Valikko</span>
@@ -884,6 +888,34 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <div id="ohjelma-content"></div>
 </div>
 
+<!-- ── RUOKA ───────────────────────────────────────────────────── -->
+<div id="page-ruoka" class="page">
+  <div class="week-nav">
+    <button class="week-btn" onclick="changeFoodDay(-1)">←</button>
+    <span class="week-label" id="food-day-label">Tänään</span>
+    <button class="week-btn" onclick="changeFoodDay(1)">→</button>
+  </div>
+
+  <div class="food-hero">
+    <div class="food-hero-glow"></div>
+    <div class="food-hero-label">RUOKA</div>
+    <div class="food-hero-main" id="food-hero-kcal">0 kcal</div>
+    <div class="food-hero-stats">
+      <div><div class="food-hero-stat-val" id="food-hero-protein">0g</div><div class="food-hero-stat-label">Proteiini</div></div>
+      <div class="food-hero-divider"></div>
+      <div><div class="food-hero-stat-val" id="food-hero-carbs">0g</div><div class="food-hero-stat-label">Hiilarit</div></div>
+      <div class="food-hero-divider"></div>
+      <div><div class="food-hero-stat-val" id="food-hero-fat">0g</div><div class="food-hero-stat-label">Rasva</div></div>
+    </div>
+  </div>
+
+  <div class="food-week-row" id="food-week-row" style="display:none">
+    <span>Viikko</span><span class="food-week-val"></span>
+  </div>
+
+  <div id="food-meals"></div>
+</div>
+
 <!-- ── SIDEBAR ────────────────────────────────────────────────── -->
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
@@ -898,7 +930,9 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span style="font-size:18px;">📋</span> Ohjelma
   </button>
   <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:20px;margin-bottom:12px;">Asetukset</div>
-  <div style="font-size:13px;color:var(--text3);">Tulossa pian...</div>
+  <button onclick="openGoalsModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
+    <span style="font-size:18px;">🎯</span> Ravintotavoitteet
+  </button>
 </div>
 
 <script>
@@ -2367,6 +2401,7 @@ function showPage(name, btn) {
   if (name === 'seuranta')  showSeuranta(seurantaPage);
   if (name === 'historia')  { populateExerciseDropdown(); loadWorkoutHistory(); loadRunChart(); }
   if (name === 'ohjelma')   renderOhjelma();
+  if (name === 'ruoka')     renderRuoka();
 }
 
 function showSeuranta(sub) {
