@@ -2553,6 +2553,7 @@ let foodModalSelected = null;
 let foodRecentItems = [];
 let foodSearchItems = [];
 let foodSearchDebounce = null;
+let foodSearchRequestId = 0;
 
 async function loadRecentFoods() {
   const from = new Date();
@@ -2617,6 +2618,7 @@ function onFoodSearchInput() {
   clearTimeout(foodSearchDebounce);
   const q = document.getElementById('food-search-input').value.trim();
   if (q.length < 2) {
+    foodSearchRequestId++;
     foodSearchItems = foodRecentItems;
     renderFoodResultsList(foodSearchItems, 'Viimeksi käytetyt', 'Ei vielä aiempia ruokia');
     return;
@@ -2625,10 +2627,12 @@ function onFoodSearchInput() {
 }
 
 async function runFoodSearch(q) {
+  const requestId = ++foodSearchRequestId;
   const el = document.getElementById('food-search-results');
   el.innerHTML = `<div class="food-search-empty">Haetaan...</div>`;
   try {
     const results = await searchFineli(q);
+    if (requestId !== foodSearchRequestId) return;
     foodSearchItems = results.map(item => ({
       name: item.name.fi,
       kcalPer100g: item.energyKcal,
@@ -2641,6 +2645,7 @@ async function runFoodSearch(q) {
     renderFoodResultsList(foodSearchItems, 'Hakutulokset', 'Ei tuloksia');
   } catch (err) {
     console.error('runFoodSearch failed:', err.message);
+    if (requestId !== foodSearchRequestId) return;
     el.innerHTML = `<div class="food-search-empty">Haku epäonnistui, yritä uudelleen</div>`;
   }
 }
