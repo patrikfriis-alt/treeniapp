@@ -588,6 +588,43 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 }
 .seuranta-hero-stat-val   { font-size: 18px; font-weight: 700; color: #fff; }
 .seuranta-hero-stat-label { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+
+/* ─── Ruokapäiväkirja ────────────────────────────────────────── */
+.food-hero {
+  position: relative; border-radius: 20px; padding: 18px; margin: 12px 12px 10px; overflow: hidden;
+  background: linear-gradient(145deg,#0d1b4b 0%,#0a2a6e 40%,#0a84ff 100%);
+}
+.food-hero-glow {
+  position: absolute; top: -20px; right: -20px; width: 140px; height: 140px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(10,132,255,0.4) 0%, transparent 70%); pointer-events: none;
+}
+.food-hero-label { font-size:10px; font-weight:700; letter-spacing:.12em; color:rgba(255,255,255,0.5); text-transform:uppercase; margin-bottom:6px; }
+.food-hero-main  { font-size:28px; font-weight:800; color:#fff; letter-spacing:-0.03em; position:relative; }
+.food-hero-stats { display:flex; align-items:center; gap:16px; margin-top:14px; position:relative; }
+.food-hero-divider { width:1px; height:28px; background:rgba(255,255,255,0.15); flex-shrink:0; }
+.food-hero-stat-val { font-size:16px; font-weight:700; color:#fff; }
+.food-hero-stat-label { font-size:10px; color:rgba(255,255,255,0.4); margin-top:2px; }
+
+.food-week-row {
+  display:flex; justify-content:space-between; align-items:center;
+  background:var(--surface); border-radius:12px; padding:10px 14px; margin-bottom:14px;
+  font-size:13px; color:var(--text2);
+}
+.food-week-row .food-week-val { color: var(--green); font-weight:600; }
+
+.meal-card { background: var(--surface); border-radius: var(--radius-lg); padding:12px; margin-bottom:10px; }
+.meal-card-header { display:flex; justify-content:space-between; font-size:13px; font-weight:600; color:var(--text); }
+.meal-card-kcal { color: var(--text3); font-weight:400; }
+.meal-entry-row {
+  display:flex; justify-content:space-between; padding:8px 0 0; margin-top:8px;
+  border-top:1px solid var(--border2); font-size:13px; color:var(--text2); cursor:pointer;
+}
+.meal-entry-kcal { color: var(--text3); }
+.meal-add-btn {
+  width:100%; margin-top:10px; font-size:12px; padding:8px;
+  background:var(--surface2); border:1px solid var(--border); border-radius:var(--rs);
+  color:var(--text2); cursor:pointer;
+}
 /* ─── Exercise history modal ─────────────────────────────────── */
 .ex-modal-overlay {
   position: fixed; inset: 0; z-index: 999;
