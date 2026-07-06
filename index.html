@@ -2722,6 +2722,8 @@ async function saveCustomFoodAndContinue() {
     showStatus('custom-food-status', 'Nimi ja kcal vaaditaan', true);
     return;
   }
+  const btn = document.getElementById('custom-food-save-btn');
+  btn.disabled = true;
   try {
     const id = await createCustomFood({
       name, kcalPer100g: kcal, proteinPer100g: protein || 0, carbsPer100g: carbs || 0, fatPer100g: fat || 0,
@@ -2738,6 +2740,8 @@ async function saveCustomFoodAndContinue() {
     goToAmountStep();
   } catch (err) {
     showStatus('custom-food-status', 'Tallennus epäonnistui', true);
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -2778,6 +2782,8 @@ async function confirmAddFood() {
     showStatus('food-amount-status', 'Syötä kelvollinen määrä', true);
     return;
   }
+  const btn = document.getElementById('food-amount-add-btn');
+  btn.disabled = true;
   try {
     let cacheId  = foodModalSelected.source === 'cache'  ? foodModalSelected.cacheId  : null;
     let customId = foodModalSelected.source === 'custom' ? foodModalSelected.customId : null;
@@ -2807,6 +2813,8 @@ async function confirmAddFood() {
     await renderRuoka();
   } catch (err) {
     showStatus('food-amount-status', 'Tallennus epäonnistui, yritä uudelleen', true);
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -2858,22 +2866,28 @@ function openEditEntryDialog(entryId) {
       showStatus('edit-entry-status', 'Syötä kelvollinen määrä', true);
       return;
     }
+    const saveBtn = document.getElementById('edit-entry-save-btn');
+    saveBtn.disabled = true;
     try {
       await updateFoodLogEntryAmount(entry.id, grams, src.kcal_per_100g, src.protein_per_100g);
       overlay.remove();
       await renderRuoka();
     } catch (err) {
       showStatus('edit-entry-status', 'Tallennus epäonnistui', true);
+      saveBtn.disabled = false;
     }
   };
 
   document.getElementById('edit-entry-delete-btn').onclick = async () => {
+    const deleteBtn = document.getElementById('edit-entry-delete-btn');
+    deleteBtn.disabled = true;
     try {
       await deleteFoodLogEntry(entry.id);
       overlay.remove();
       await renderRuoka();
     } catch (err) {
       showStatus('edit-entry-status', 'Poisto epäonnistui', true);
+      deleteBtn.disabled = false;
     }
   };
 
@@ -3082,7 +3096,7 @@ if ('serviceWorker' in navigator) {
         <button class="stab" onclick="setFoodAmount(150)">150g</button>
         <button class="stab" onclick="setFoodAmount(200)">200g</button>
       </div>
-      <button class="btn btn-primary" onclick="confirmAddFood()">Lisää</button>
+      <button class="btn btn-primary" id="food-amount-add-btn" onclick="confirmAddFood()">Lisää</button>
       <div class="status" id="food-amount-status"></div>
     </div>
 
@@ -3092,7 +3106,7 @@ if ('serviceWorker' in navigator) {
       <div class="form-row"><label>Proteiini/100g</label><input type="text" inputmode="decimal" id="custom-food-protein"></div>
       <div class="form-row"><label>Hiilarit/100g</label><input type="text" inputmode="decimal" id="custom-food-carbs"></div>
       <div class="form-row"><label>Rasva/100g</label><input type="text" inputmode="decimal" id="custom-food-fat"></div>
-      <button class="btn btn-primary" onclick="saveCustomFoodAndContinue()">Tallenna ja jatka</button>
+      <button class="btn btn-primary" id="custom-food-save-btn" onclick="saveCustomFoodAndContinue()">Tallenna ja jatka</button>
       <div class="status" id="custom-food-status"></div>
     </div>
 
