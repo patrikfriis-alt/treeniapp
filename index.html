@@ -947,6 +947,9 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <button onclick="openGoalsModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span style="font-size:18px;">🎯</span> Ravintotavoitteet
   </button>
+  <button onclick="openCalorieSettingsModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
+    <span style="font-size:18px;">⌚</span> Kalorikerroin
+  </button>
 </div>
 
 <script>
@@ -2974,6 +2977,54 @@ async function openGoalsModal() {
     }
   };
   document.getElementById('goals-cancel-btn').onclick = () => overlay.remove();
+}
+
+async function openCalorieSettingsModal() {
+  closeSidebar();
+  const settings = (await loadAppSettings()) || { calorie_correction: 0.72 };
+  const percentValue = Math.round((1 - settings.calorie_correction) * 100);
+
+  const existing = document.getElementById('calorie-settings-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'calorie-settings-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
+
+  modal.innerHTML = `
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Kalorikerroin</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5;">Apple Watchin kalorilukema on tutkitusti epätarkka. Tämä prosentti vähennetään Applen ilmoittamasta kalorimäärästä arvioidun todellisen kulutuksen laskemiseksi.</div>
+    <div class="form-row"><label>Korjaus (%)</label><input type="text" inputmode="numeric" id="calorie-correction-pct" value="${percentValue}"></div>
+    <button class="btn btn-primary" id="calorie-settings-save-btn">Tallenna</button>
+    <button class="btn" id="calorie-settings-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Sulje</button>
+    <div class="status" id="calorie-settings-status"></div>
+  `;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  document.getElementById('calorie-settings-save-btn').onclick = async () => {
+    const saveBtn = document.getElementById('calorie-settings-save-btn');
+    const pct = parseNum('calorie-correction-pct');
+    if (pct == null || pct < 0 || pct > 100) {
+      showStatus('calorie-settings-status', 'Syötä luku 0-100', true);
+      return;
+    }
+    saveBtn.disabled = true;
+    try {
+      await saveCalorieCorrection(Math.round(100 - pct) / 100);
+      appSettings = null;
+      overlay.remove();
+    } catch (err) {
+      showStatus('calorie-settings-status', 'Tallennus epäonnistui', true);
+      saveBtn.disabled = false;
+    }
+  };
+  document.getElementById('calorie-settings-cancel-btn').onclick = () => overlay.remove();
 }
 
 /* ═══════════════════════════════════════════════════════════════
