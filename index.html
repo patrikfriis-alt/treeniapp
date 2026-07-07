@@ -1835,6 +1835,20 @@ async function saveBodyMetrics() {
 /* ═══════════════════════════════════════════════════════════════
    ACTIVITIES
 ═══════════════════════════════════════════════════════════════ */
+let appSettings = null;
+
+async function loadAppSettings() {
+  const { data, error } = await sb.from('app_settings').select('*').eq('id', 1).maybeSingle();
+  if (error) { console.error('loadAppSettings failed:', error.message); return null; }
+  return data;
+}
+
+async function saveCalorieCorrection(multiplier) {
+  const { error } = await sb.from('app_settings')
+    .upsert({ id: 1, calorie_correction: multiplier, updated_at: new Date().toISOString() });
+  if (error) { console.error('saveCalorieCorrection failed:', error.message); throw error; }
+}
+
 async function loadActivities() {
   const { data, error } = await sb.from('activity_data').select('*')
     .order('activity_date',{ ascending:false }).limit(10);
