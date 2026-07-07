@@ -1,7 +1,7 @@
 -- Apple Watch -treenisynkronointi: workout_sessions/activity_data laajennus + app_settings
 
 alter table workout_sessions add column calories numeric;
-alter table workout_sessions add column avg_heart_rate integer;
+alter table workout_sessions add column avg_heart_rate numeric;
 
 alter table activity_data add column source text not null default 'manual' check (source in ('manual','watch'));
 alter table activity_data add column healthkit_uuid text unique;
