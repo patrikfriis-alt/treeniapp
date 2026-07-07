@@ -19,7 +19,7 @@ Lisää **Aseta muuttuja**-toiminnot (Set Variable) jokaiselle seuraavalle treen
 - `WorkoutType` ← Treenin **Treenityyppi** (Workout Type)
 - `Duration` ← **Kesto** minuutteina
 - `Calories` ← **Aktiivinen energia** (Total Active Energy), yksikkö kcal
-- `AvgHR` ← **Keskisyke** (Average Heart Rate)
+- `AvgHR` ← **Keskisyke** (Average Heart Rate), pyöristä **Pyöristä numero** (Round Number) -toiminnolla kokonaisluvuksi ennen tallennusta muuttujaan (HealthKitin syke on lähes aina desimaaliluku, esim. 142.37)
 - `Distance` ← **Kokonaismatka** (Total Distance), yksikkö km (voi olla tyhjä salitreeneillä)
 - `WorkoutUUID` ← Treenin **UUID**
 - `EndDate` ← **Päättymispäivä**, muotoile **Muotoile päivämäärä** -toiminnolla muotoon `yyyy-MM-dd`
@@ -82,3 +82,4 @@ Paina Shortcutsin automaation kohdalla **"Kokeile"** (Run) manuaalisesti ilman e
 
 - Jos rivi ei ilmesty: tarkista että anon-avain on oikein kopioitu (löytyy `index.html`:n `SB_KEY`-vakiosta), ja että migraatiotiedosto `supabase/migrations/20260708_apple_watch_sync.sql` on ajettu.
 - Jos sali-kalorit eivät päivity: varmista että olet merkinnyt kyseisen päivän session "tehdyksi" Treeniapista ennen tai pian Watch-treenin jälkeen — `workout_sessions`-rivi täytyy olla olemassa jotta `PATCH` löytää sen.
+- Jos tallennus epäonnistuu virheellä joka viittaa `avg_heart_rate`-kenttään: varmista että käytit **Pyöristä numero** -toimintoa `AvgHR`-muuttujalle vaiheessa 3 — HealthKitin desimaaliluku voi hylkääntyä jos tietokannan sarake ei hyväksy desimaaleja.
