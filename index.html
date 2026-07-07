@@ -903,14 +903,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   </div>
 </div>
 
-<!-- ── SEURANTA ────────────────────────────────────────────────── -->
-<div id="page-seuranta" class="page">
-  <div class="stab-bar">
-    <button id="stab-keho" class="stab active" onclick="showSeuranta('keho')">Keho</button>
-    <button id="stab-uni" class="stab" onclick="showSeuranta('uni')">Uni</button>
+<!-- ── KEHO ───────────────────────────────────────────────────── -->
+<div id="page-keho" class="page">
+  <div class="page-header">
+    <button class="back-btn" onclick="showPage('koonti', document.getElementById('nav-koonti'))">‹</button>
+    <span class="page-title">Keho</span>
   </div>
-
-  <div id="seuranta-keho">
     <div class="seuranta-hero seuranta-hero--keho">
       <div class="seuranta-hero-glow" style="background:radial-gradient(circle,rgba(138,43,226,0.5) 0%,transparent 70%)"></div>
       <div class="seuranta-hero-label">TÄNÄÄN · KEHO</div>
@@ -935,9 +933,14 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
       <div class="card-title">Kehitys</div>
       <div class="chart-wrap"><canvas id="body-chart"></canvas></div>
     </div>
-  </div>
+</div>
 
-  <div id="seuranta-uni" style="display:none">
+<!-- ── UNI ────────────────────────────────────────────────────── -->
+<div id="page-uni" class="page">
+  <div class="page-header">
+    <button class="back-btn" onclick="showPage('koonti', document.getElementById('nav-koonti'))">‹</button>
+    <span class="page-title">Uni</span>
+  </div>
     <div class="seuranta-hero seuranta-hero--uni">
       <div class="seuranta-hero-glow" style="background:radial-gradient(circle,rgba(0,92,158,0.5) 0%,transparent 70%)"></div>
       <div class="seuranta-hero-label">VIIME YÖ · UNI</div>
@@ -963,7 +966,6 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
       <div class="card-title">Historia</div>
       <div id="sleep-history"><div style="color:var(--text3);font-size:13px">Ladataan...</div></div>
     </div>
-  </div>
 </div>
 
 <!-- ── HISTORIA ───────────────────────────────────────────────── -->
@@ -3207,7 +3209,8 @@ function showPage(name, btn) {
   if (name === 'koonti')    loadKoonti();
   if (name === 'sali')      renderTreeni();
   if (name === 'aerobia')   { loadActivities(); loadRunChart(); }
-  if (name === 'seuranta')  showSeuranta(seurantaPage);
+  if (name === 'keho')      loadBodyMetrics();
+  if (name === 'uni')       loadSleep();
   if (name === 'historia')  { populateExerciseDropdown(); loadWorkoutHistory(); loadRunChart(); }
   if (name === 'ohjelma')   renderOhjelma();
   if (name === 'ruoka')     renderRuoka();
@@ -3218,16 +3221,6 @@ function loadKoonti() {
     new Date().toLocaleDateString('fi-FI', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
-function showSeuranta(sub) {
-  seurantaPage = sub;
-  ['keho','aktiviteetti','uni'].forEach(s => {
-    document.getElementById('seuranta-' + s).style.display = s === sub ? 'block' : 'none';
-    document.getElementById('stab-' + s).classList.toggle('active', s === sub);
-  });
-  if (sub === 'keho')         loadBodyMetrics();
-  if (sub === 'aktiviteetti') loadActivities();
-  if (sub === 'uni')          loadSleep();
-}
 
 function toggleSidebar() {
   const open = document.getElementById('sidebar').style.transform === 'translateX(0%)';
