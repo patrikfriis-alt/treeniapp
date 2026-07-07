@@ -828,7 +828,61 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <button class="week-btn" onclick="changeWeek(1)">→</button>
   </div>
   <div class="day-tabs" id="day-tabs"></div>
-  <div id="session-content"></div>
+
+  <div class="stab-bar">
+    <button id="sali-tab-treeni" class="stab active" onclick="showSaliTab('treeni',this)">Treeni</button>
+    <button id="sali-tab-kehitys" class="stab" onclick="showSaliTab('kehitys',this)">Kehitys</button>
+  </div>
+
+  <div id="sali-treeni">
+    <div id="session-content"></div>
+  </div>
+
+  <div id="sali-kehitys" style="display:none">
+    <div class="card">
+      <div class="card-title">Liikkeen kehitys</div>
+      <div class="form-row">
+        <label>Liike</label>
+        <select id="ex-select" onchange="loadExerciseChart(this.value)">
+          <option value="">— Valitse liike —</option>
+        </select>
+      </div>
+      <div style="text-align:right;margin-top:6px">
+        <button class="btn btn-primary" style="width:auto;padding:6px 14px;font-size:13px"
+          onclick="const v=document.getElementById('ex-select').value;if(v)openExerciseModal(v)">Graffi ↗</button>
+      </div>
+      <div class="stab-bar" style="margin-top:10px;margin-bottom:0">
+        <button id="hist-range-1" class="stab active" onclick="setHistRange(1,this)">1 kk</button>
+        <button id="hist-range-3" class="stab"        onclick="setHistRange(3,this)">3 kk</button>
+        <button id="hist-range-0" class="stab"        onclick="setHistRange(0,this)">Kaikki</button>
+      </div>
+      <div id="ex-stats" style="display:none;gap:8px;margin-top:10px">
+        <div class="stat-mini-card">
+          <div class="stat-mini-label">Paras 1RM</div>
+          <div id="stat-1rm" class="stat-mini-val">—</div>
+        </div>
+        <div class="stat-mini-card">
+          <div class="stat-mini-label">Volyymi (ed. sessio)</div>
+          <div id="stat-vol" class="stat-mini-val">—</div>
+          <div id="stat-vol-delta" style="font-size:11px;color:var(--text3);margin-top:2px"></div>
+        </div>
+      </div>
+      <div class="chart-wrap" id="ex-chart-wrap" style="display:none;margin-top:12px">
+        <canvas id="ex-chart"></canvas>
+      </div>
+      <div id="ex-chart-status" style="color:var(--text3);font-size:13px;text-align:center;padding:6px"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Salilokit</div>
+      <div class="form-row">
+        <label>Liike</label>
+        <select id="lokit-ex-select" onchange="loadWorkoutHistory()">
+          <option value="">— Kaikki liikkeet —</option>
+        </select>
+      </div>
+      <div id="workout-history"><div style="color:var(--text3);font-size:13px">Ladataan...</div></div>
+    </div>
+  </div>
 </div>
 
 <!-- ── AEROBIA ────────────────────────────────────────────────── -->
@@ -968,77 +1022,6 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     </div>
 </div>
 
-<!-- ── HISTORIA ───────────────────────────────────────────────── -->
-<div id="page-historia" class="page">
-  <div class="stab-bar">
-    <button id="hist-tab-kaaviot" class="stab active" onclick="showHistTab('kaaviot',this)">Kaaviot</button>
-    <button id="hist-tab-lokit"   class="stab"        onclick="showHistTab('lokit',this)">Lokit</button>
-  </div>
-
-  <div id="hist-kaaviot">
-    <div class="card">
-      <div class="card-title">Liikkeen kehitys</div>
-      <div class="form-row">
-        <label>Liike</label>
-        <select id="ex-select" onchange="loadExerciseChart(this.value)">
-          <option value="">— Valitse liike —</option>
-        </select>
-      </div>
-      <div style="text-align:right;margin-top:6px">
-        <button class="btn btn-primary" style="width:auto;padding:6px 14px;font-size:13px"
-          onclick="const v=document.getElementById('ex-select').value;if(v)openExerciseModal(v)">Graffi ↗</button>
-      </div>
-      <div class="stab-bar" style="margin-top:10px;margin-bottom:0">
-        <button id="hist-range-1" class="stab active" onclick="setHistRange(1,this)">1 kk</button>
-        <button id="hist-range-3" class="stab"        onclick="setHistRange(3,this)">3 kk</button>
-        <button id="hist-range-0" class="stab"        onclick="setHistRange(0,this)">Kaikki</button>
-      </div>
-      <div id="ex-stats" style="display:none;gap:8px;margin-top:10px">
-        <div class="stat-mini-card">
-          <div class="stat-mini-label">Paras 1RM</div>
-          <div id="stat-1rm" class="stat-mini-val">—</div>
-        </div>
-        <div class="stat-mini-card">
-          <div class="stat-mini-label">Volyymi (ed. sessio)</div>
-          <div id="stat-vol" class="stat-mini-val">—</div>
-          <div id="stat-vol-delta" style="font-size:11px;color:var(--text3);margin-top:2px"></div>
-        </div>
-      </div>
-      <div class="chart-wrap" id="ex-chart-wrap" style="display:none;margin-top:12px">
-        <canvas id="ex-chart"></canvas>
-      </div>
-      <div id="ex-chart-status" style="color:var(--text3);font-size:13px;text-align:center;padding:6px"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Juoksun kehitys</div>
-      <div class="form-row">
-        <label>Näytä</label>
-        <select id="run-chart-type" onchange="loadRunChart()">
-          <option value="distance">Matka (km)</option>
-          <option value="pace">Vauhti (min/km)</option>
-        </select>
-      </div>
-      <div class="chart-wrap" id="run-chart-wrap" style="margin-top:12px">
-        <canvas id="run-chart"></canvas>
-      </div>
-      <div id="run-chart-status" style="color:var(--text3);font-size:13px;text-align:center;padding:6px"></div>
-    </div>
-  </div>
-
-  <div id="hist-lokit" style="display:none">
-    <div class="card">
-      <div class="card-title">Salilokit</div>
-      <div class="form-row">
-        <label>Liike</label>
-        <select id="lokit-ex-select" onchange="loadWorkoutHistory()">
-          <option value="">— Kaikki liikkeet —</option>
-        </select>
-      </div>
-      <div id="workout-history"><div style="color:var(--text3);font-size:13px">Ladataan...</div></div>
-    </div>
-  </div>
-</div>
-
 <!-- ── OHJELMA ─────────────────────────────────────────────────── -->
 <div id="page-ohjelma" class="page">
   <div id="ohjelma-content"></div>
@@ -1079,9 +1062,6 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <div class="version-chip" style="margin:0">v1.4.1</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
-  <button onclick="showPage('historia',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
-    <span style="font-size:18px;">📈</span> Historia
-  </button>
   <button onclick="showPage('ohjelma',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
     <span style="font-size:18px;">📋</span> Ohjelma
   </button>
@@ -2124,12 +2104,12 @@ function showAerobiaTab(tab, btn) {
   btn.classList.add('active');
 }
 
-function showHistTab(tab, btn) {
-  document.getElementById('hist-kaaviot').style.display = tab === 'kaaviot' ? '' : 'none';
-  document.getElementById('hist-lokit').style.display   = tab === 'lokit'   ? '' : 'none';
-  ['hist-tab-kaaviot','hist-tab-lokit'].forEach(id => document.getElementById(id).classList.remove('active'));
+function showSaliTab(tab, btn) {
+  document.getElementById('sali-treeni').style.display  = tab === 'treeni'  ? '' : 'none';
+  document.getElementById('sali-kehitys').style.display = tab === 'kehitys' ? '' : 'none';
+  ['sali-tab-treeni','sali-tab-kehitys'].forEach(id => document.getElementById(id).classList.remove('active'));
   btn.classList.add('active');
-  if (tab === 'lokit') loadWorkoutHistory();
+  if (tab === 'kehitys') loadWorkoutHistory();
 }
 
 function setHistRange(months, btn) {
@@ -3207,11 +3187,10 @@ function showPage(name, btn) {
   document.getElementById('page-' + name).classList.add('active');
   if (btn) btn.classList.add('active');
   if (name === 'koonti')    loadKoonti();
-  if (name === 'sali')      renderTreeni();
+  if (name === 'sali')      { renderTreeni(); populateExerciseDropdown(); loadWorkoutHistory(); }
   if (name === 'aerobia')   { loadActivities(); loadRunChart(); }
   if (name === 'keho')      loadBodyMetrics();
   if (name === 'uni')       loadSleep();
-  if (name === 'historia')  { populateExerciseDropdown(); loadWorkoutHistory(); loadRunChart(); }
   if (name === 'ohjelma')   renderOhjelma();
   if (name === 'ruoka')     renderRuoka();
 }
