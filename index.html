@@ -1853,6 +1853,9 @@ async function saveCalorieCorrection(multiplier) {
 }
 
 async function loadActivities() {
+  if (!appSettings) appSettings = await loadAppSettings();
+  const correction = (appSettings && appSettings.calorie_correction) ?? 1;
+
   const { data, error } = await sb.from('activity_data').select('*')
     .order('activity_date',{ ascending:false }).limit(10);
   if (error) { console.error('loadActivities failed:', error.message); return; }
@@ -1879,12 +1882,18 @@ async function loadActivities() {
       const pSec = Math.round((a.duration_min / a.distance_km - pMin) * 60);
       paceStr = ` · ${pMin}:${String(pSec).padStart(2,'0')} min/km`;
     }
+    const sourceBadge = a.source === 'watch' ? '⌚ ' : '';
+    const calStr = a.calories
+      ? (a.source === 'watch'
+          ? `${a.calories} kcal (Apple) · ~${Math.round(a.calories * correction)} kcal arvio`
+          : `${a.calories} kcal`)
+      : '';
     return `
     <div class="hist-item">
-      <div><div class="hist-label">${a.activity_type}</div><div class="hist-date">${a.activity_date}</div></div>
+      <div><div class="hist-label">${sourceBadge}${a.activity_type}</div><div class="hist-date">${a.activity_date}</div></div>
       <div style="text-align:right">
         <div class="hist-val">${a.duration_min ? a.duration_min+' min' : '—'}</div>
-        <div style="font-size:11px;color:var(--text3)">${a.calories?a.calories+' kcal':''}${a.avg_heart_rate?' · '+a.avg_heart_rate+' bpm':''}${a.distance_km?' · '+a.distance_km+' km'+paceStr:''}</div>
+        <div style="font-size:11px;color:var(--text3)">${calStr}${a.avg_heart_rate?' · '+a.avg_heart_rate+' bpm':''}${a.distance_km?' · '+a.distance_km+' km'+paceStr:''}</div>
       </div>
     </div>`;
   }).join('');
