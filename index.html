@@ -733,15 +733,11 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <body>
 
 <nav>
-  <button class="active" onclick="showPage('treeni',this)">
-    <span class="nav-icon">🏋️</span>
-    <span>Treeni</span>
+  <button id="nav-koonti" class="active" onclick="showPage('koonti',this)">
+    <span class="nav-icon">🏠</span>
+    <span>Koonti</span>
   </button>
-  <button onclick="showPage('seuranta',this)">
-    <span class="nav-icon">📊</span>
-    <span>Seuranta</span>
-  </button>
-  <button onclick="showPage('ruoka',this)">
+  <button id="nav-ruoka" onclick="showPage('ruoka',this)">
     <span class="nav-icon">🍽️</span>
     <span>Ruoka</span>
   </button>
@@ -757,8 +753,70 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <span id="rest-timer-count">90</span>
 </div>
 
+<!-- ── KOONTI ─────────────────────────────────────────────────── -->
+<div id="page-koonti" class="page active">
+  <div class="koonti-greeting">Hei! 👋</div>
+  <div class="koonti-date" id="koonti-date"></div>
+
+  <div class="hero-metrics">
+    <div class="hero-metric">
+      <div class="hero-metric-icon">🔥</div>
+      <div class="hero-metric-val" id="koonti-ms-streak">—</div>
+      <div class="hero-metric-label">streak</div>
+    </div>
+    <div class="hero-metric">
+      <div class="hero-metric-icon">🏋️</div>
+      <div class="hero-metric-val" id="koonti-ws-gym">—</div>
+      <div class="hero-metric-label">viikon sali</div>
+    </div>
+    <div class="hero-metric">
+      <div class="hero-metric-icon">🏃</div>
+      <div class="hero-metric-val" id="koonti-ws-act">—</div>
+      <div class="hero-metric-label">viikon aktiiv.</div>
+    </div>
+  </div>
+
+  <div class="koonti-section-label">Tänään</div>
+  <div class="koonti-cards">
+    <div class="koonti-card" id="kc-sali" onclick="showPage('sali', document.getElementById('nav-koonti'))">
+      <span class="koonti-card-icon">🏋️</span>
+      <div class="koonti-card-label">Sali</div>
+      <div class="koonti-card-sub" id="kc-sali-sub">Ladataan…</div>
+    </div>
+    <div class="koonti-card" id="kc-aerobia" onclick="showPage('aerobia', document.getElementById('nav-koonti'))">
+      <span class="koonti-card-icon">🏃</span>
+      <div class="koonti-card-label">Aerobinen</div>
+      <div class="koonti-card-sub" id="kc-aerobia-sub">Ladataan…</div>
+    </div>
+  </div>
+
+  <div class="koonti-section-label">Mittarit</div>
+  <div class="koonti-cards">
+    <div class="koonti-card" id="kc-keho" onclick="showPage('keho', document.getElementById('nav-koonti'))">
+      <span class="koonti-card-icon">⚖️</span>
+      <div class="koonti-card-label">Keho</div>
+      <div class="koonti-card-sub" id="kc-keho-sub">Ladataan…</div>
+    </div>
+    <div class="koonti-card" id="kc-uni" onclick="showPage('uni', document.getElementById('nav-koonti'))">
+      <span class="koonti-card-icon">😴</span>
+      <div class="koonti-card-label">Uni</div>
+      <div class="koonti-card-sub" id="kc-uni-sub">Ladataan…</div>
+    </div>
+  </div>
+
+  <div class="koonti-cards koonti-cards--wide">
+    <div class="koonti-card koonti-card--ruoka" id="kc-ruoka" onclick="showPage('ruoka', document.getElementById('nav-ruoka'))">
+      <div>
+        <div class="koonti-card-label">🍽️ Ruokailu</div>
+        <div class="koonti-card-sub" id="kc-ruoka-sub">Ladataan…</div>
+      </div>
+      <div style="font-size:20px;color:var(--text3)">›</div>
+    </div>
+  </div>
+</div>
+
 <!-- ── TREENI ─────────────────────────────────────────────────── -->
-<div id="page-treeni" class="page active">
+<div id="page-treeni" class="page">
   <div id="hero-section"></div>
   <div class="week-nav">
     <button class="week-btn" onclick="changeWeek(-1)">←</button>
@@ -3106,10 +3164,16 @@ function showPage(name, btn) {
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   if (btn) btn.classList.add('active');
+  if (name === 'koonti')    loadKoonti();
   if (name === 'seuranta')  showSeuranta(seurantaPage);
   if (name === 'historia')  { populateExerciseDropdown(); loadWorkoutHistory(); loadRunChart(); }
   if (name === 'ohjelma')   renderOhjelma();
   if (name === 'ruoka')     renderRuoka();
+}
+
+function loadKoonti() {
+  document.getElementById('koonti-date').textContent =
+    new Date().toLocaleDateString('fi-FI', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 function showSeuranta(sub) {
@@ -3216,7 +3280,7 @@ function migrateLD_v3() {
 
 migrateLD_v2();
 migrateLD_v3();
-renderTreeni();
+loadKoonti();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW rekisteröinti epäonnistui:', e));
