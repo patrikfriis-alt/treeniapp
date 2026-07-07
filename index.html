@@ -815,8 +815,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   </div>
 </div>
 
-<!-- ── TREENI ─────────────────────────────────────────────────── -->
-<div id="page-treeni" class="page">
+<!-- ── SALI ───────────────────────────────────────────────────── -->
+<div id="page-sali" class="page">
+  <div class="page-header">
+    <button class="back-btn" onclick="showPage('koonti', document.getElementById('nav-koonti'))">‹</button>
+    <span class="page-title">Sali</span>
+  </div>
   <div id="hero-section"></div>
   <div class="week-nav">
     <button class="week-btn" onclick="changeWeek(-1)">←</button>
@@ -3165,6 +3169,7 @@ function showPage(name, btn) {
   document.getElementById('page-' + name).classList.add('active');
   if (btn) btn.classList.add('active');
   if (name === 'koonti')    loadKoonti();
+  if (name === 'sali')      renderTreeni();
   if (name === 'seuranta')  showSeuranta(seurantaPage);
   if (name === 'historia')  { populateExerciseDropdown(); loadWorkoutHistory(); loadRunChart(); }
   if (name === 'ohjelma')   renderOhjelma();
