@@ -831,42 +831,19 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <div id="session-content"></div>
 </div>
 
-<!-- ── SEURANTA ────────────────────────────────────────────────── -->
-<div id="page-seuranta" class="page">
+<!-- ── AEROBIA ────────────────────────────────────────────────── -->
+<div id="page-aerobia" class="page">
+  <div class="page-header">
+    <button class="back-btn" onclick="showPage('koonti', document.getElementById('nav-koonti'))">‹</button>
+    <span class="page-title">Aerobia</span>
+  </div>
+
   <div class="stab-bar">
-    <button id="stab-keho" class="stab active" onclick="showSeuranta('keho')">Keho</button>
-    <button id="stab-aktiviteetti" class="stab" onclick="showSeuranta('aktiviteetti')">Aktiviteetti</button>
-    <button id="stab-uni" class="stab" onclick="showSeuranta('uni')">Uni</button>
+    <button id="aerobia-tab-treeni" class="stab active" onclick="showAerobiaTab('treeni',this)">Aktiviteetti</button>
+    <button id="aerobia-tab-kehitys" class="stab" onclick="showAerobiaTab('kehitys',this)">Kehitys</button>
   </div>
 
-  <div id="seuranta-keho">
-    <div class="seuranta-hero seuranta-hero--keho">
-      <div class="seuranta-hero-glow" style="background:radial-gradient(circle,rgba(138,43,226,0.5) 0%,transparent 70%)"></div>
-      <div class="seuranta-hero-label">TÄNÄÄN · KEHO</div>
-      <div class="seuranta-hero-main" id="m-weight">—</div>
-      <div class="seuranta-hero-sub" id="m-weight-delta"></div>
-      <div class="seuranta-hero-stats">
-        <div><div class="seuranta-hero-stat-val" id="m-fat">—</div><div class="seuranta-hero-stat-label">rasva%</div></div>
-        <div class="seuranta-hero-divider"></div>
-        <div><div class="seuranta-hero-stat-val" id="m-muscle">—</div><div class="seuranta-hero-stat-label">lihas%</div></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-title">Kirjaa mittaus</div>
-      <div class="form-row"><label>Päivämäärä</label><input type="date" id="body-date"></div>
-      <div class="form-row"><label>Paino (kg)</label><input type="text" inputmode="decimal" id="body-weight" placeholder="114,8"></div>
-      <div class="form-row"><label>Rasva%</label><input type="text" inputmode="decimal" id="body-fat" placeholder="37,7"></div>
-      <div class="form-row"><label>Lihas%</label><input type="text" inputmode="decimal" id="body-muscle" placeholder="29,3"></div>
-      <button class="btn btn-primary" onclick="saveBodyMetrics()">Tallenna</button>
-      <div class="status" id="body-status"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Kehitys</div>
-      <div class="chart-wrap"><canvas id="body-chart"></canvas></div>
-    </div>
-  </div>
-
-  <div id="seuranta-aktiviteetti" style="display:none">
+  <div id="aerobia-treeni">
     <div class="seuranta-hero seuranta-hero--akt">
       <div class="seuranta-hero-glow" style="background:radial-gradient(circle,rgba(255,107,0,0.5) 0%,transparent 70%)"></div>
       <div class="seuranta-hero-label">VIIMEISIN · AKTIVITEETTI</div>
@@ -905,6 +882,58 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <div class="card">
       <div class="card-title">Viimeiset</div>
       <div id="act-history"><div style="color:var(--text3);font-size:13px">Ladataan...</div></div>
+    </div>
+  </div>
+
+  <div id="aerobia-kehitys" style="display:none">
+    <div class="card">
+      <div class="card-title">Juoksun kehitys</div>
+      <div class="form-row">
+        <label>Näytä</label>
+        <select id="run-chart-type" onchange="loadRunChart()">
+          <option value="distance">Matka (km)</option>
+          <option value="pace">Vauhti (min/km)</option>
+        </select>
+      </div>
+      <div class="chart-wrap" id="run-chart-wrap" style="margin-top:12px">
+        <canvas id="run-chart"></canvas>
+      </div>
+      <div id="run-chart-status" style="color:var(--text3);font-size:13px;text-align:center;padding:6px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SEURANTA ────────────────────────────────────────────────── -->
+<div id="page-seuranta" class="page">
+  <div class="stab-bar">
+    <button id="stab-keho" class="stab active" onclick="showSeuranta('keho')">Keho</button>
+    <button id="stab-uni" class="stab" onclick="showSeuranta('uni')">Uni</button>
+  </div>
+
+  <div id="seuranta-keho">
+    <div class="seuranta-hero seuranta-hero--keho">
+      <div class="seuranta-hero-glow" style="background:radial-gradient(circle,rgba(138,43,226,0.5) 0%,transparent 70%)"></div>
+      <div class="seuranta-hero-label">TÄNÄÄN · KEHO</div>
+      <div class="seuranta-hero-main" id="m-weight">—</div>
+      <div class="seuranta-hero-sub" id="m-weight-delta"></div>
+      <div class="seuranta-hero-stats">
+        <div><div class="seuranta-hero-stat-val" id="m-fat">—</div><div class="seuranta-hero-stat-label">rasva%</div></div>
+        <div class="seuranta-hero-divider"></div>
+        <div><div class="seuranta-hero-stat-val" id="m-muscle">—</div><div class="seuranta-hero-stat-label">lihas%</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Kirjaa mittaus</div>
+      <div class="form-row"><label>Päivämäärä</label><input type="date" id="body-date"></div>
+      <div class="form-row"><label>Paino (kg)</label><input type="text" inputmode="decimal" id="body-weight" placeholder="114,8"></div>
+      <div class="form-row"><label>Rasva%</label><input type="text" inputmode="decimal" id="body-fat" placeholder="37,7"></div>
+      <div class="form-row"><label>Lihas%</label><input type="text" inputmode="decimal" id="body-muscle" placeholder="29,3"></div>
+      <button class="btn btn-primary" onclick="saveBodyMetrics()">Tallenna</button>
+      <div class="status" id="body-status"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Kehitys</div>
+      <div class="chart-wrap"><canvas id="body-chart"></canvas></div>
     </div>
   </div>
 
@@ -2086,6 +2115,13 @@ async function saveSleep() {
 /* ═══════════════════════════════════════════════════════════════
    EXERCISE PROGRESS CHART
 ═══════════════════════════════════════════════════════════════ */
+function showAerobiaTab(tab, btn) {
+  document.getElementById('aerobia-treeni').style.display  = tab === 'treeni'  ? '' : 'none';
+  document.getElementById('aerobia-kehitys').style.display = tab === 'kehitys' ? '' : 'none';
+  ['aerobia-tab-treeni','aerobia-tab-kehitys'].forEach(id => document.getElementById(id).classList.remove('active'));
+  btn.classList.add('active');
+}
+
 function showHistTab(tab, btn) {
   document.getElementById('hist-kaaviot').style.display = tab === 'kaaviot' ? '' : 'none';
   document.getElementById('hist-lokit').style.display   = tab === 'lokit'   ? '' : 'none';
@@ -3170,6 +3206,7 @@ function showPage(name, btn) {
   if (btn) btn.classList.add('active');
   if (name === 'koonti')    loadKoonti();
   if (name === 'sali')      renderTreeni();
+  if (name === 'aerobia')   { loadActivities(); loadRunChart(); }
   if (name === 'seuranta')  showSeuranta(seurantaPage);
   if (name === 'historia')  { populateExerciseDropdown(); loadWorkoutHistory(); loadRunChart(); }
   if (name === 'ohjelma')   renderOhjelma();
