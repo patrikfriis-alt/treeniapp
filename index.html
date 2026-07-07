@@ -223,6 +223,55 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .hero-metric-val   { font-size:20px; font-weight:700; line-height:1; }
 .hero-metric-label { font-size:10px; color:var(--text3); margin-top:2px; }
 
+/* ─── Koonti (dashboard) ─────────────────────────────────────── */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 14px;
+}
+.back-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 26px;
+  line-height: 1;
+  padding: 0 4px 0 0;
+  cursor: pointer;
+}
+.page-title { font-size: 20px; font-weight: 700; }
+
+.koonti-greeting { font-size: 22px; font-weight: 700; margin: 4px 12px 2px; }
+.koonti-date      { font-size: 13px; color: var(--text2); margin: 0 12px 14px; }
+.koonti-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text3);
+  margin: 18px 12px 8px;
+}
+.koonti-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0 12px;
+}
+.koonti-cards--wide { grid-template-columns: 1fr; }
+.koonti-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  cursor: pointer;
+  transition: transform var(--t);
+}
+.koonti-card:active { transform: scale(.98); }
+.koonti-card-icon  { font-size: 24px; margin-bottom: 8px; display: block; }
+.koonti-card-label { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.koonti-card-sub   { font-size: 12px; color: var(--text3); }
+.koonti-card--done .koonti-card-sub { color: var(--green); }
+.koonti-card--ruoka { display: flex; align-items: center; justify-content: space-between; }
+
 /* ─── Sessiotyypin valitsin (pill-tyyli) ────────────────────── */
 .sess-picker { display:flex; gap:5px; flex-wrap:wrap; }
 .sess-btn {
