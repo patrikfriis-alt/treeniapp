@@ -2878,6 +2878,123 @@ async function openFoodSearch(mealType) {
   renderFoodResultsList(foodSearchItems, 'Viimeksi käytetyt', 'Ei vielä aiempia ruokia');
 }
 
+let exercisePickerSessionId = null;
+let exerciseLibraryCache = null;
+let exerciseLibraryLoadingPromise = null;
+let exerciseSearchDebounce = null;
+let exerciseMuscleFilter = '';
+
+async function loadExerciseLibrary() {
+  if (exerciseLibraryCache) return exerciseLibraryCache;
+  if (exerciseLibraryLoadingPromise) return exerciseLibraryLoadingPromise;
+  exerciseLibraryLoadingPromise = (async () => {
+    const { data } = await sb.from('exercises').select('*').order('name');
+    exerciseLibraryCache = data || [];
+    exerciseLibraryLoadingPromise = null;
+    return exerciseLibraryCache;
+  })();
+  return exerciseLibraryLoadingPromise;
+}
+
+function renderExerciseResults(items, exactMatch) {
+  const el = document.getElementById('ex-search-results');
+  const q = document.getElementById('ex-search-input').value.trim();
+  let html = '';
+  if (!items.length) {
+    html += `<div class="ex-search-empty">Ei tuloksia</div>`;
+  } else {
+    html += items.map(item => `
+      <div class="ex-search-result-row" onclick="selectExerciseFromLibrary(${item.id})">
+        <span>${item.name}</span>
+        <span class="ex-search-result-muscle">${item.muscle_group || ''}</span>
+      </div>`).join('');
+  }
+  if (q.length >= 2 && !exactMatch) {
+    html += `<div class="ex-search-custom-link" onclick="createNewExerciseAndAdd('${q.replace(/'/g, "\\'")}')">+ Lisää uusi liike "${q}"</div>`;
+  }
+  el.innerHTML = html;
+}
+
+async function runExerciseSearch() {
+  const q = document.getElementById('ex-search-input').value.trim().toLowerCase();
+  const all = await loadExerciseLibrary();
+  const filtered = all.filter(e => {
+    const matchesQuery = !q || e.name.toLowerCase().includes(q);
+    const matchesMuscle = !exerciseMuscleFilter || e.muscle_group === exerciseMuscleFilter;
+    return matchesQuery && matchesMuscle;
+  });
+  const exactMatch = all.some(e => e.name.toLowerCase() === q);
+  renderExerciseResults(filtered, exactMatch);
+}
+
+function onExerciseSearchInput() {
+  clearTimeout(exerciseSearchDebounce);
+  exerciseSearchDebounce = setTimeout(runExerciseSearch, 200);
+}
+
+function setExerciseMuscleFilter(muscle, btn) {
+  clearTimeout(exerciseSearchDebounce);
+  exerciseMuscleFilter = muscle;
+  document.querySelectorAll('#ex-muscle-filter .stab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  runExerciseSearch();
+}
+
+async function openExercisePicker(sessionId) {
+  exercisePickerSessionId = sessionId;
+  exerciseMuscleFilter = '';
+  document.getElementById('ex-search-input').value = '';
+  document.querySelectorAll('#ex-muscle-filter .stab').forEach(b => b.classList.remove('active'));
+  document.querySelector('#ex-muscle-filter .stab').classList.add('active');
+  document.getElementById('exercise-picker-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  exerciseLibraryCache = null;
+  await runExerciseSearch();
+}
+
+function closeExercisePicker() {
+  document.getElementById('exercise-picker-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+async function addExerciseToCurrentSession(exerciseName) {
+  const existing = programSessionExercisesRaw.filter(e => e.program_session_id === exercisePickerSessionId);
+  const nextOrder = existing.length ? Math.max(...existing.map(e => e.sort_order)) + 1 : 0;
+  const { error } = await sb.from('program_session_exercises').insert({
+    program_session_id: exercisePickerSessionId,
+    exercise_name: exerciseName,
+    target_sets: 3,
+    target_display: '3×10',
+    sort_order: nextOrder,
+  });
+  if (error) {
+    console.error('addExerciseToCurrentSession failed:', error.message);
+    document.getElementById('ex-search-results').innerHTML = `<div class="ex-search-empty">Lisäys epäonnistui, yritä uudelleen</div>`;
+    return;
+  }
+  closeExercisePicker();
+  await loadProgram();
+  renderOhjelma();
+}
+
+async function selectExerciseFromLibrary(exerciseId) {
+  const ex = exerciseLibraryCache.find(e => e.id === exerciseId);
+  if (ex) await addExerciseToCurrentSession(ex.name);
+}
+
+async function createNewExerciseAndAdd(name) {
+  const { data, error } = await sb.from('exercises')
+    .insert({ name, muscle_group: exerciseMuscleFilter || null })
+    .select().single();
+  if (error) {
+    console.error('createNewExerciseAndAdd failed:', error.message);
+    document.getElementById('ex-search-results').innerHTML = `<div class="ex-search-empty">Tallennus epäonnistui, yritä uudelleen</div>`;
+    return;
+  }
+  exerciseLibraryCache = null;
+  await addExerciseToCurrentSession(data.name);
+}
+
 function closeFoodSearch() {
   document.getElementById('food-search-modal').style.display = 'none';
   document.body.style.overflow = '';
@@ -3503,6 +3620,29 @@ if ('serviceWorker' in navigator) {
       <div class="status" id="custom-food-status"></div>
     </div>
 
+  </div>
+</div>
+
+<div id="exercise-picker-modal" class="ex-modal-overlay" style="display:none">
+  <div class="ex-modal-header">
+    <div class="ex-modal-nav">
+      <button class="ex-modal-back" onclick="closeExercisePicker()">← Peruuta</button>
+    </div>
+    <div class="ex-modal-title">Lisää liike</div>
+  </div>
+  <div class="ex-modal-body">
+    <input type="text" id="ex-search-input" placeholder="Hae liikettä..."
+           oninput="onExerciseSearchInput()" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
+    <div class="ex-muscle-filter" id="ex-muscle-filter">
+      <button class="stab active" onclick="setExerciseMuscleFilter('', this)">Kaikki</button>
+      <button class="stab" onclick="setExerciseMuscleFilter('rinta', this)">Rinta</button>
+      <button class="stab" onclick="setExerciseMuscleFilter('selka', this)">Selkä</button>
+      <button class="stab" onclick="setExerciseMuscleFilter('jalat', this)">Jalat</button>
+      <button class="stab" onclick="setExerciseMuscleFilter('hartiat', this)">Hartiat</button>
+      <button class="stab" onclick="setExerciseMuscleFilter('kasivarret', this)">Käsivarret</button>
+      <button class="stab" onclick="setExerciseMuscleFilter('vatsa', this)">Vatsa</button>
+    </div>
+    <div id="ex-search-results"></div>
   </div>
 </div>
 </body>
