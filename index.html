@@ -843,6 +843,19 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     </div>
   </div>
 
+  <div class="hero-metrics" style="grid-template-columns:1fr 1fr">
+    <div class="hero-metric">
+      <div class="hero-metric-icon">📅</div>
+      <div class="hero-metric-val" id="koonti-ms-week">—</div>
+      <div class="hero-metric-label">viikon aktiivisuus</div>
+    </div>
+    <div class="hero-metric">
+      <div class="hero-metric-icon">🗓️</div>
+      <div class="hero-metric-val" id="koonti-ms-month">—</div>
+      <div class="hero-metric-label">kuukausi</div>
+    </div>
+  </div>
+
   <div class="koonti-section-label">Tänään</div>
   <div class="koonti-cards">
     <div class="koonti-card" id="kc-sali" onclick="showPage('sali', document.getElementById('nav-koonti'))">
@@ -1682,6 +1695,8 @@ async function loadMotivationSummary() {
   const monthCount = actMonth ? actMonth.length : 0;
   const msMonthEl = document.getElementById('ms-month');
   if (msMonthEl) msMonthEl.textContent = monthCount + ' krt';
+  const kMonthEl = document.getElementById('koonti-ms-month');
+  if (kMonthEl) kMonthEl.textContent = monthCount + ' krt';
 
   // Streak + viikko% — yksi kysely 90 päivälle kattaa molemmat
   const today = new Date();
@@ -1700,6 +1715,8 @@ async function loadMotivationSummary() {
   const weekPct = Math.min(100, Math.round(activeDaysThisWeek.size / 6 * 100));
   const msWeekEl = document.getElementById('ms-week');
   if (msWeekEl) msWeekEl.textContent = weekPct + '%';
+  const kWeekEl = document.getElementById('koonti-ms-week');
+  if (kWeekEl) kWeekEl.textContent = weekPct + '%';
 
   let streak = 0;
   for (let i = 0; i < 90; i++) {
