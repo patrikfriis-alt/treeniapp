@@ -2065,6 +2065,7 @@ async function saveBodyMetrics() {
    ACTIVITIES
 ═══════════════════════════════════════════════════════════════ */
 let appSettings = null;
+let lastActivities = [];
 
 async function loadAppSettings() {
   const { data, error } = await sb.from('app_settings').select('*').eq('id', 1).maybeSingle();
@@ -2187,6 +2188,7 @@ async function loadActivities() {
   const { data, error } = await sb.from('activity_data').select('*')
     .order('activity_date',{ ascending:false }).limit(10);
   if (error) { console.error('loadActivities failed:', error.message); return; }
+  lastActivities = data || [];
   const el = document.getElementById('act-history');
   if (!data || !data.length) {
     el.innerHTML = '<div style="color:var(--text3);font-size:13px">Ei aktiviteetteja vielä</div>';
@@ -2217,7 +2219,7 @@ async function loadActivities() {
           : `${a.calories} kcal`)
       : '';
     return `
-    <div class="hist-item">
+    <div class="hist-item" style="cursor:pointer" onclick="openEditActivityDialog('${a.id}')">
       <div><div class="hist-label">${sourceBadge}${a.activity_type}</div><div class="hist-date">${a.activity_date}</div></div>
       <div style="text-align:right">
         <div class="hist-val">${a.duration_min ? a.duration_min+' min' : '—'}</div>
@@ -2225,6 +2227,88 @@ async function loadActivities() {
       </div>
     </div>`;
   }).join('');
+}
+
+async function updateActivity(id, fields) {
+  const { error } = await sb.from('activity_data').update(fields).eq('id', id);
+  if (error) { console.error('updateActivity failed:', error.message); throw error; }
+}
+
+async function deleteActivity(id) {
+  const { error } = await sb.from('activity_data').delete().eq('id', id);
+  if (error) { console.error('deleteActivity failed:', error.message); throw error; }
+}
+
+function openEditActivityDialog(activityId) {
+  const a = lastActivities.find(x => x.id === activityId);
+  if (!a) return;
+
+  const existing = document.getElementById('edit-act-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'edit-act-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  const types = ['Jääkiekko', 'Juoksu', 'Kävely', 'Sali', 'Muu'];
+  const typeOptions = types.map(t => `<option ${t === a.activity_type ? 'selected' : ''}>${t}</option>`).join('');
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
+  modal.innerHTML = `
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Muokkaa aktiviteettia</div>
+    <div class="form-row"><label>Päivämäärä</label><input type="date" id="edit-act-date" value="${a.activity_date || ''}"></div>
+    <div class="form-row"><label>Laji</label><select id="edit-act-type">${typeOptions}</select></div>
+    <div class="form-row"><label>Kesto (min)</label><input type="text" inputmode="numeric" id="edit-act-duration" value="${a.duration_min ?? ''}"></div>
+    <div class="form-row"><label>Kalorit</label><input type="text" inputmode="numeric" id="edit-act-calories" value="${a.calories ?? ''}"></div>
+    <div class="form-row"><label>Syke (avg)</label><input type="text" inputmode="numeric" id="edit-act-hr" value="${a.avg_heart_rate ?? ''}"></div>
+    <div class="form-row"><label>Matka (km)</label><input type="text" inputmode="decimal" id="edit-act-km" value="${a.distance_km ?? ''}"></div>
+    <button class="btn btn-primary" id="edit-act-save-btn">Tallenna</button>
+    <button class="btn" id="edit-act-delete-btn" style="margin-top:8px;background:var(--surface2);color:var(--red);width:100%;">Poista</button>
+    <button class="btn" id="edit-act-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Peruuta</button>
+    <div class="status" id="edit-act-status"></div>
+  `;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  document.getElementById('edit-act-save-btn').onclick = async () => {
+    const date = document.getElementById('edit-act-date').value;
+    if (!date) { showStatus('edit-act-status', 'Valitse päivämäärä', true); return; }
+    const saveBtn = document.getElementById('edit-act-save-btn');
+    saveBtn.disabled = true;
+    try {
+      await updateActivity(a.id, {
+        activity_date:  date,
+        activity_type:  document.getElementById('edit-act-type').value,
+        duration_min:   parseNum('edit-act-duration'),
+        calories:       parseNum('edit-act-calories'),
+        avg_heart_rate: parseNum('edit-act-hr'),
+        distance_km:    parseFloat((document.getElementById('edit-act-km').value || '').replace(',','.')) || null,
+      });
+      overlay.remove();
+      await loadActivities();
+    } catch (err) {
+      showStatus('edit-act-status', 'Tallennus epäonnistui', true);
+      saveBtn.disabled = false;
+    }
+  };
+
+  document.getElementById('edit-act-delete-btn').onclick = async () => {
+    const deleteBtn = document.getElementById('edit-act-delete-btn');
+    deleteBtn.disabled = true;
+    try {
+      await deleteActivity(a.id);
+      overlay.remove();
+      await loadActivities();
+    } catch (err) {
+      showStatus('edit-act-status', 'Poisto epäonnistui', true);
+      deleteBtn.disabled = false;
+    }
+  };
+
+  document.getElementById('edit-act-cancel-btn').onclick = () => overlay.remove();
 }
 
 async function saveActivity() {
