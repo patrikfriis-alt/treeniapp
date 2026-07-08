@@ -1147,6 +1147,13 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <button onclick="openCalorieSettingsModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span style="font-size:18px;">⌚</span> Kalorikerroin
   </button>
+  <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:20px;margin-bottom:12px;">Vie data</div>
+  <button onclick="exportActivitiesCSV()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
+    <span style="font-size:18px;">📤</span> Vie aktiviteetit (CSV)
+  </button>
+  <button onclick="exportWorkoutSetsCSV()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
+    <span style="font-size:18px;">📤</span> Vie salilokit (CSV)
+  </button>
 </div>
 
 <script>
@@ -2309,6 +2316,38 @@ function openEditActivityDialog(activityId) {
   };
 
   document.getElementById('edit-act-cancel-btn').onclick = () => overlay.remove();
+}
+
+function downloadCSV(filename, headers, rows) {
+  const escapeCSV = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+  const lines = [headers.map(escapeCSV).join(',')];
+  rows.forEach(row => lines.push(row.map(escapeCSV).join(',')));
+  const csv = lines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function exportActivitiesCSV() {
+  const { data, error } = await sb.from('activity_data').select('*').order('activity_date', { ascending: false });
+  if (error) { console.error('exportActivitiesCSV failed:', error.message); return; }
+  const headers = ['activity_date', 'activity_type', 'duration_min', 'calories', 'avg_heart_rate', 'distance_km'];
+  const rows = (data || []).map(a => [a.activity_date, a.activity_type, a.duration_min, a.calories, a.avg_heart_rate, a.distance_km]);
+  downloadCSV(`treeniapp-aktiviteetit-${localIso(new Date())}.csv`, headers, rows);
+}
+
+async function exportWorkoutSetsCSV() {
+  const { data, error } = await sb.from('workout_sets').select('*').order('workout_date', { ascending: false });
+  if (error) { console.error('exportWorkoutSetsCSV failed:', error.message); return; }
+  const headers = ['workout_date', 'exercise_name', 'set_number', 'weight_kg', 'reps', 'session_type'];
+  const rows = (data || []).map(s => [s.workout_date, s.exercise_name, s.set_number, s.weight_kg, s.reps, s.session_type]);
+  downloadCSV(`treeniapp-salilokit-${localIso(new Date())}.csv`, headers, rows);
 }
 
 async function saveActivity() {
