@@ -1464,7 +1464,7 @@ async function loadWeekActivityData(o) {
   const fromDate = mon.iso;
   const toDate   = localIso(sun);
 
-  const [workoutRes, actRes] = await Promise.all([
+  const [workoutRes, actRes, overrideRes] = await Promise.all([
     sb.from('workout_sets')
       .select('workout_date, exercise_name, set_number, weight_kg, reps')
       .gte('workout_date', fromDate)
@@ -1475,6 +1475,10 @@ async function loadWeekActivityData(o) {
       .select('activity_date, activity_type, duration_min, calories, avg_heart_rate, distance_km')
       .gte('activity_date', fromDate)
       .lte('activity_date', toDate),
+    sb.from('day_session_overrides')
+      .select('workout_date, session_type')
+      .gte('workout_date', fromDate)
+      .lte('workout_date', toDate),
   ]);
 
   (workoutRes.data || []).forEach(row => {
@@ -1489,6 +1493,12 @@ async function loadWeekActivityData(o) {
     if (!weekActivityCache[row.activity_date])
       weekActivityCache[row.activity_date] = { workout: {}, activities: [] };
     weekActivityCache[row.activity_date].activities.push(row);
+  });
+
+  (overrideRes.data || []).forEach(row => {
+    if (!weekActivityCache[row.workout_date])
+      weekActivityCache[row.workout_date] = { workout: {}, activities: [] };
+    weekActivityCache[row.workout_date].override = row.session_type;
   });
 }
 
@@ -1809,9 +1819,23 @@ async function renderTreeni() {
 /* ═══════════════════════════════════════════════════════════════
    RENDER — SESSION
 ═══════════════════════════════════════════════════════════════ */
-const getSessionKey    = (o, d)     => `w${o}_d${d}_sess`;
-const getActiveSession = (o, d)     => LD[getSessionKey(o,d)] || SCHED[d];
-const setActiveSession = (o, d, st) => { LD[getSessionKey(o,d)] = st; saveLD(); renderTreeni(); };
+const getActiveSession = (o, d) => {
+  const mon = wStart(o), dt = new Date(mon.date);
+  dt.setDate(mon.date.getDate() + d);
+  const dayIso = localIso(dt);
+  const cached = weekActivityCache[dayIso];
+  return (cached && cached.override) || SCHED[d];
+};
+
+async function setActiveSession(o, d, st) {
+  const mon = wStart(o), dt = new Date(mon.date);
+  dt.setDate(mon.date.getDate() + d);
+  const workout_date = localIso(dt);
+  const { error } = await sb.from('day_session_overrides')
+    .upsert({ workout_date, session_type: st }, { onConflict: 'workout_date' });
+  if (error) { console.error('setActiveSession failed:', error.message); return; }
+  renderTreeni();
+}
 
 async function renderSession() {
   const st = getActiveSession(wOff, aDay), sess = SESS[st];
