@@ -3451,34 +3451,194 @@ function closeSidebar() {
 /* ═══════════════════════════════════════════════════════════════
    OHJELMA
 ═══════════════════════════════════════════════════════════════ */
-function renderOhjelma(selected) {
-  const saliKeys = ['t1','t2','t3','t4'];
-  const defaultKey = saliKeys.includes(SCHED[aDay]) ? SCHED[aDay] : 't1';
-  const key  = selected || defaultKey;
-  const sess = SESS[key];
-  const el   = document.getElementById('ohjelma-content');
+let ohjelmaExpandedId = null;
 
-  let html = `<div class="card" style="margin-bottom:8px">
-    <div class="card-title">Harjoitus</div>
-    <select onchange="renderOhjelma(this.value)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);color:var(--text);padding:8px 11px;font-size:14px;outline:none;">`;
-  saliKeys.forEach(k => {
-    html += `<option value="${k}" ${k === key ? 'selected' : ''}>${SESS[k].name}</option>`;
-  });
-  html += `</select></div>`;
+function jsAttrEscape(str) {
+  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+function htmlAttrEscape(str) {
+  return String(str).replace(/"/g, '&quot;');
+}
 
-  html += `<div class="card">
-    <div style="font-size:16px;font-weight:600;margin-bottom:4px">${sess.name}</div>
-    <div style="font-size:13px;color:var(--text3);margin-bottom:16px">${sess.focus}</div>`;
+function renderOhjelma() {
+  const el = document.getElementById('ohjelma-content');
+  const sessions = [...programSessionsRaw].sort((a, b) => a.sort_order - b.sort_order);
 
-  sess.ex.forEach((ex, i) => {
-    html += `<div class="hist-item">
-      <div class="hist-label">${i + 1}. ${ex.n}</div>
-      <div class="hist-val" style="font-size:13px">${ex.t}</div>
-    </div>`;
+  let html = `<div class="ohj-header">
+    <span></span>
+    <button class="ohj-add-btn" onclick="addNewProgramSession()">+ Uusi sessio</button>
+  </div>
+  <div id="sess-list">`;
+
+  sessions.forEach(s => {
+    const exCount = SESS[s.id] ? SESS[s.id].ex.length : 0;
+    const dayLabels = (s.default_weekdays || []).map(d => DAYS[d]).join(', ') || '—';
+    const isOpen = s.id === ohjelmaExpandedId;
+    html += `<div class="sess-card" data-session-id="${s.id}">
+      <div class="sess-card-row" onclick="toggleSessionExpand('${s.id}')">
+        <span class="sess-drag-handle">⠿</span>
+        <div class="sess-card-info">
+          <div class="sess-card-name">${s.name}</div>
+          <div class="sess-card-meta">${exCount} liikettä · ${dayLabels}</div>
+        </div>
+        <span class="sess-card-chev${isOpen ? ' open' : ''}">›</span>
+      </div>`;
+    if (isOpen) html += renderSessionExpand(s);
+    html += `</div>`;
   });
 
   html += `</div>`;
   el.innerHTML = html;
+
+  new Sortable(document.getElementById('sess-list'), {
+    handle: '.sess-drag-handle',
+    animation: 150,
+    onEnd: async () => {
+      const ids = [...document.getElementById('sess-list').children].map(c => c.dataset.sessionId);
+      await Promise.all(ids.map((id, i) => sb.from('program_sessions').update({ sort_order: i }).eq('id', id)));
+      await loadProgram();
+      renderOhjelma();
+    },
+  });
+
+  if (ohjelmaExpandedId) {
+    const exList = document.getElementById(`ex-list-${ohjelmaExpandedId}`);
+    if (exList) {
+      new Sortable(exList, {
+        handle: '.sess-ex-drag',
+        animation: 150,
+        onEnd: async () => {
+          const ids = [...exList.children].map(c => Number(c.dataset.exId));
+          await Promise.all(ids.map((id, i) => sb.from('program_session_exercises').update({ sort_order: i }).eq('id', id)));
+          await loadProgram();
+          renderOhjelma();
+        },
+      });
+    }
+  }
+}
+
+function renderSessionExpand(s) {
+  const ex = SESS[s.id] ? SESS[s.id].ex : [];
+  let html = `<div class="sess-expand">
+    <div class="sess-field-label">Nimi ja kuvaus</div>
+    <input type="text" class="sess-name-input" value="${htmlAttrEscape(s.name)}" onblur="saveSessionField('${s.id}','name',this.value)">
+    <input type="text" class="sess-focus-input" value="${htmlAttrEscape(s.focus || '')}" onblur="saveSessionField('${s.id}','focus',this.value)">
+
+    <div class="sess-field-label" style="margin-top:14px">Viikonpäivät</div>
+    <div class="weekday-picker">`;
+  DAYS.forEach((lb, i) => {
+    const on = (s.default_weekdays || []).includes(i);
+    html += `<button class="wd-btn${on ? ' on' : ''}" onclick="toggleSessionWeekday('${s.id}',${i})">${lb}</button>`;
+  });
+  html += `</div>
+
+    <div class="sess-field-label" style="margin-top:14px">Liikkeet</div>
+    <div id="ex-list-${s.id}">`;
+  ex.forEach(e => {
+    html += `<div class="sess-ex-row" data-ex-id="${e._id}">
+      <span class="sess-ex-drag">⠿</span>
+      <div class="sess-ex-info" onclick="editExerciseTarget(${e._id},'${jsAttrEscape(e.n)}',${e.s},'${jsAttrEscape(e.t)}')">
+        <div class="sess-ex-name">${e.n}</div>
+        <div class="sess-ex-target" id="ex-target-${e._id}">${e.t}</div>
+      </div>
+      <button class="sess-ex-remove" onclick="removeExerciseFromSession(${e._id})">✕</button>
+    </div>`;
+  });
+  html += `</div>
+    <div class="sess-add-ex-btn" onclick="openExercisePicker('${s.id}')">+ Lisää liike</div>
+    <button class="sess-delete-btn" onclick="deleteProgramSession('${s.id}')">Poista sessio</button>
+  </div>`;
+  return html;
+}
+
+function toggleSessionExpand(id) {
+  ohjelmaExpandedId = ohjelmaExpandedId === id ? null : id;
+  renderOhjelma();
+}
+
+async function saveSessionField(id, field, value) {
+  const { error } = await sb.from('program_sessions').update({ [field]: value }).eq('id', id);
+  if (error) { console.error('saveSessionField failed:', error.message); return; }
+  await loadProgram();
+  renderOhjelma();
+}
+
+async function toggleSessionWeekday(id, dayIndex) {
+  const s = programSessionsRaw.find(r => r.id === id);
+  if (!s) return;
+  const days = new Set(s.default_weekdays || []);
+  if (days.has(dayIndex)) days.delete(dayIndex); else days.add(dayIndex);
+  const { error } = await sb.from('program_sessions')
+    .update({ default_weekdays: [...days].sort((a, b) => a - b) }).eq('id', id);
+  if (error) { console.error('toggleSessionWeekday failed:', error.message); return; }
+  await loadProgram();
+  renderOhjelma();
+}
+
+function slugify(name) {
+  const map = { ä:'a', ö:'o', å:'a', Ä:'a', Ö:'o', Å:'a' };
+  const base = name.trim().toLowerCase()
+    .replace(/[äöåÄÖÅ]/g, c => map[c])
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+  return base || 'sessio';
+}
+
+async function addNewProgramSession() {
+  let slug = slugify('Uusi sessio');
+  let n = 1;
+  while (programSessionsRaw.some(s => s.id === slug)) { n++; slug = `${slugify('Uusi sessio')}-${n}`; }
+  const nextOrder = programSessionsRaw.length
+    ? Math.max(...programSessionsRaw.map(s => s.sort_order)) + 1 : 0;
+  const { error } = await sb.from('program_sessions').insert({
+    id: slug, name: 'Uusi sessio', focus: '', default_weekdays: [], sort_order: nextOrder,
+  });
+  if (error) { console.error('addNewProgramSession failed:', error.message); return; }
+  await loadProgram();
+  ohjelmaExpandedId = slug;
+  renderOhjelma();
+}
+
+async function deleteProgramSession(id) {
+  const { error } = await sb.from('program_sessions').delete().eq('id', id);
+  if (error) { console.error('deleteProgramSession failed:', error.message); return; }
+  ohjelmaExpandedId = null;
+  await loadProgram();
+  renderOhjelma();
+}
+
+async function removeExerciseFromSession(exId) {
+  const { error } = await sb.from('program_session_exercises').delete().eq('id', exId);
+  if (error) { console.error('removeExerciseFromSession failed:', error.message); return; }
+  await loadProgram();
+  renderOhjelma();
+}
+
+function editExerciseTarget(exId, name, currentSets, currentDisplay) {
+  const el = document.getElementById(`ex-target-${exId}`);
+  el.innerHTML = `<div class="ex-target-edit">
+    <input type="text" inputmode="numeric" value="${htmlAttrEscape(currentSets)}" style="width:40px" id="ex-target-sets-${exId}">
+    <input type="text" value="${htmlAttrEscape(currentDisplay)}" style="width:70px" id="ex-target-display-${exId}">
+  </div>`;
+  const saveIt = () => saveExerciseTarget(exId);
+  document.getElementById(`ex-target-sets-${exId}`).onblur = saveIt;
+  document.getElementById(`ex-target-display-${exId}`).onblur = saveIt;
+  document.getElementById(`ex-target-sets-${exId}`).focus();
+}
+
+async function saveExerciseTarget(exId) {
+  const setsEl = document.getElementById(`ex-target-sets-${exId}`);
+  const dispEl = document.getElementById(`ex-target-display-${exId}`);
+  if (!setsEl || !dispEl) return;
+  const target_sets = parseInt(setsEl.value, 10) || 1;
+  const target_display = dispEl.value.trim() || `${target_sets}×10`;
+  const { error } = await sb.from('program_session_exercises')
+    .update({ target_sets, target_display }).eq('id', exId);
+  if (error) { console.error('saveExerciseTarget failed:', error.message); return; }
+  await loadProgram();
+  const targetEl = document.getElementById(`ex-target-${exId}`);
+  if (targetEl) targetEl.textContent = target_display;
 }
 
 /* ═══════════════════════════════════════════════════════════════
