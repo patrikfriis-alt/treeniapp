@@ -1698,18 +1698,20 @@ async function renderTreeni() {
   const tabs = document.getElementById('day-tabs');
   tabs.innerHTML = '';
   DAYS.forEach((lb, i) => {
-    const ist = getActiveSession(wOff, i), isSali = ['t1','t2','t3','t4'].includes(ist);
+    const ist = getActiveSession(wOff, i);
+    const hasEx = ist && SESS[ist] && SESS[ist].ex && SESS[ist].ex.length > 0;
     const btn = document.createElement('button');
     btn.className = 'day-tab';
     if (i === aDay)                btn.classList.add('active');
     else if (isDone(wOff, i, ist)) btn.classList.add('done');
-    else if (!isSali)              btn.classList.add('rest');
+    else if (!hasEx)                btn.classList.add('rest');
     btn.style.cssText = 'display:flex;flex-direction:column;align-items:center;';
     const dotDone    = isDone(wOff, i, ist);
     const dotStarted = isStarted(wOff, i, ist);
     const dotCls     = dotDone ? 'done' : dotStarted ? 'active' : '';
     const dotHtml    = dotCls ? `<div class="day-state-dot ${dotCls}"></div>` : '';
-    btn.innerHTML = `<span>${lb}</span><span style="font-size:9px;opacity:.6">${ist.toUpperCase()}</span>${dotHtml}`;
+    const shortLabel = ist ? ist.toUpperCase() : '—';
+    btn.innerHTML = `<span>${lb}</span><span style="font-size:9px;opacity:.6">${shortLabel}</span>${dotHtml}`;
     btn.onclick = () => { aDay = i; renderTreeni(); };
 
     const dayD = new Date(ws.date);
@@ -1750,11 +1752,6 @@ const getSessionKey    = (o, d)     => `w${o}_d${d}_sess`;
 const getActiveSession = (o, d)     => LD[getSessionKey(o,d)] || SCHED[d];
 const setActiveSession = (o, d, st) => { LD[getSessionKey(o,d)] = st; saveLD(); renderTreeni(); };
 
-const SESSION_LABELS = {
-  t1:'T1 Työntävät', t2:'T2 Vetävät', t3:'T3 Hartiat',
-  t4:'T4 Power', kiekko:'Jääkiekko', juoksu:'Juoksu', lepo:'Lepo',
-};
-
 async function renderSession() {
   const st = getActiveSession(wOff, aDay), sess = SESS[st];
   const el = document.getElementById('session-content');
@@ -1763,21 +1760,20 @@ async function renderSession() {
   let html = `<div class="card" style="margin-bottom:8px">
     <div class="card-title">Päivän tyyppi</div>
     <div class="sess-picker">`;
-  Object.entries(SESSION_LABELS).forEach(([key, lbl]) => {
+  Object.entries(SESS).forEach(([key, s]) => {
     const active = key === st;
     html += `<button onclick="setActiveSession(${wOff},${aDay},'${key}')"
       class="sess-btn${active ? ' active' : ''}">
-      ${lbl}</button>`;
+      ${s.name}</button>`;
   });
   html += `</div></div>`;
 
   // Rest / activity day (no exercises)
   if (!sess || !sess.ex || !sess.ex.length) {
-    const isRest = ['kiekko','juoksu','lepo'].includes(st);
-    el.innerHTML = html + (isRest ? `<div class="card rest-card">
-      <div class="sess-name" style="margin-bottom:6px">${sess ? sess.name : '—'}</div>
+    el.innerHTML = html + `<div class="card rest-card">
+      <div class="sess-name" style="margin-bottom:6px">${sess ? sess.name : 'Ei ohjelmoitua sessiota'}</div>
       <div class="sess-focus">${sess ? sess.focus : ''}</div>
-    </div>` : '');
+    </div>`;
     return;
   }
 
@@ -3215,10 +3211,10 @@ async function loadKoonti() {
   } else {
     kcSaliCard.classList.remove('koonti-card--done');
     const st = SCHED[(new Date().getDay() + 6) % 7];
-    const isSaliDay = ['t1','t2','t3','t4'].includes(st);
-    kcSaliSub.textContent = isSaliDay
+    const hasEx = st && SESS[st] && SESS[st].ex && SESS[st].ex.length > 0;
+    kcSaliSub.textContent = hasEx
       ? `Ei vielä · ${SESS[st].name}`
-      : 'Ei salipäivä tänään';
+      : (st ? 'Ei salipäivä tänään' : 'Ei ohjelmoitua sessiota tänään');
   }
 
   const { data: actRows } = await sb.from('activity_data')
