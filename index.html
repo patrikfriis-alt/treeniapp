@@ -969,6 +969,10 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
         <div><div class="seuranta-hero-stat-val" id="hero-act-cal">—</div><div class="seuranta-hero-stat-label">kcal</div></div>
       </div>
     </div>
+    <div class="card" id="aerobia-goal-card" style="display:none">
+      <div class="card-title">Viikkotavoite</div>
+      <div id="aerobia-goal-content"></div>
+    </div>
     <div class="card">
       <div class="card-title">Kirjaa aktiviteetti</div>
       <div class="form-row"><label>Päivämäärä</label><input type="date" id="act-date"></div>
@@ -2055,6 +2059,58 @@ async function saveCalorieCorrection(multiplier) {
   const { error } = await sb.from('app_settings')
     .upsert({ id: 1, calorie_correction: multiplier, updated_at: new Date().toISOString() });
   if (error) { console.error('saveCalorieCorrection failed:', error.message); throw error; }
+}
+
+async function loadActivityGoalProgress() {
+  if (!activityGoals) activityGoals = await loadActivityGoals();
+  const mon = wStart(wOff);
+  const sun = new Date(mon.date);
+  sun.setDate(mon.date.getDate() + 6);
+  const from = mon.iso, to = localIso(sun);
+
+  const { data, error } = await sb.from('activity_data')
+    .select('distance_km,duration_min')
+    .gte('activity_date', from).lte('activity_date', to);
+  if (error) { console.error('loadActivityGoalProgress failed:', error.message); return null; }
+
+  const rows = data || [];
+  const totalKm = rows.reduce((s, r) => s + (r.distance_km || 0), 0);
+  const sessionCount = rows.length;
+  const paced = rows.filter(r => r.distance_km && r.duration_min);
+  const totalPaceKm = paced.reduce((s, r) => s + r.distance_km, 0);
+  const totalPaceMin = paced.reduce((s, r) => s + r.duration_min, 0);
+  const avgPace = totalPaceKm > 0 ? totalPaceMin / totalPaceKm : null;
+
+  return { goals: activityGoals, totalKm, sessionCount, avgPace };
+}
+
+function formatPaceMinPerKm(pace) {
+  const min = Math.floor(pace);
+  const sec = Math.round((pace - min) * 60);
+  return `${min}:${String(sec).padStart(2, '0')}`;
+}
+
+async function renderAerobiaGoalCard() {
+  const progress = await loadActivityGoalProgress();
+  const card = document.getElementById('aerobia-goal-card');
+  const content = document.getElementById('aerobia-goal-content');
+  if (!progress || !progress.goals) { card.style.display = 'none'; return; }
+  const { goals, totalKm, sessionCount, avgPace } = progress;
+  const rows = [];
+  if (goals.weekly_km != null) {
+    rows.push(`<div class="hist-item"><div class="hist-label">Kilometrit</div><div class="hist-val">${totalKm.toFixed(1)} / ${goals.weekly_km} km</div></div>`);
+  }
+  if (goals.weekly_sessions != null) {
+    rows.push(`<div class="hist-item"><div class="hist-label">Kerrat</div><div class="hist-val">${sessionCount} / ${goals.weekly_sessions}</div></div>`);
+  }
+  if (goals.target_pace_min_per_km != null) {
+    const targetStr = formatPaceMinPerKm(goals.target_pace_min_per_km);
+    const avgStr = avgPace != null ? formatPaceMinPerKm(avgPace) : '—';
+    rows.push(`<div class="hist-item"><div class="hist-label">Keskivauhti</div><div class="hist-val">${avgStr} / ${targetStr} min/km</div></div>`);
+  }
+  if (!rows.length) { card.style.display = 'none'; return; }
+  content.innerHTML = rows.join('');
+  card.style.display = '';
 }
 
 async function loadActivities() {
@@ -3453,7 +3509,7 @@ function showPage(name, btn) {
   if (btn) btn.classList.add('active');
   if (name === 'koonti')    loadKoonti();
   if (name === 'sali')      { renderTreeni(); populateExerciseDropdown(); loadWorkoutHistory(); }
-  if (name === 'aerobia')   { loadActivities(); loadRunChart(); }
+  if (name === 'aerobia')   { loadActivities(); loadRunChart(); renderAerobiaGoalCard(); }
   if (name === 'keho')      loadBodyMetrics();
   if (name === 'uni')       loadSleep();
   if (name === 'ohjelma')   renderOhjelma();
