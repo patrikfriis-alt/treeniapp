@@ -819,6 +819,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <div class="koonti-greeting">Hei! 👋</div>
   <div class="koonti-date" id="koonti-date"></div>
 
+  <div class="card" id="onboarding-card" style="display:none">
+    <div class="card-title">Aloita tästä</div>
+    <div id="onboarding-rows"></div>
+    <button class="btn" id="onboarding-skip-btn" onclick="skipOnboarding()" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Ohita</button>
+  </div>
+
   <div class="hero-metrics">
     <div class="hero-metric">
       <div class="hero-metric-icon">🔥</div>
@@ -2061,6 +2067,56 @@ async function saveCalorieCorrection(multiplier) {
   const { error } = await sb.from('app_settings')
     .upsert({ id: 1, calorie_correction: multiplier, updated_at: new Date().toISOString() });
   if (error) { console.error('saveCalorieCorrection failed:', error.message); throw error; }
+}
+
+async function saveOnboardingCompleted() {
+  const { error } = await sb.from('app_settings')
+    .upsert({ id: 1, onboarding_completed: true, updated_at: new Date().toISOString() });
+  if (error) { console.error('saveOnboardingCompleted failed:', error.message); throw error; }
+}
+
+async function renderOnboardingCard() {
+  const card = document.getElementById('onboarding-card');
+  appSettings = await loadAppSettings();
+  if (appSettings && appSettings.onboarding_completed) {
+    card.style.display = 'none';
+    return;
+  }
+
+  const hasProgram = Object.keys(SESS).length > 0;
+
+  const nGoals = await loadNutritionGoals();
+  const hasNutritionGoals = !!(nGoals && nGoals.daily_kcal != null);
+
+  if (!activityGoals) activityGoals = await loadActivityGoals();
+  const hasActivityGoals = !!(activityGoals && (
+    activityGoals.weekly_km != null ||
+    activityGoals.weekly_sessions != null ||
+    activityGoals.target_pace_min_per_km != null
+  ));
+
+  if (hasProgram && hasNutritionGoals && hasActivityGoals) {
+    await saveOnboardingCompleted();
+    card.style.display = 'none';
+    return;
+  }
+
+  const rows = [
+    { done: hasProgram,        label: 'Luo harjoitusohjelma',       action: "showPage('ohjelma', null)" },
+    { done: hasNutritionGoals, label: 'Aseta ravintotavoitteet',    action: 'openGoalsModal()' },
+    { done: hasActivityGoals,  label: 'Aseta kestävyystavoitteet',  action: 'openActivityGoalsModal()' },
+  ];
+  document.getElementById('onboarding-rows').innerHTML = rows.map(r => `
+    <div class="hist-item" style="cursor:pointer" onclick="${r.action}">
+      <div class="hist-label">${r.done ? '✓' : '○'} ${r.label}</div>
+    </div>
+  `).join('');
+  card.style.display = '';
+}
+
+async function skipOnboarding() {
+  await saveOnboardingCompleted();
+  document.getElementById('onboarding-card').style.display = 'none';
 }
 
 async function loadActivityGoalProgress() {
@@ -3524,6 +3580,7 @@ async function loadKoonti() {
 
   loadWeekSummary();
   loadMotivationSummary();
+  renderOnboardingCard();
 
   const todayIso = localIso(new Date());
 
