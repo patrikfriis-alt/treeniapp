@@ -1561,7 +1561,15 @@ function updateSetBox(o, d, e, s) {
   const sess = SESS[st];
   const exName = sess && sess.ex && sess.ex[e] ? sess.ex[e].n : null;
   const prev = exName ? getPrevSet(exName, s) : null;
-  box.className = `set-table-row s-${setStatus(sd, prev)}`;
+  const status = setStatus(sd, prev);
+  box.className = `set-table-row s-${status}`;
+
+  const prevTextEl = document.getElementById(`set-prevtext-${o}-${d}-${e}-${s}`);
+  if (prevTextEl) {
+    const prevStr = prev ? `${prev.weight_kg ?? '?'}×${prev.reps ?? '?'}` : '—';
+    const statusIcon = { worse: '▼ ', same: '● ', better: '▲ ' }[status] || '';
+    prevTextEl.textContent = `${statusIcon}${prevStr}`;
+  }
 
   const ormEl = document.getElementById(`set-1rm-${o}-${d}-${e}-${s}`);
   if (ormEl) {
@@ -1950,7 +1958,7 @@ async function renderSession() {
           value="${sd.reps || ''}" ${locked ? 'disabled' : ''}
           onchange="saveSet(${wOff},${aDay},${ei},${s},'reps',this.value)">
         <span class="set-tprev">
-          <span>${statusIcon}${prevStr}</span>
+          <span id="set-prevtext-${wOff}-${aDay}-${ei}-${s}">${statusIcon}${prevStr}</span>
           <span class="set-1rm${orm ? ' visible' : ''}" id="set-1rm-${wOff}-${aDay}-${ei}-${s}">${orm ? `1RM ~${orm}kg` : ''}</span>
         </span>
       </div>`;
