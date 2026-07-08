@@ -1938,6 +1938,7 @@ async function renderSession() {
       const prevSet = getPrevSet(ex.n, s);
       const status  = setStatus(sd, prevSet);
       const prevStr = prevSet ? `${prevSet.weight_kg ?? '?'}×${prevSet.reps ?? '?'}` : '—';
+      const statusIcon = { worse: '▼ ', same: '● ', better: '▲ ' }[status] || '';
 
       const orm = calc1RM(parseFloat(sd.kg), parseInt(sd.reps));
       html += `<div class="set-table-row s-${status}" id="set-${wOff}-${aDay}-${ei}-${s}">
@@ -1949,7 +1950,7 @@ async function renderSession() {
           value="${sd.reps || ''}" ${locked ? 'disabled' : ''}
           onchange="saveSet(${wOff},${aDay},${ei},${s},'reps',this.value)">
         <span class="set-tprev">
-          <span>${prevStr}</span>
+          <span>${statusIcon}${prevStr}</span>
           <span class="set-1rm${orm ? ' visible' : ''}" id="set-1rm-${wOff}-${aDay}-${ei}-${s}">${orm ? `1RM ~${orm}kg` : ''}</span>
         </span>
       </div>`;
