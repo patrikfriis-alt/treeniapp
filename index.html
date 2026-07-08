@@ -1148,10 +1148,10 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span style="font-size:18px;">⌚</span> Kalorikerroin
   </button>
   <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:20px;margin-bottom:12px;">Vie data</div>
-  <button onclick="exportActivitiesCSV()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
+  <button id="export-activities-btn" onclick="exportActivitiesCSV()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span style="font-size:18px;">📤</span> Vie aktiviteetit (CSV)
   </button>
-  <button onclick="exportWorkoutSetsCSV()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
+  <button id="export-sets-btn" onclick="exportWorkoutSetsCSV()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span style="font-size:18px;">📤</span> Vie salilokit (CSV)
   </button>
 </div>
@@ -2335,7 +2335,7 @@ function downloadCSV(filename, headers, rows) {
 }
 
 async function exportActivitiesCSV() {
-  const btn = event.target;
+  const btn = document.getElementById('export-activities-btn');
   btn.disabled = true;
   try {
     const { data, error } = await sb.from('activity_data').select('*').order('activity_date', { ascending: false }).limit(100000);
@@ -2349,7 +2349,7 @@ async function exportActivitiesCSV() {
 }
 
 async function exportWorkoutSetsCSV() {
-  const btn = event.target;
+  const btn = document.getElementById('export-sets-btn');
   btn.disabled = true;
   try {
     const { data, error } = await sb.from('workout_sets').select('*').order('workout_date', { ascending: false }).limit(100000);
