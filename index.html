@@ -2322,7 +2322,7 @@ function downloadCSV(filename, headers, rows) {
   const escapeCSV = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
   const lines = [headers.map(escapeCSV).join(',')];
   rows.forEach(row => lines.push(row.map(escapeCSV).join(',')));
-  const csv = lines.join('\r\n');
+  const csv = '﻿' + lines.join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2335,19 +2335,31 @@ function downloadCSV(filename, headers, rows) {
 }
 
 async function exportActivitiesCSV() {
-  const { data, error } = await sb.from('activity_data').select('*').order('activity_date', { ascending: false });
-  if (error) { console.error('exportActivitiesCSV failed:', error.message); return; }
-  const headers = ['activity_date', 'activity_type', 'duration_min', 'calories', 'avg_heart_rate', 'distance_km'];
-  const rows = (data || []).map(a => [a.activity_date, a.activity_type, a.duration_min, a.calories, a.avg_heart_rate, a.distance_km]);
-  downloadCSV(`treeniapp-aktiviteetit-${localIso(new Date())}.csv`, headers, rows);
+  const btn = event.target;
+  btn.disabled = true;
+  try {
+    const { data, error } = await sb.from('activity_data').select('*').order('activity_date', { ascending: false }).limit(100000);
+    if (error) { console.error('exportActivitiesCSV failed:', error.message); return; }
+    const headers = ['activity_date', 'activity_type', 'duration_min', 'calories', 'avg_heart_rate', 'distance_km'];
+    const rows = (data || []).map(a => [a.activity_date, a.activity_type, a.duration_min, a.calories, a.avg_heart_rate, a.distance_km]);
+    downloadCSV(`treeniapp-aktiviteetit-${localIso(new Date())}.csv`, headers, rows);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function exportWorkoutSetsCSV() {
-  const { data, error } = await sb.from('workout_sets').select('*').order('workout_date', { ascending: false });
-  if (error) { console.error('exportWorkoutSetsCSV failed:', error.message); return; }
-  const headers = ['workout_date', 'exercise_name', 'set_number', 'weight_kg', 'reps', 'session_type'];
-  const rows = (data || []).map(s => [s.workout_date, s.exercise_name, s.set_number, s.weight_kg, s.reps, s.session_type]);
-  downloadCSV(`treeniapp-salilokit-${localIso(new Date())}.csv`, headers, rows);
+  const btn = event.target;
+  btn.disabled = true;
+  try {
+    const { data, error } = await sb.from('workout_sets').select('*').order('workout_date', { ascending: false }).limit(100000);
+    if (error) { console.error('exportWorkoutSetsCSV failed:', error.message); return; }
+    const headers = ['workout_date', 'exercise_name', 'set_number', 'weight_kg', 'reps', 'session_type'];
+    const rows = (data || []).map(s => [s.workout_date, s.exercise_name, s.set_number, s.weight_kg, s.reps, s.session_type]);
+    downloadCSV(`treeniapp-salilokit-${localIso(new Date())}.csv`, headers, rows);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function saveActivity() {
