@@ -271,6 +271,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .koonti-card-label { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
 .koonti-card-sub   { font-size: 12px; color: var(--text3); }
 .koonti-card--done .koonti-card-sub { color: var(--green); }
+.koonti-card-goal  { font-size: 11px; color: var(--accent); margin-top: 2px; }
 .koonti-card--ruoka { display: flex; align-items: center; justify-content: space-between; }
 
 /* ─── Ohjelmaeditori ─────────────────────────────────────────── */
@@ -847,6 +848,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
       <span class="koonti-card-icon">🏃</span>
       <div class="koonti-card-label">Aerobinen</div>
       <div class="koonti-card-sub" id="kc-aerobia-sub">Ladataan…</div>
+      <div class="koonti-card-goal" id="kc-aerobia-goal" style="display:none"></div>
     </div>
   </div>
 
@@ -3550,6 +3552,23 @@ async function loadKoonti() {
   kcAerobiaSub.textContent = (actRows && actRows[0])
     ? `${actRows[0].activity_type} · ${actRows[0].duration_min ?? '—'} min (${actRows[0].activity_date})`
     : 'Ei aktiviteetteja vielä';
+
+  const activityProgress = await loadActivityGoalProgress();
+  const kcAerobiaGoal = document.getElementById('kc-aerobia-goal');
+  if (activityProgress && activityProgress.goals &&
+      (activityProgress.goals.weekly_km != null || activityProgress.goals.weekly_sessions != null)) {
+    const parts = [];
+    if (activityProgress.goals.weekly_km != null) {
+      parts.push(`${activityProgress.totalKm.toFixed(1)}/${activityProgress.goals.weekly_km} km`);
+    }
+    if (activityProgress.goals.weekly_sessions != null) {
+      parts.push(`${activityProgress.sessionCount}/${activityProgress.goals.weekly_sessions} krt`);
+    }
+    kcAerobiaGoal.textContent = parts.join(' · ');
+    kcAerobiaGoal.style.display = '';
+  } else {
+    kcAerobiaGoal.style.display = 'none';
+  }
 
   const { data: bodyRows } = await sb.from('body_metrics')
     .select('weight_kg,measured_at')
