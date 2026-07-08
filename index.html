@@ -1158,6 +1158,8 @@ async function loadProgram() {
   ]);
   if (sessErr) console.error('loadProgram (sessions) failed:', sessErr.message);
   if (exErr) console.error('loadProgram (exercises) failed:', exErr.message);
+  if (sessErr || exErr) return false;
+
   programSessionsRaw = sessions || [];
   programSessionExercisesRaw = exercises || [];
 
@@ -1180,7 +1182,7 @@ async function loadProgram() {
 
   SESS = newSESS;
   SCHED = newSCHED;
-  return !sessErr && !exErr;
+  return true;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1730,8 +1732,8 @@ async function renderTreeni() {
     <div class="hero-card">
       <div class="hero-glow"></div>
       <div class="hero-day">${dayLabel}</div>
-      <div class="hero-name">${sess ? sess.name : '—'}</div>
-      <div class="hero-focus">${sess ? sess.focus : ''}</div>
+      <div class="hero-name">${sess ? escapeHtml(sess.name) : '—'}</div>
+      <div class="hero-focus">${sess ? escapeHtml(sess.focus) : ''}</div>
       ${heroStatsHtml}
       ${ctaLabel ? `<button class="${ctaClass}" onclick="${ctaOnclick}">${ctaLabel}</button>` : ''}
     </div>
@@ -1823,15 +1825,15 @@ async function renderSession() {
     const active = key === st;
     html += `<button onclick="setActiveSession(${wOff},${aDay},'${key}')"
       class="sess-btn${active ? ' active' : ''}">
-      ${s.name}</button>`;
+      ${escapeHtml(s.name)}</button>`;
   });
   html += `</div></div>`;
 
   // Rest / activity day (no exercises)
   if (!sess || !sess.ex || !sess.ex.length) {
     el.innerHTML = html + `<div class="card rest-card">
-      <div class="sess-name" style="margin-bottom:6px">${sess ? sess.name : 'Ei ohjelmoitua sessiota'}</div>
-      <div class="sess-focus">${sess ? sess.focus : ''}</div>
+      <div class="sess-name" style="margin-bottom:6px">${sess ? escapeHtml(sess.name) : 'Ei ohjelmoitua sessiota'}</div>
+      <div class="sess-focus">${sess ? escapeHtml(sess.focus) : ''}</div>
     </div>`;
     return;
   }
@@ -2905,8 +2907,8 @@ function renderExerciseResults(items, exactMatch) {
   } else {
     html += items.map(item => `
       <div class="ex-search-result-row" onclick="selectExerciseFromLibrary(${item.id})">
-        <span>${item.name}</span>
-        <span class="ex-search-result-muscle">${item.muscle_group || ''}</span>
+        <span>${escapeHtml(item.name)}</span>
+        <span class="ex-search-result-muscle">${escapeHtml(item.muscle_group || '')}</span>
       </div>`).join('');
   }
   if (q.length >= 2 && !exactMatch) {
@@ -3459,6 +3461,9 @@ function jsAttrEscape(str) {
 function htmlAttrEscape(str) {
   return String(str).replace(/"/g, '&quot;');
 }
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 function renderOhjelma() {
   const el = document.getElementById('ohjelma-content');
@@ -3478,7 +3483,7 @@ function renderOhjelma() {
       <div class="sess-card-row" onclick="toggleSessionExpand('${s.id}')">
         <span class="sess-drag-handle">⠿</span>
         <div class="sess-card-info">
-          <div class="sess-card-name">${s.name}</div>
+          <div class="sess-card-name">${escapeHtml(s.name)}</div>
           <div class="sess-card-meta">${exCount} liikettä · ${dayLabels}</div>
         </div>
         <span class="sess-card-chev${isOpen ? ' open' : ''}">›</span>
@@ -3539,8 +3544,8 @@ function renderSessionExpand(s) {
     html += `<div class="sess-ex-row" data-ex-id="${e._id}">
       <span class="sess-ex-drag">⠿</span>
       <div class="sess-ex-info" onclick="editExerciseTarget(${e._id},'${jsAttrEscape(e.n)}',${e.s},'${jsAttrEscape(e.t)}')">
-        <div class="sess-ex-name">${e.n}</div>
-        <div class="sess-ex-target" id="ex-target-${e._id}">${e.t}</div>
+        <div class="sess-ex-name">${escapeHtml(e.n)}</div>
+        <div class="sess-ex-target" id="ex-target-${e._id}">${escapeHtml(e.t)}</div>
       </div>
       <button class="sess-ex-remove" onclick="removeExerciseFromSession(${e._id})">✕</button>
     </div>`;
@@ -3561,7 +3566,10 @@ async function saveSessionField(id, field, value) {
   const { error } = await sb.from('program_sessions').update({ [field]: value }).eq('id', id);
   if (error) { console.error('saveSessionField failed:', error.message); return; }
   await loadProgram();
-  renderOhjelma();
+  if (field === 'name') {
+    const nameEl = document.querySelector(`.sess-card[data-session-id="${id}"] .sess-card-name`);
+    if (nameEl) nameEl.textContent = value;
+  }
 }
 
 async function toggleSessionWeekday(id, dayIndex) {
