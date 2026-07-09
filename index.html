@@ -282,6 +282,20 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .weekly-insight { font-size: 12px; color: var(--accent); margin-top: 6px; }
 .weekly-insight:first-child { margin-top: 0; }
 .koonti-card--ruoka { display: flex; align-items: center; justify-content: space-between; }
+.skel-sub {
+  display: inline-block;
+  width: 70%;
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.5s infinite;
+  color: transparent;
+}
+@keyframes skel-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 
 /* ─── Ohjelmaeditori ─────────────────────────────────────────── */
 .ohj-header { display:flex; align-items:center; justify-content:space-between; padding:2px 2px 14px; }
@@ -870,12 +884,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <div class="koonti-card" id="kc-sali" onclick="showPage('sali', document.getElementById('nav-koonti'))">
       <span class="koonti-card-icon">🏋️</span>
       <div class="koonti-card-label">Sali</div>
-      <div class="koonti-card-sub" id="kc-sali-sub">Ladataan…</div>
+      <div class="koonti-card-sub skel-sub" id="kc-sali-sub">&nbsp;</div>
     </div>
     <div class="koonti-card" id="kc-aerobia" onclick="showPage('aerobia', document.getElementById('nav-koonti'))">
       <span class="koonti-card-icon">🏃</span>
       <div class="koonti-card-label">Aerobinen</div>
-      <div class="koonti-card-sub" id="kc-aerobia-sub">Ladataan…</div>
+      <div class="koonti-card-sub skel-sub" id="kc-aerobia-sub">&nbsp;</div>
       <div class="koonti-card-goal" id="kc-aerobia-goal" style="display:none"></div>
     </div>
   </div>
@@ -885,12 +899,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <div class="koonti-card" id="kc-keho" onclick="showPage('keho', document.getElementById('nav-koonti'))">
       <span class="koonti-card-icon">⚖️</span>
       <div class="koonti-card-label">Keho</div>
-      <div class="koonti-card-sub" id="kc-keho-sub">Ladataan…</div>
+      <div class="koonti-card-sub skel-sub" id="kc-keho-sub">&nbsp;</div>
     </div>
     <div class="koonti-card" id="kc-uni" onclick="showPage('uni', document.getElementById('nav-koonti'))">
       <span class="koonti-card-icon">😴</span>
       <div class="koonti-card-label">Uni</div>
-      <div class="koonti-card-sub" id="kc-uni-sub">Ladataan…</div>
+      <div class="koonti-card-sub skel-sub" id="kc-uni-sub">&nbsp;</div>
     </div>
   </div>
 
@@ -898,7 +912,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <div class="koonti-card koonti-card--ruoka" id="kc-ruoka" onclick="showPage('ruoka', document.getElementById('nav-ruoka'))">
       <div>
         <div class="koonti-card-label">🍽️ Ruokailu</div>
-        <div class="koonti-card-sub" id="kc-ruoka-sub">Ladataan…</div>
+        <div class="koonti-card-sub skel-sub" id="kc-ruoka-sub">&nbsp;</div>
       </div>
       <div style="font-size:20px;color:var(--text3)">›</div>
     </div>
@@ -906,7 +920,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 
   <div class="card" id="kc-weekly-report" style="margin:0 12px 10px">
     <div class="card-title">Tällä viikolla</div>
-    <div id="kc-weekly-rows">Ladataan…</div>
+    <div id="kc-weekly-rows"><div class="koonti-card-sub skel-sub" style="width:100%">&nbsp;</div></div>
     <div id="kc-weekly-insights" style="display:none"></div>
   </div>
 </div>
@@ -3900,6 +3914,7 @@ async function loadKoonti() {
     .eq('workout_date', todayIso).limit(1);
   const kcSaliCard = document.getElementById('kc-sali');
   const kcSaliSub  = document.getElementById('kc-sali-sub');
+  kcSaliSub.classList.remove('skel-sub');
   kcSaliCard.classList.remove('koonti-card--done', 'koonti-card--inprogress');
   if (wsRows && wsRows[0] && wsRows[0].is_done) {
     const cal = wsRows[0].calories ? ` · ${wsRows[0].calories} kcal` : '';
@@ -3923,6 +3938,7 @@ async function loadKoonti() {
     .order('activity_date', { ascending: false }).limit(1);
   const kcAerobiaCard = document.getElementById('kc-aerobia');
   const kcAerobiaSub = document.getElementById('kc-aerobia-sub');
+  kcAerobiaSub.classList.remove('skel-sub');
   const aerobiaDoneToday = !!(actRows && actRows[0] && actRows[0].activity_date === todayIso);
   kcAerobiaCard.classList.toggle('koonti-card--done', aerobiaDoneToday);
   kcAerobiaSub.textContent = (actRows && actRows[0])
@@ -3951,6 +3967,7 @@ async function loadKoonti() {
     .order('measured_at', { ascending: false }).limit(2);
   const kcKehoCard = document.getElementById('kc-keho');
   const kcKehoSub = document.getElementById('kc-keho-sub');
+  kcKehoSub.classList.remove('skel-sub');
   const kehoDoneToday = !!(bodyRows && bodyRows[0] && bodyRows[0].measured_at === todayIso);
   kcKehoCard.classList.toggle('koonti-card--done', kehoDoneToday);
   if (bodyRows && bodyRows[0] && bodyRows[0].weight_kg) {
@@ -3969,6 +3986,7 @@ async function loadKoonti() {
     .order('sleep_date', { ascending: false }).limit(7);
   const kcUniCard = document.getElementById('kc-uni');
   const kcUniSub = document.getElementById('kc-uni-sub');
+  kcUniSub.classList.remove('skel-sub');
   const uniDoneToday = !!(sleepRows && sleepRows[0] && sleepRows[0].sleep_date === todayIso);
   kcUniCard.classList.toggle('koonti-card--done', uniDoneToday);
   if (sleepRows && sleepRows[0] && sleepRows[0].duration_min !== null) {
@@ -3982,6 +4000,7 @@ async function loadKoonti() {
   const entries = await loadFoodDayEntries(todayIso);
   const kcRuokaCard = document.getElementById('kc-ruoka');
   const kcRuokaSub = document.getElementById('kc-ruoka-sub');
+  kcRuokaSub.classList.remove('skel-sub');
   kcRuokaCard.classList.toggle('koonti-card--done', entries.length > 0);
   const totalKcal = entries.reduce((s, e) => s + (e.kcal || 0), 0);
   kcRuokaSub.textContent = entries.length ? `${Math.round(totalKcal)} kcal tänään` : 'Ei kirjauksia tänään';
