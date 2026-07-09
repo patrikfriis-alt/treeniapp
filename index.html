@@ -838,11 +838,11 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 
 <nav>
   <button id="nav-koonti" class="active" onclick="showPage('koonti',this)">
-    <span class="nav-icon">🏠</span>
+    <span class="nav-icon" data-icon="home"></span>
     <span>Koonti</span>
   </button>
   <button id="nav-ruoka" onclick="showPage('ruoka',this)">
-    <span class="nav-icon">🍽️</span>
+    <span class="nav-icon" data-icon="utensils"></span>
     <span>Ruoka</span>
   </button>
   <button id="hamburger-btn" onclick="toggleSidebar()">
@@ -1197,24 +1197,24 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('ohjelma',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
-    <span style="font-size:18px;">📋</span> Ohjelma
+    <span data-icon="clipboard" style="display:inline-flex"></span> Ohjelma
   </button>
   <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:20px;margin-bottom:12px;">Asetukset</div>
   <button onclick="openGoalsModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
-    <span style="font-size:18px;">🎯</span> Ravintotavoitteet
+    <span data-icon="target" style="display:inline-flex"></span> Ravintotavoitteet
   </button>
   <button onclick="openActivityGoalsModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
-    <span style="font-size:18px;">🏃</span> Kestävyystavoitteet
+    <span data-icon="running" style="display:inline-flex"></span> Kestävyystavoitteet
   </button>
   <button onclick="openCalorieSettingsModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
-    <span style="font-size:18px;">⌚</span> Kalorikerroin
+    <span data-icon="watch" style="display:inline-flex"></span> Kalorikerroin
   </button>
   <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:20px;margin-bottom:12px;">Vie data</div>
   <button id="export-activities-btn" onclick="exportActivitiesCSV();closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
-    <span style="font-size:18px;">📤</span> Vie aktiviteetit (CSV)
+    <span data-icon="upload" style="display:inline-flex"></span> Vie aktiviteetit (CSV)
   </button>
   <button id="export-sets-btn" onclick="exportWorkoutSetsCSV();closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
-    <span style="font-size:18px;">📤</span> Vie salilokit (CSV)
+    <span data-icon="upload" style="display:inline-flex"></span> Vie salilokit (CSV)
   </button>
 </div>
 
