@@ -1401,14 +1401,14 @@ function stopRestTimer() {
   }
 }
 
-const celebratedPRExercises = new Set();
+const celebratedPRSlots = new Set();
 
 function checkForPR(o, d, st, e) {
   const sess = SESS[st];
   if (!sess || !sess.ex[e]) return;
   const exName = sess.ex[e].n;
   const k = eKey(o, d, st, e);
-  if (celebratedPRExercises.has(k)) return;
+  if (celebratedPRSlots.has(k)) return;
   const prevSets = prevCache[exName];
   if (!prevSets || !prevSets.length) return;
   const prevMax = Math.max(...prevSets.map(s => s.weight_kg || 0));
@@ -1420,7 +1420,7 @@ function checkForPR(o, d, st, e) {
   const currentMax = Math.max(...currentWeights);
 
   if (currentMax > prevMax) {
-    celebratedPRExercises.add(k);
+    celebratedPRSlots.add(k);
     showCelebrationToast('🏆', 'Uusi ennätys!', `${escapeHtml(exName)} ${currentMax}kg`, 'pr');
   }
 }
