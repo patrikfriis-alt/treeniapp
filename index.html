@@ -1220,6 +1220,44 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 
 <script>
 /* ═══════════════════════════════════════════════════════════════
+   IKONIT (SVG)
+═══════════════════════════════════════════════════════════════ */
+const ICONS = {
+  home:      '<path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10"/>',
+  utensils:  '<path d="M18 8V6a2 2 0 00-2-2H8a2 2 0 00-2 2v2"/><path d="M20 8H4a1 1 0 00-1 1v2a1 1 0 001 1h16a1 1 0 001-1V9a1 1 0 00-1-1z"/><path d="M6 12v7a2 2 0 002 2h8a2 2 0 002-2v-7"/>',
+  dumbbell:  '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/><rect x="1" y="9" width="4" height="6" rx="1"/><rect x="19" y="9" width="4" height="6" rx="1"/><rect x="5" y="7" width="3" height="10" rx="1"/><rect x="16" y="7" width="3" height="10" rx="1"/>',
+  flame:     '<path d="M12 2c-2 4-6 5-6 10a6 6 0 0012 0c0-2-1-3-2-4 0 2-1 3-2 2 1-3-1-5-2-8z"/>',
+  running:   '<circle cx="14" cy="4" r="2"/><path d="M10 22l2-6 3-2-1-5-4 1-2 4M13 8l3 3 4-1M8 13l-3 2 1 5"/>',
+  scale:     '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 8v4l3 2"/>',
+  moon:      '<path d="M21 12.5A8.5 8.5 0 1111.5 3 7 7 0 0021 12.5z"/>',
+  calendar:  '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  clipboard: '<rect x="6" y="4" width="12" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 11h6M9 15h6"/>',
+  target:    '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  watch:     '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2 2M9 3h6l-1 3H10z"/>',
+  upload:    '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>',
+};
+
+function svgIcon(name, color, size) {
+  const path = ICONS[name];
+  if (!path) return '';
+  const c = color || 'currentColor';
+  const s = size || 20;
+  return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+}
+
+function renderIcons() {
+  document.querySelectorAll('[data-icon]').forEach(el => {
+    const name = el.dataset.icon;
+    if (!ICONS[name]) return;
+    const color = el.dataset.iconColor || 'currentColor';
+    el.innerHTML = svgIcon(name, color);
+    if (el.dataset.iconBg) {
+      el.style.cssText += `display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:${el.dataset.iconBg};`;
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
    CONFIG
 ═══════════════════════════════════════════════════════════════ */
 const SB_URL = 'https://dodrzzgbdlucjbkmxbjn.supabase.co';
@@ -4338,6 +4376,7 @@ function migrateLD_v3() {
    INIT
 ═══════════════════════════════════════════════════════════════ */
 (async () => {
+  renderIcons();
   ['body-date','act-date','sleep-date'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = localIso(new Date());
