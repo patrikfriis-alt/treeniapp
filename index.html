@@ -1401,6 +1401,30 @@ function stopRestTimer() {
   }
 }
 
+const celebratedPRExercises = new Set();
+
+function checkForPR(o, d, st, e) {
+  const sess = SESS[st];
+  if (!sess || !sess.ex[e]) return;
+  const exName = sess.ex[e].n;
+  if (celebratedPRExercises.has(exName)) return;
+  const prevSets = prevCache[exName];
+  if (!prevSets || !prevSets.length) return;
+  const prevMax = Math.max(...prevSets.map(s => s.weight_kg || 0));
+  if (prevMax <= 0) return;
+
+  const k = eKey(o, d, st, e);
+  const currentSets = (LD[k] && LD[k].sets) || [];
+  const currentWeights = currentSets.map(s => parseFloat(s && s.kg)).filter(n => !isNaN(n));
+  if (!currentWeights.length) return;
+  const currentMax = Math.max(...currentWeights);
+
+  if (currentMax > prevMax) {
+    celebratedPRExercises.add(exName);
+    showCelebrationToast('🏆', 'Uusi ennätys!', `${escapeHtml(exName)} ${currentMax}kg`, 'pr');
+  }
+}
+
 function saveSet(o, d, e, s, field, value) {
   const st = getActiveSession(o, d);
   const k = eKey(o, d, st, e);
@@ -1413,6 +1437,8 @@ function saveSet(o, d, e, s, field, value) {
   // Käynnistä lepoajastin kun sarja on täysin tallennettu (kg + toistot)
   const sd = LD[k].sets[s];
   if (sd && sd.kg && sd.reps) startRestTimer();
+
+  checkForPR(o, d, st, e);
 
   const timerKey = `${o}-${d}-${e}-${s}`;
   clearTimeout(syncTimers[timerKey]);
