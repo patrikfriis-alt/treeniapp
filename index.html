@@ -4396,6 +4396,7 @@ function migrateLD_v3() {
 ═══════════════════════════════════════════════════════════════ */
 const OFFLINE_QUEUE_KEY = 'sbOfflineQueue';
 const MAX_RETRY_ATTEMPTS = 5;
+let flushInFlight = false;
 
 function looksOffline(error) {
   if (!navigator.onLine) return true;
@@ -4406,7 +4407,10 @@ function looksOffline(error) {
 }
 
 function loadQueue() {
-  try { return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]'); }
+  try {
+    const parsed = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  }
   catch { return []; }
 }
 
@@ -4435,43 +4439,54 @@ function enqueueWrite(entry) {
   persistQueue(q);
 }
 
-async function sbWrite({ table, op, payload, eq, opts }) {
+async function attemptWrite({ table, op, payload, eq, opts }) {
   try {
     let q = sb.from(table);
     if (op === 'insert') q = q.insert(payload);
     else if (op === 'upsert') q = q.upsert(payload, opts);
     else if (op === 'update') q = q.update(payload).eq(eq.column, eq.value);
     else if (op === 'delete') q = q.delete().eq(eq.column, eq.value);
+    else throw new Error(`sbWrite: unknown op "${op}"`);
     const { error } = await q;
-    if (error) {
-      if (looksOffline(error)) { enqueueWrite({ table, op, payload, eq, opts }); return { error: null }; }
-      return { error };
-    }
-    return { error: null };
+    return { error: error || null };
   } catch (e) {
-    if (looksOffline(e)) { enqueueWrite({ table, op, payload, eq, opts }); return { error: null }; }
     return { error: e };
   }
 }
 
+async function sbWrite({ table, op, payload, eq, opts }) {
+  const { error } = await attemptWrite({ table, op, payload, eq, opts });
+  if (error) {
+    if (looksOffline(error)) { enqueueWrite({ table, op, payload, eq, opts }); return { error: null }; }
+    return { error };
+  }
+  return { error: null };
+}
+
 async function flushQueue() {
-  let q = loadQueue();
-  if (q.length === 0) return;
-  const remaining = [];
-  for (let i = 0; i < q.length; i++) {
-    const entry = q[i];
-    if (entry.attempts >= MAX_RETRY_ATTEMPTS) { remaining.push(entry); continue; }
-    const { error } = await sbWrite(entry);
-    if (error) {
-      entry.attempts += 1;
-      remaining.push(entry);
-      if (!navigator.onLine) {
-        remaining.push(...q.slice(i + 1));
-        break;
+  if (flushInFlight) return;
+  flushInFlight = true;
+  try {
+    let q = loadQueue();
+    if (q.length === 0) return;
+    const remaining = [];
+    for (let i = 0; i < q.length; i++) {
+      const entry = q[i];
+      if (entry.attempts >= MAX_RETRY_ATTEMPTS) { remaining.push(entry); continue; }
+      const { error } = await attemptWrite(entry);
+      if (error) {
+        entry.attempts += 1;
+        remaining.push(entry);
+        if (!navigator.onLine) {
+          remaining.push(...q.slice(i + 1));
+          break;
+        }
       }
     }
+    persistQueue(remaining);
+  } finally {
+    flushInFlight = false;
   }
-  persistQueue(remaining);
 }
 
 window.addEventListener('online', flushQueue);
