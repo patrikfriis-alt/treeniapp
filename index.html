@@ -3901,15 +3901,14 @@ async function loadKoonti() {
   const kcSaliCard = document.getElementById('kc-sali');
   const kcSaliSub  = document.getElementById('kc-sali-sub');
   kcSaliCard.classList.remove('koonti-card--done', 'koonti-card--inprogress');
-  const todayIdx = (new Date().getDay() + 6) % 7;
   if (wsRows && wsRows[0] && wsRows[0].is_done) {
     const cal = wsRows[0].calories ? ` · ${wsRows[0].calories} kcal` : '';
     kcSaliSub.textContent = `Tehty ✓${cal}`;
     kcSaliCard.classList.add('koonti-card--done');
   } else {
-    const st = SCHED[todayIdx];
+    const st = SCHED[todayIdx()];
     const hasEx = st && SESS[st] && SESS[st].ex && SESS[st].ex.length > 0;
-    if (isStarted(0, todayIdx, st)) {
+    if (isStarted(0, todayIdx(), st)) {
       kcSaliCard.classList.add('koonti-card--inprogress');
       kcSaliSub.textContent = hasEx ? `Kesken · ${SESS[st].name}` : 'Kesken';
     } else {
