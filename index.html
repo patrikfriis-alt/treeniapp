@@ -281,6 +281,26 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 #kc-weekly-insights { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .weekly-insight { font-size: 12px; color: var(--accent); margin-top: 6px; }
 .weekly-insight:first-child { margin-top: 0; }
+.celebration-toast {
+  position: fixed;
+  top: -100px;
+  left: 16px;
+  right: 16px;
+  z-index: 300;
+  background: linear-gradient(135deg, #ff9f0a, #ff453a);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  transition: top 0.3s ease;
+}
+.celebration-toast.visible { top: 16px; }
+.celebration-toast--pr { background: linear-gradient(135deg, #0a84ff, #5e5ce6); }
+.celebration-toast-icon { font-size: 28px; }
+.celebration-toast-title { color: #fff; font-weight: 700; font-size: 15px; }
+.celebration-toast-sub { color: #fff; font-size: 12px; opacity: 0.9; }
 .koonti-card--ruoka { display: flex; align-items: center; justify-content: space-between; }
 .skel-sub {
   display: inline-block;
@@ -1897,6 +1917,38 @@ async function loadMotivationSummary() {
   if (msStreakEl) msStreakEl.textContent = streak + ' pv';
   const kStreakEl = document.getElementById('koonti-ms-streak');
   if (kStreakEl) kStreakEl.textContent = streak + ' pv';
+
+  const streakMilestones = [7, 14, 30, 50, 100];
+  const isStreakMilestone = streakMilestones.includes(streak) || (streak > 100 && streak % 50 === 0);
+  if (isStreakMilestone) {
+    const lastCelebrated = parseInt(localStorage.getItem('celebratedStreak') || '0', 10);
+    if (streak > lastCelebrated) {
+      localStorage.setItem('celebratedStreak', String(streak));
+      showCelebrationToast('🔥', `${streak} päivän streak!`, 'Pidät yllä upeaa vauhtia');
+    }
+  }
+}
+
+function showCelebrationToast(icon, title, sub, type) {
+  const existing = document.getElementById('celebration-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'celebration-toast';
+  toast.className = `celebration-toast${type ? ' celebration-toast--' + type : ''}`;
+  toast.innerHTML = `
+    <div class="celebration-toast-icon">${icon}</div>
+    <div>
+      <div class="celebration-toast-title">${title}</div>
+      <div class="celebration-toast-sub">${sub}</div>
+    </div>
+  `;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.classList.add('visible'), 10);
+  setTimeout(() => {
+    toast.classList.remove('visible');
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
 }
 
 async function renderTreeni() {
