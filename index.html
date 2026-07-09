@@ -3876,8 +3876,11 @@ async function loadActivityGoals() {
 }
 
 async function saveActivityGoals(goals) {
-  const { error } = await sb.from('activity_goals')
-    .upsert({ id: 1, ...goals, updated_at: new Date().toISOString() });
+  const { error } = await sbWrite({
+    table: 'activity_goals',
+    op: 'upsert',
+    payload: { id: 1, ...goals, updated_at: new Date().toISOString() },
+  });
   if (error) { console.error('saveActivityGoals failed:', error.message); throw error; }
 }
 
@@ -3933,8 +3936,11 @@ async function openActivityGoalsModal() {
 }
 
 async function saveNutritionGoals(goals) {
-  const { error } = await sb.from('nutrition_goals')
-    .upsert({ id: 1, ...goals, updated_at: new Date().toISOString() });
+  const { error } = await sbWrite({
+    table: 'nutrition_goals',
+    op: 'upsert',
+    payload: { id: 1, ...goals, updated_at: new Date().toISOString() },
+  });
   if (error) { console.error('saveNutritionGoals failed:', error.message); throw error; }
 }
 
