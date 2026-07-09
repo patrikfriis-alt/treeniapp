@@ -3596,12 +3596,16 @@ function closeExercisePicker() {
 async function addExerciseToCurrentSession(exerciseName) {
   const existing = programSessionExercisesRaw.filter(e => e.program_session_id === exercisePickerSessionId);
   const nextOrder = existing.length ? Math.max(...existing.map(e => e.sort_order)) + 1 : 0;
-  const { error } = await sb.from('program_session_exercises').insert({
-    program_session_id: exercisePickerSessionId,
-    exercise_name: exerciseName,
-    target_sets: 3,
-    target_display: '3×10',
-    sort_order: nextOrder,
+  const { error } = await sbWrite({
+    table: 'program_session_exercises',
+    op: 'insert',
+    payload: {
+      program_session_id: exercisePickerSessionId,
+      exercise_name: exerciseName,
+      target_sets: 3,
+      target_display: '3×10',
+      sort_order: nextOrder,
+    },
   });
   if (error) {
     console.error('addExerciseToCurrentSession failed:', error.message);
@@ -4246,7 +4250,7 @@ function renderOhjelma() {
     animation: 150,
     onEnd: async () => {
       const ids = [...document.getElementById('sess-list').children].map(c => c.dataset.sessionId);
-      await Promise.all(ids.map((id, i) => sb.from('program_sessions').update({ sort_order: i }).eq('id', id)));
+      await Promise.all(ids.map((id, i) => sbWrite({ table: 'program_sessions', op: 'update', payload: { sort_order: i }, eq: { column: 'id', value: id } })));
       await loadProgram();
       renderOhjelma();
     },
@@ -4260,7 +4264,7 @@ function renderOhjelma() {
         animation: 150,
         onEnd: async () => {
           const ids = [...exList.children].map(c => Number(c.dataset.exId));
-          await Promise.all(ids.map((id, i) => sb.from('program_session_exercises').update({ sort_order: i }).eq('id', id)));
+          await Promise.all(ids.map((id, i) => sbWrite({ table: 'program_session_exercises', op: 'update', payload: { sort_order: i }, eq: { column: 'id', value: id } })));
           await loadProgram();
           renderOhjelma();
         },
@@ -4309,7 +4313,7 @@ function toggleSessionExpand(id) {
 }
 
 async function saveSessionField(id, field, value) {
-  const { error } = await sb.from('program_sessions').update({ [field]: value }).eq('id', id);
+  const { error } = await sbWrite({ table: 'program_sessions', op: 'update', payload: { [field]: value }, eq: { column: 'id', value: id } });
   if (error) { console.error('saveSessionField failed:', error.message); return; }
   await loadProgram();
   if (field === 'name') {
@@ -4323,8 +4327,12 @@ async function toggleSessionWeekday(id, dayIndex) {
   if (!s) return;
   const days = new Set(s.default_weekdays || []);
   if (days.has(dayIndex)) days.delete(dayIndex); else days.add(dayIndex);
-  const { error } = await sb.from('program_sessions')
-    .update({ default_weekdays: [...days].sort((a, b) => a - b) }).eq('id', id);
+  const { error } = await sbWrite({
+    table: 'program_sessions',
+    op: 'update',
+    payload: { default_weekdays: [...days].sort((a, b) => a - b) },
+    eq: { column: 'id', value: id },
+  });
   if (error) { console.error('toggleSessionWeekday failed:', error.message); return; }
   await loadProgram();
   renderOhjelma();
@@ -4345,8 +4353,10 @@ async function addNewProgramSession() {
   while (programSessionsRaw.some(s => s.id === slug)) { n++; slug = `${slugify('Uusi sessio')}-${n}`; }
   const nextOrder = programSessionsRaw.length
     ? Math.max(...programSessionsRaw.map(s => s.sort_order)) + 1 : 0;
-  const { error } = await sb.from('program_sessions').insert({
-    id: slug, name: 'Uusi sessio', focus: '', default_weekdays: [], sort_order: nextOrder,
+  const { error } = await sbWrite({
+    table: 'program_sessions',
+    op: 'insert',
+    payload: { id: slug, name: 'Uusi sessio', focus: '', default_weekdays: [], sort_order: nextOrder },
   });
   if (error) { console.error('addNewProgramSession failed:', error.message); return; }
   await loadProgram();
@@ -4355,7 +4365,7 @@ async function addNewProgramSession() {
 }
 
 async function deleteProgramSession(id) {
-  const { error } = await sb.from('program_sessions').delete().eq('id', id);
+  const { error } = await sbWrite({ table: 'program_sessions', op: 'delete', eq: { column: 'id', value: id } });
   if (error) { console.error('deleteProgramSession failed:', error.message); return; }
   ohjelmaExpandedId = null;
   await loadProgram();
@@ -4363,7 +4373,7 @@ async function deleteProgramSession(id) {
 }
 
 async function removeExerciseFromSession(exId) {
-  const { error } = await sb.from('program_session_exercises').delete().eq('id', exId);
+  const { error } = await sbWrite({ table: 'program_session_exercises', op: 'delete', eq: { column: 'id', value: exId } });
   if (error) { console.error('removeExerciseFromSession failed:', error.message); return; }
   await loadProgram();
   renderOhjelma();
@@ -4387,8 +4397,12 @@ async function saveExerciseTarget(exId) {
   if (!setsEl || !dispEl) return;
   const target_sets = parseInt(setsEl.value, 10) || 1;
   const target_display = dispEl.value.trim() || `${target_sets}×10`;
-  const { error } = await sb.from('program_session_exercises')
-    .update({ target_sets, target_display }).eq('id', exId);
+  const { error } = await sbWrite({
+    table: 'program_session_exercises',
+    op: 'update',
+    payload: { target_sets, target_display },
+    eq: { column: 'id', value: exId },
+  });
   if (error) { console.error('saveExerciseTarget failed:', error.message); return; }
   await loadProgram();
   const targetEl = document.getElementById(`ex-target-${exId}`);
