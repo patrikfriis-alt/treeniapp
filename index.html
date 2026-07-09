@@ -265,12 +265,18 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   padding: 16px;
   cursor: pointer;
   transition: transform var(--t);
+  position: relative;
 }
 .koonti-card:active { transform: scale(.98); }
 .koonti-card-icon  { font-size: 24px; margin-bottom: 8px; display: block; }
 .koonti-card-label { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
 .koonti-card-sub   { font-size: 12px; color: var(--text3); }
+.koonti-card--done { background: var(--green-bg); border: 1px solid rgba(48,209,88,0.3); }
 .koonti-card--done .koonti-card-sub { color: var(--green); }
+.koonti-card--done::after { content: "✓"; position: absolute; top: 12px; right: 14px; color: var(--green); font-weight: 700; font-size: 13px; }
+.koonti-card--inprogress { background: var(--accent-bg); border: 1px solid rgba(10,132,255,0.35); }
+.koonti-card--inprogress .koonti-card-sub { color: var(--accent); }
+.koonti-card--inprogress::after { content: "●"; position: absolute; top: 16px; right: 16px; color: var(--accent); font-size: 8px; }
 .koonti-card-goal  { font-size: 11px; color: var(--accent); margin-top: 2px; }
 #kc-weekly-insights { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .weekly-insight { font-size: 12px; color: var(--accent); margin-top: 6px; }
@@ -3894,23 +3900,32 @@ async function loadKoonti() {
     .eq('workout_date', todayIso).limit(1);
   const kcSaliCard = document.getElementById('kc-sali');
   const kcSaliSub  = document.getElementById('kc-sali-sub');
+  kcSaliCard.classList.remove('koonti-card--done', 'koonti-card--inprogress');
+  const todayIdx = (new Date().getDay() + 6) % 7;
   if (wsRows && wsRows[0] && wsRows[0].is_done) {
     const cal = wsRows[0].calories ? ` · ${wsRows[0].calories} kcal` : '';
     kcSaliSub.textContent = `Tehty ✓${cal}`;
     kcSaliCard.classList.add('koonti-card--done');
   } else {
-    kcSaliCard.classList.remove('koonti-card--done');
-    const st = SCHED[(new Date().getDay() + 6) % 7];
+    const st = SCHED[todayIdx];
     const hasEx = st && SESS[st] && SESS[st].ex && SESS[st].ex.length > 0;
-    kcSaliSub.textContent = hasEx
-      ? `Ei vielä · ${SESS[st].name}`
-      : (st ? 'Ei salipäivä tänään' : 'Ei ohjelmoitua sessiota tänään');
+    if (isStarted(0, todayIdx, st)) {
+      kcSaliCard.classList.add('koonti-card--inprogress');
+      kcSaliSub.textContent = hasEx ? `Kesken · ${SESS[st].name}` : 'Kesken';
+    } else {
+      kcSaliSub.textContent = hasEx
+        ? `Ei vielä · ${SESS[st].name}`
+        : (st ? 'Ei salipäivä tänään' : 'Ei ohjelmoitua sessiota tänään');
+    }
   }
 
   const { data: actRows } = await sb.from('activity_data')
     .select('activity_type,activity_date,duration_min')
     .order('activity_date', { ascending: false }).limit(1);
+  const kcAerobiaCard = document.getElementById('kc-aerobia');
   const kcAerobiaSub = document.getElementById('kc-aerobia-sub');
+  const aerobiaDoneToday = !!(actRows && actRows[0] && actRows[0].activity_date === todayIso);
+  kcAerobiaCard.classList.toggle('koonti-card--done', aerobiaDoneToday);
   kcAerobiaSub.textContent = (actRows && actRows[0])
     ? `${actRows[0].activity_type} · ${actRows[0].duration_min ?? '—'} min (${actRows[0].activity_date})`
     : 'Ei aktiviteetteja vielä';
@@ -3935,7 +3950,10 @@ async function loadKoonti() {
   const { data: bodyRows } = await sb.from('body_metrics')
     .select('weight_kg,measured_at')
     .order('measured_at', { ascending: false }).limit(2);
+  const kcKehoCard = document.getElementById('kc-keho');
   const kcKehoSub = document.getElementById('kc-keho-sub');
+  const kehoDoneToday = !!(bodyRows && bodyRows[0] && bodyRows[0].measured_at === todayIso);
+  kcKehoCard.classList.toggle('koonti-card--done', kehoDoneToday);
   if (bodyRows && bodyRows[0] && bodyRows[0].weight_kg) {
     let deltaStr = '';
     if (bodyRows[1] && bodyRows[1].weight_kg) {
@@ -3950,7 +3968,10 @@ async function loadKoonti() {
   const { data: sleepRows } = await sb.from('sleep_data')
     .select('duration_min,sleep_date')
     .order('sleep_date', { ascending: false }).limit(7);
+  const kcUniCard = document.getElementById('kc-uni');
   const kcUniSub = document.getElementById('kc-uni-sub');
+  const uniDoneToday = !!(sleepRows && sleepRows[0] && sleepRows[0].sleep_date === todayIso);
+  kcUniCard.classList.toggle('koonti-card--done', uniDoneToday);
   if (sleepRows && sleepRows[0] && sleepRows[0].duration_min !== null) {
     const withDur = sleepRows.filter(r => r.duration_min !== null);
     const avg = withDur.length ? withDur.reduce((s, r) => s + r.duration_min, 0) / withDur.length : 0;
@@ -3960,7 +3981,9 @@ async function loadKoonti() {
   }
 
   const entries = await loadFoodDayEntries(todayIso);
+  const kcRuokaCard = document.getElementById('kc-ruoka');
   const kcRuokaSub = document.getElementById('kc-ruoka-sub');
+  kcRuokaCard.classList.toggle('koonti-card--done', entries.length > 0);
   const totalKcal = entries.reduce((s, e) => s + (e.kcal || 0), 0);
   kcRuokaSub.textContent = entries.length ? `${Math.round(totalKcal)} kcal tänään` : 'Ei kirjauksia tänään';
 }
