@@ -1,7 +1,7 @@
 # Treeniapp — Raportointi, motivointi & Koonti-kiillotus
 
 **Päivämäärä:** 2026-07-08
-**Laajuus:** Sprintti 2 osat 2-4 yhdistettynä (kohdat 8, 9, 10, 11, 14, 15 — 16 pistettä). Kohta 17 (Kehitys-välilehtien syvyys) jätetty pois, koska se oli alkuperäisessä katselmoinnissa merkitty tarkkailukohteeksi, ei rakennusteh­täväksi.
+**Laajuus:** Sprintti 2 osat 2-4 yhdistettynä (kohdat 8, 9, 10, 11, 14, 15 — 14 pistettä). Kohta 17 (Kehitys-välilehtien syvyys, 2p) jätetty pois, koska se oli alkuperäisessä katselmoinnissa merkitty tarkkailukohteeksi, ei rakennustehtäväksi.
 **Riippuvuudet:** Käyttää olemassa olevia `activity_data`-, `workout_sets`-, `body_metrics`- ja `sleep_data`-tauluja. Ei uutta migraatiota.
 
 ---
