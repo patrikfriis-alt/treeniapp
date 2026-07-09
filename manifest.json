@@ -1,6 +1,6 @@
 {
-  "name": "Treeniapp",
-  "short_name": "Treeni",
+  "name": "Valkku",
+  "short_name": "Valkku",
   "description": "Henkilökohtainen treenikirjanpito",
   "start_url": "/",
   "display": "standalone",
