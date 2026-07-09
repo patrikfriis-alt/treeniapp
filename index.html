@@ -1407,20 +1407,20 @@ function checkForPR(o, d, st, e) {
   const sess = SESS[st];
   if (!sess || !sess.ex[e]) return;
   const exName = sess.ex[e].n;
-  if (celebratedPRExercises.has(exName)) return;
+  const k = eKey(o, d, st, e);
+  if (celebratedPRExercises.has(k)) return;
   const prevSets = prevCache[exName];
   if (!prevSets || !prevSets.length) return;
   const prevMax = Math.max(...prevSets.map(s => s.weight_kg || 0));
   if (prevMax <= 0) return;
 
-  const k = eKey(o, d, st, e);
   const currentSets = (LD[k] && LD[k].sets) || [];
   const currentWeights = currentSets.map(s => parseFloat(s && s.kg)).filter(n => !isNaN(n));
   if (!currentWeights.length) return;
   const currentMax = Math.max(...currentWeights);
 
   if (currentMax > prevMax) {
-    celebratedPRExercises.add(exName);
+    celebratedPRExercises.add(k);
     showCelebrationToast('🏆', 'Uusi ennätys!', `${escapeHtml(exName)} ${currentMax}kg`, 'pr');
   }
 }
