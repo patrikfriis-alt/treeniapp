@@ -664,6 +664,21 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   background: rgba(0,0,0,0.6);
 }
 
+/* ─── Offline-banneri ───────────────────────────────────────── */
+#offline-banner {
+  display: none;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--amber-bg);
+  color: var(--amber);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  text-align: center;
+  border-bottom: 1px solid var(--amber);
+}
+
 /* ─── Rest timer ─────────────────────────────────────────────── */
 #rest-timer {
   position: fixed;
@@ -836,6 +851,8 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 </style>
 </head>
 <body>
+
+<div id="offline-banner"><span id="offline-banner-text"></span></div>
 
 <nav>
   <button id="nav-koonti" class="active" onclick="showPage('koonti',this)">
@@ -4375,10 +4392,97 @@ function migrateLD_v3() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   OFFLINE-KIRJOITUSJONO
+═══════════════════════════════════════════════════════════════ */
+const OFFLINE_QUEUE_KEY = 'sbOfflineQueue';
+const MAX_RETRY_ATTEMPTS = 5;
+
+function looksOffline(error) {
+  if (!navigator.onLine) return true;
+  const msg = ((error && error.message) || '').toLowerCase();
+  const looksNetworky = msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed') || msg.includes('network request failed');
+  const hasPostgrestCode = error && typeof error.code === 'string' && error.code.length > 0;
+  return looksNetworky && !hasPostgrestCode;
+}
+
+function loadQueue() {
+  try { return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function persistQueue(q) {
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q));
+  updateOfflineBanner(q);
+}
+
+function updateOfflineBanner(queue) {
+  const banner = document.getElementById('offline-banner');
+  const text = document.getElementById('offline-banner-text');
+  if (!banner || !text) return;
+  if (queue.length === 0) { banner.style.display = 'none'; return; }
+  const stuck = queue.filter(e => e.attempts >= MAX_RETRY_ATTEMPTS).length;
+  const pending = queue.length - stuck;
+  let msg = '';
+  if (pending > 0) msg += `${pending} tallennusta odottaa synkronointia`;
+  if (stuck > 0) msg += (msg ? ' · ' : '') + `${stuck} jumissa (yritä myöhemmin uudelleen)`;
+  text.textContent = msg;
+  banner.style.display = 'block';
+}
+
+function enqueueWrite(entry) {
+  const q = loadQueue();
+  q.push({ ...entry, id: Date.now() + '-' + Math.random().toString(36).slice(2), attempts: 0, ts: Date.now() });
+  persistQueue(q);
+}
+
+async function sbWrite({ table, op, payload, eq, opts }) {
+  try {
+    let q = sb.from(table);
+    if (op === 'insert') q = q.insert(payload);
+    else if (op === 'upsert') q = q.upsert(payload, opts);
+    else if (op === 'update') q = q.update(payload).eq(eq.column, eq.value);
+    else if (op === 'delete') q = q.delete().eq(eq.column, eq.value);
+    const { error } = await q;
+    if (error) {
+      if (looksOffline(error)) { enqueueWrite({ table, op, payload, eq, opts }); return { error: null }; }
+      return { error };
+    }
+    return { error: null };
+  } catch (e) {
+    if (looksOffline(e)) { enqueueWrite({ table, op, payload, eq, opts }); return { error: null }; }
+    return { error: e };
+  }
+}
+
+async function flushQueue() {
+  let q = loadQueue();
+  if (q.length === 0) return;
+  const remaining = [];
+  for (let i = 0; i < q.length; i++) {
+    const entry = q[i];
+    if (entry.attempts >= MAX_RETRY_ATTEMPTS) { remaining.push(entry); continue; }
+    const { error } = await sbWrite(entry);
+    if (error) {
+      entry.attempts += 1;
+      remaining.push(entry);
+      if (!navigator.onLine) {
+        remaining.push(...q.slice(i + 1));
+        break;
+      }
+    }
+  }
+  persistQueue(remaining);
+}
+
+window.addEventListener('online', flushQueue);
+
+/* ═══════════════════════════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════════════════════════ */
 (async () => {
   renderIcons();
+  updateOfflineBanner(loadQueue());
+  flushQueue();
   ['body-date','act-date','sleep-date'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = localIso(new Date());
