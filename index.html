@@ -2075,21 +2075,22 @@ async function renderTreeni() {
     </div>
     <div class="hero-metrics">
       <div class="hero-metric">
-        <div class="hero-metric-icon">🔥</div>
+        <div class="hero-metric-icon" data-icon="flame" data-icon-color="var(--amber)" data-icon-bg="var(--amber-bg)"></div>
         <div class="hero-metric-val" style="color:#ff9f0a" id="ms-streak">—</div>
         <div class="hero-metric-label">streak</div>
       </div>
       <div class="hero-metric">
-        <div class="hero-metric-icon">💪</div>
+        <div class="hero-metric-icon" data-icon="dumbbell" data-icon-color="var(--accent)" data-icon-bg="var(--accent-bg)"></div>
         <div class="hero-metric-val" style="color:#0a84ff" id="ws-gym">—</div>
         <div class="hero-metric-label">viikon sali</div>
       </div>
       <div class="hero-metric">
-        <div class="hero-metric-icon">😴</div>
+        <div class="hero-metric-icon" data-icon="moon" data-icon-color="var(--green)" data-icon-bg="var(--green-bg)"></div>
         <div class="hero-metric-val" style="color:#30d158" id="ws-sleep">—</div>
         <div class="hero-metric-label">uni ka</div>
       </div>
     </div>`;
+  renderIcons();
 
   // Päivätabit
   const tabs = document.getElementById('day-tabs');
