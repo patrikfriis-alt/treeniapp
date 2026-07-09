@@ -2383,12 +2383,17 @@ async function saveBodyMetrics() {
   const btn = document.querySelector('#seuranta-keho .btn-primary');
   btn.disabled = true;
   try {
-    const { error } = await sb.from('body_metrics').upsert({
-      measured_at: date,
-      weight_kg:   parseNum('body-weight'),
-      fat_pct:     parseNum('body-fat'),
-      muscle_pct:  parseNum('body-muscle'),
-    }, { onConflict:'measured_at' });
+    const { error } = await sbWrite({
+      table: 'body_metrics',
+      op: 'upsert',
+      payload: {
+        measured_at: date,
+        weight_kg:   parseNum('body-weight'),
+        fat_pct:     parseNum('body-fat'),
+        muscle_pct:  parseNum('body-muscle'),
+      },
+      opts: { onConflict:'measured_at' },
+    });
     if (error) { showStatus('body-status','Virhe: '+error.message,true); return; }
     showStatus('body-status','Tallennettu!',false);
     loadBodyMetrics();
@@ -2410,14 +2415,20 @@ async function loadAppSettings() {
 }
 
 async function saveCalorieCorrection(multiplier) {
-  const { error } = await sb.from('app_settings')
-    .upsert({ id: 1, calorie_correction: multiplier, updated_at: new Date().toISOString() });
+  const { error } = await sbWrite({
+    table: 'app_settings',
+    op: 'upsert',
+    payload: { id: 1, calorie_correction: multiplier, updated_at: new Date().toISOString() },
+  });
   if (error) { console.error('saveCalorieCorrection failed:', error.message); throw error; }
 }
 
 async function saveOnboardingCompleted() {
-  const { error } = await sb.from('app_settings')
-    .upsert({ id: 1, onboarding_completed: true, updated_at: new Date().toISOString() });
+  const { error } = await sbWrite({
+    table: 'app_settings',
+    op: 'upsert',
+    payload: { id: 1, onboarding_completed: true, updated_at: new Date().toISOString() },
+  });
   if (error) { console.error('saveOnboardingCompleted failed:', error.message); throw error; }
 }
 
@@ -2566,12 +2577,12 @@ async function loadActivities() {
 }
 
 async function updateActivity(id, fields) {
-  const { error } = await sb.from('activity_data').update(fields).eq('id', id);
+  const { error } = await sbWrite({ table: 'activity_data', op: 'update', payload: fields, eq: { column: 'id', value: id } });
   if (error) { console.error('updateActivity failed:', error.message); throw error; }
 }
 
 async function deleteActivity(id) {
-  const { error } = await sb.from('activity_data').delete().eq('id', id);
+  const { error } = await sbWrite({ table: 'activity_data', op: 'delete', eq: { column: 'id', value: id } });
   if (error) { console.error('deleteActivity failed:', error.message); throw error; }
 }
 
@@ -2697,13 +2708,17 @@ async function saveActivity() {
   const btn = document.querySelector('#aerobia-treeni .btn-primary');
   btn.disabled = true;
   try {
-    const { error } = await sb.from('activity_data').insert({
-      activity_date:  date,
-      activity_type:  document.getElementById('act-type').value,
-      duration_min:   parseNum('act-duration'),
-      calories:       parseNum('act-calories'),
-      avg_heart_rate: parseNum('act-hr'),
-      distance_km:    parseFloat((document.getElementById('act-km').value || '').replace(',','.')) || null,
+    const { error } = await sbWrite({
+      table: 'activity_data',
+      op: 'insert',
+      payload: {
+        activity_date:  date,
+        activity_type:  document.getElementById('act-type').value,
+        duration_min:   parseNum('act-duration'),
+        calories:       parseNum('act-calories'),
+        avg_heart_rate: parseNum('act-hr'),
+        distance_km:    parseFloat((document.getElementById('act-km').value || '').replace(',','.')) || null,
+      },
     });
     if (error) { showStatus('act-status','Virhe',true); return; }
     showStatus('act-status','Tallennettu!',false);
@@ -2749,13 +2764,18 @@ async function saveSleep() {
   const btn = document.querySelector('#seuranta-uni .btn-primary');
   btn.disabled = true;
   try {
-    const { error } = await sb.from('sleep_data').upsert({
-      sleep_date:     date,
-      duration_min:   parseNum('sleep-dur'),
-      deep_sleep_min: parseNum('sleep-deep'),
-      rem_sleep_min:  parseNum('sleep-rem'),
-      awakenings:     parseNum('sleep-awk'),
-    }, { onConflict:'sleep_date' });
+    const { error } = await sbWrite({
+      table: 'sleep_data',
+      op: 'upsert',
+      payload: {
+        sleep_date:     date,
+        duration_min:   parseNum('sleep-dur'),
+        deep_sleep_min: parseNum('sleep-deep'),
+        rem_sleep_min:  parseNum('sleep-rem'),
+        awakenings:     parseNum('sleep-awk'),
+      },
+      opts: { onConflict:'sleep_date' },
+    });
     if (error) { showStatus('sleep-status','Virhe',true); return; }
     showStatus('sleep-status','Tallennettu!',false);
     loadSleep();
