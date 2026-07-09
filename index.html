@@ -2380,7 +2380,7 @@ async function loadBodyMetrics() {
 async function saveBodyMetrics() {
   const date = document.getElementById('body-date').value;
   if (!date) { showStatus('body-status','Valitse päivämäärä',true); return; }
-  const btn = document.querySelector('#seuranta-keho .btn-primary');
+  const btn = document.querySelector('#page-keho .btn-primary');
   btn.disabled = true;
   try {
     const { error } = await sbWrite({
@@ -2761,7 +2761,7 @@ async function loadSleep() {
 async function saveSleep() {
   const date = document.getElementById('sleep-date').value;
   if (!date) { showStatus('sleep-status','Valitse päivämäärä',true); return; }
-  const btn = document.querySelector('#seuranta-uni .btn-primary');
+  const btn = document.querySelector('#page-uni .btn-primary');
   btn.disabled = true;
   try {
     const { error } = await sbWrite({
