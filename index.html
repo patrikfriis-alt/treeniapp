@@ -3726,14 +3726,18 @@ async function ensureFoodCache(fineliId, name, kcalPer100g, proteinPer100g, carb
 async function addFoodLogEntry({ mealType, dateIso, foodCacheId, customFoodId, amountG, kcalPer100g, proteinPer100g }) {
   const kcal = Math.round(kcalPer100g * amountG / 100);
   const protein_g = Math.round(proteinPer100g * amountG / 100 * 10) / 10;
-  const { error } = await sb.from('food_log_entries').insert({
-    meal_type: mealType,
-    logged_at: dateIso,
-    food_cache_id: foodCacheId || null,
-    custom_food_id: customFoodId || null,
-    amount_g: amountG,
-    kcal,
-    protein_g,
+  const { error } = await sbWrite({
+    table: 'food_log_entries',
+    op: 'insert',
+    payload: {
+      meal_type: mealType,
+      logged_at: dateIso,
+      food_cache_id: foodCacheId || null,
+      custom_food_id: customFoodId || null,
+      amount_g: amountG,
+      kcal,
+      protein_g,
+    },
   });
   if (error) { console.error('addFoodLogEntry failed:', error.message); throw error; }
 }
@@ -3783,14 +3787,17 @@ async function confirmAddFood() {
 async function updateFoodLogEntryAmount(entryId, amountG, kcalPer100g, proteinPer100g) {
   const kcal = Math.round(kcalPer100g * amountG / 100);
   const protein_g = Math.round(proteinPer100g * amountG / 100 * 10) / 10;
-  const { error } = await sb.from('food_log_entries')
-    .update({ amount_g: amountG, kcal, protein_g })
-    .eq('id', entryId);
+  const { error } = await sbWrite({
+    table: 'food_log_entries',
+    op: 'update',
+    payload: { amount_g: amountG, kcal, protein_g },
+    eq: { column: 'id', value: entryId },
+  });
   if (error) { console.error('updateFoodLogEntryAmount failed:', error.message); throw error; }
 }
 
 async function deleteFoodLogEntry(entryId) {
-  const { error } = await sb.from('food_log_entries').delete().eq('id', entryId);
+  const { error } = await sbWrite({ table: 'food_log_entries', op: 'delete', eq: { column: 'id', value: entryId } });
   if (error) { console.error('deleteFoodLogEntry failed:', error.message); throw error; }
 }
 
