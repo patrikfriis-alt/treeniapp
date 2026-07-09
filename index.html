@@ -1380,12 +1380,17 @@ async function syncDone(o, d, st, value) {
   const mon = wStart(o), dt = new Date(mon.date);
   dt.setDate(mon.date.getDate() + d);
   const workout_date = localIso(dt);
-  const { error } = await sb.from('workout_sessions').upsert({
-    workout_date,
-    session_type: st,
-    is_done:      value,
-    done_at:      value ? new Date().toISOString() : null,
-  }, { onConflict: 'workout_date,session_type' });
+  const { error } = await sbWrite({
+    table: 'workout_sessions',
+    op: 'upsert',
+    payload: {
+      workout_date,
+      session_type: st,
+      is_done:      value,
+      done_at:      value ? new Date().toISOString() : null,
+    },
+    opts: { onConflict: 'workout_date,session_type' },
+  });
   if (error) console.error('syncDone failed:', error.message);
 }
 const isStarted  = (o, d, st) => LD[`${dKey(o,d,st)}_started`] === true;
@@ -1524,14 +1529,19 @@ async function syncSet(o, d, e, s) {
   const dtMonth = String(dt.getMonth() + 1).padStart(2, '0');
   const dtDay   = String(dt.getDate()).padStart(2, '0');
   const dtIso   = `${dtYear}-${dtMonth}-${dtDay}`;
-  const { error } = await sb.from('workout_sets').upsert({
-    workout_date:  dtIso,
-    exercise_name: ex.n,
-    set_number:    s + 1,
-    weight_kg:     parseFloat(sd.kg)  || null,
-    reps:          parseInt(sd.reps)  || null,
-    session_type:  st,
-  }, { onConflict: 'workout_date,exercise_name,set_number' });
+  const { error } = await sbWrite({
+    table: 'workout_sets',
+    op: 'upsert',
+    payload: {
+      workout_date:  dtIso,
+      exercise_name: ex.n,
+      set_number:    s + 1,
+      weight_kg:     parseFloat(sd.kg)  || null,
+      reps:          parseInt(sd.reps)  || null,
+      session_type:  st,
+    },
+    opts: { onConflict: 'workout_date,exercise_name,set_number' },
+  });
   if (error) {
     console.error(`syncSet failed for "${ex.n}" set ${s + 1} on ${dtIso}:`, error.message);
   }
@@ -2176,8 +2186,12 @@ async function setActiveSession(o, d, st) {
   const mon = wStart(o), dt = new Date(mon.date);
   dt.setDate(mon.date.getDate() + d);
   const workout_date = localIso(dt);
-  const { error } = await sb.from('day_session_overrides')
-    .upsert({ workout_date, session_type: st }, { onConflict: 'workout_date' });
+  const { error } = await sbWrite({
+    table: 'day_session_overrides',
+    op: 'upsert',
+    payload: { workout_date, session_type: st },
+    opts: { onConflict: 'workout_date' },
+  });
   if (error) { console.error('setActiveSession failed:', error.message); return; }
   renderTreeni();
 }
