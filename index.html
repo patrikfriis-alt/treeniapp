@@ -870,17 +870,17 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 
   <div class="hero-metrics">
     <div class="hero-metric">
-      <div class="hero-metric-icon">🔥</div>
+      <div class="hero-metric-icon" data-icon="flame" data-icon-color="var(--amber)" data-icon-bg="var(--amber-bg)"></div>
       <div class="hero-metric-val" id="koonti-ms-streak">—</div>
       <div class="hero-metric-label">streak</div>
     </div>
     <div class="hero-metric">
-      <div class="hero-metric-icon">🏋️</div>
+      <div class="hero-metric-icon" data-icon="dumbbell" data-icon-color="var(--accent)" data-icon-bg="var(--accent-bg)"></div>
       <div class="hero-metric-val" id="koonti-ws-gym">—</div>
       <div class="hero-metric-label">viikon sali</div>
     </div>
     <div class="hero-metric">
-      <div class="hero-metric-icon">🏃</div>
+      <div class="hero-metric-icon" data-icon="running" data-icon-color="var(--red)" data-icon-bg="var(--red-bg)"></div>
       <div class="hero-metric-val" id="koonti-ws-act">—</div>
       <div class="hero-metric-label">viikon aktiiv.</div>
     </div>
@@ -888,12 +888,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 
   <div class="hero-metrics" style="grid-template-columns:1fr 1fr">
     <div class="hero-metric">
-      <div class="hero-metric-icon">📅</div>
+      <div class="hero-metric-icon" data-icon="calendar" data-icon-color="var(--text2)" data-icon-bg="var(--surface2)"></div>
       <div class="hero-metric-val" id="koonti-ms-week">—</div>
       <div class="hero-metric-label">viikon aktiivisuus</div>
     </div>
     <div class="hero-metric">
-      <div class="hero-metric-icon">🗓️</div>
+      <div class="hero-metric-icon" data-icon="calendar" data-icon-color="var(--text2)" data-icon-bg="var(--surface2)"></div>
       <div class="hero-metric-val" id="koonti-ms-month">—</div>
       <div class="hero-metric-label">kuukausi</div>
     </div>
@@ -902,12 +902,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <div class="koonti-section-label">Tänään</div>
   <div class="koonti-cards">
     <div class="koonti-card" id="kc-sali" onclick="showPage('sali', document.getElementById('nav-koonti'))">
-      <span class="koonti-card-icon">🏋️</span>
+      <span class="koonti-card-icon" data-icon="dumbbell" data-icon-color="var(--accent)" data-icon-bg="var(--accent-bg)"></span>
       <div class="koonti-card-label">Sali</div>
       <div class="koonti-card-sub skel-sub" id="kc-sali-sub">&nbsp;</div>
     </div>
     <div class="koonti-card" id="kc-aerobia" onclick="showPage('aerobia', document.getElementById('nav-koonti'))">
-      <span class="koonti-card-icon">🏃</span>
+      <span class="koonti-card-icon" data-icon="running" data-icon-color="var(--red)" data-icon-bg="var(--red-bg)"></span>
       <div class="koonti-card-label">Aerobinen</div>
       <div class="koonti-card-sub skel-sub" id="kc-aerobia-sub">&nbsp;</div>
       <div class="koonti-card-goal" id="kc-aerobia-goal" style="display:none"></div>
@@ -917,12 +917,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <div class="koonti-section-label">Mittarit</div>
   <div class="koonti-cards">
     <div class="koonti-card" id="kc-keho" onclick="showPage('keho', document.getElementById('nav-koonti'))">
-      <span class="koonti-card-icon">⚖️</span>
+      <span class="koonti-card-icon" data-icon="scale" data-icon-color="var(--green)" data-icon-bg="var(--green-bg)"></span>
       <div class="koonti-card-label">Keho</div>
       <div class="koonti-card-sub skel-sub" id="kc-keho-sub">&nbsp;</div>
     </div>
     <div class="koonti-card" id="kc-uni" onclick="showPage('uni', document.getElementById('nav-koonti'))">
-      <span class="koonti-card-icon">😴</span>
+      <span class="koonti-card-icon" data-icon="moon" data-icon-color="var(--green)" data-icon-bg="var(--green-bg)"></span>
       <div class="koonti-card-label">Uni</div>
       <div class="koonti-card-sub skel-sub" id="kc-uni-sub">&nbsp;</div>
     </div>
