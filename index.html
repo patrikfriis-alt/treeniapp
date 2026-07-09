@@ -894,6 +894,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
       <div style="font-size:20px;color:var(--text3)">›</div>
     </div>
   </div>
+
+  <div class="card" id="kc-weekly-report" style="margin:0 12px 10px">
+    <div class="card-title">Tällä viikolla</div>
+    <div id="kc-weekly-rows">Ladataan…</div>
+    <div id="kc-weekly-insights" style="display:none"></div>
+  </div>
 </div>
 
 <!-- ── SALI ───────────────────────────────────────────────────── -->
@@ -1682,6 +1688,68 @@ async function loadWeekSummary() {
   } else {
     if (sleepEl) sleepEl.textContent = '—';
   }
+}
+
+async function getWeekStats(offset) {
+  const mon = wStart(offset);
+  const sun = new Date(mon.date);
+  sun.setDate(mon.date.getDate() + 6);
+  const from = mon.iso, to = localIso(sun);
+
+  const [
+    { data: gymData },
+    { data: actData },
+    { data: sleepData },
+    { data: weightData },
+  ] = await Promise.all([
+    sb.from('workout_sets').select('workout_date').gte('workout_date', from).lte('workout_date', to),
+    sb.from('activity_data').select('distance_km').gte('activity_date', from).lte('activity_date', to),
+    sb.from('sleep_data').select('duration_min').gte('sleep_date', from).lte('sleep_date', to),
+    sb.from('body_metrics').select('weight_kg,measured_at').gte('measured_at', from).lte('measured_at', to).order('measured_at', { ascending: true }),
+  ]);
+
+  const gymDays = new Set((gymData || []).map(r => r.workout_date)).size;
+  const actCount = actData ? actData.length : 0;
+  const totalKm = (actData || []).reduce((s, r) => s + (r.distance_km || 0), 0);
+  const withDur = (sleepData || []).filter(r => r.duration_min !== null);
+  const avgSleep = withDur.length ? withDur.reduce((s, r) => s + r.duration_min, 0) / withDur.length / 60 : null;
+  const withWeight = (weightData || []).filter(r => r.weight_kg != null);
+  const weightDelta = withWeight.length >= 2
+    ? Math.round((withWeight[withWeight.length - 1].weight_kg - withWeight[0].weight_kg) * 10) / 10
+    : null;
+
+  return { gymDays, actCount, totalKm, avgSleep, weightDelta };
+}
+
+async function loadWeeklyReportCard() {
+  const [thisWeek, lastWeek] = await Promise.all([
+    getWeekStats(wOff),
+    getWeekStats(wOff - 1),
+  ]);
+
+  const fmtDelta = (cur, prev, unit) => {
+    if (prev == null || cur == null) return '';
+    const d = Math.round((cur - prev) * 10) / 10;
+    if (d === 0) return '';
+    return ` (${d > 0 ? '+' : ''}${d}${unit})`;
+  };
+
+  const rows = [];
+  rows.push(`<div class="hist-item"><div class="hist-label">Salikertoja</div><div class="hist-val">${thisWeek.gymDays}${fmtDelta(thisWeek.gymDays, lastWeek.gymDays, '')}</div></div>`);
+  rows.push(`<div class="hist-item"><div class="hist-label">Aktiviteettikertoja</div><div class="hist-val">${thisWeek.actCount}${fmtDelta(thisWeek.actCount, lastWeek.actCount, '')}</div></div>`);
+  if (thisWeek.totalKm > 0 || lastWeek.totalKm > 0) {
+    rows.push(`<div class="hist-item"><div class="hist-label">Kilometrit</div><div class="hist-val">${thisWeek.totalKm.toFixed(1)} km${fmtDelta(thisWeek.totalKm, lastWeek.totalKm, ' km')}</div></div>`);
+  }
+  if (thisWeek.avgSleep != null || lastWeek.avgSleep != null) {
+    const curStr = thisWeek.avgSleep != null ? thisWeek.avgSleep.toFixed(1) + 'h' : '—';
+    rows.push(`<div class="hist-item"><div class="hist-label">Unen keskiarvo</div><div class="hist-val">${curStr}${fmtDelta(thisWeek.avgSleep, lastWeek.avgSleep, 'h')}</div></div>`);
+  }
+  if (thisWeek.weightDelta != null) {
+    const sign = thisWeek.weightDelta >= 0 ? '+' : '';
+    rows.push(`<div class="hist-item"><div class="hist-label">Painon muutos</div><div class="hist-val">${sign}${thisWeek.weightDelta} kg</div></div>`);
+  }
+
+  document.getElementById('kc-weekly-rows').innerHTML = rows.join('');
 }
 
 async function loadMotivationSummary() {
@@ -3742,6 +3810,7 @@ async function loadKoonti() {
   loadWeekSummary();
   loadMotivationSummary();
   renderOnboardingCard();
+  loadWeeklyReportCard();
 
   const todayIso = localIso(new Date());
 
