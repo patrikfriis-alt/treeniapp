@@ -272,6 +272,9 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .koonti-card-sub   { font-size: 12px; color: var(--text3); }
 .koonti-card--done .koonti-card-sub { color: var(--green); }
 .koonti-card-goal  { font-size: 11px; color: var(--accent); margin-top: 2px; }
+#kc-weekly-insights { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.weekly-insight { font-size: 12px; color: var(--accent); margin-top: 6px; }
+.weekly-insight:first-child { margin-top: 0; }
 .koonti-card--ruoka { display: flex; align-items: center; justify-content: space-between; }
 
 /* ─── Ohjelmaeditori ─────────────────────────────────────────── */
@@ -1750,6 +1753,78 @@ async function loadWeeklyReportCard() {
   }
 
   document.getElementById('kc-weekly-rows').innerHTML = rows.join('');
+
+  const [bestWeekInsight, plateauInsight] = await Promise.all([
+    checkBestRunningWeek(),
+    checkPlateau(),
+  ]);
+  const insights = [bestWeekInsight, plateauInsight].filter(Boolean);
+  const insightsEl = document.getElementById('kc-weekly-insights');
+  if (insights.length) {
+    insightsEl.innerHTML = insights.map(i => `<div class="weekly-insight">${i}</div>`).join('');
+    insightsEl.style.display = '';
+  } else {
+    insightsEl.style.display = 'none';
+  }
+}
+
+async function checkBestRunningWeek() {
+  const mon0 = wStart(wOff - 11);
+  const sunLast = new Date(wStart(wOff).date);
+  sunLast.setDate(sunLast.getDate() + 6);
+  const { data } = await sb.from('activity_data').select('activity_date,distance_km')
+    .eq('activity_type', 'Juoksu')
+    .gte('activity_date', mon0.iso).lte('activity_date', localIso(sunLast));
+
+  const weekKm = new Array(12).fill(0);
+  for (let i = 0; i < 12; i++) {
+    const mon = wStart(wOff - i);
+    const sun = new Date(mon.date);
+    sun.setDate(mon.date.getDate() + 6);
+    const from = mon.iso, to = localIso(sun);
+    weekKm[i] = (data || [])
+      .filter(r => r.activity_date >= from && r.activity_date <= to)
+      .reduce((s, r) => s + (r.distance_km || 0), 0);
+  }
+
+  const currentKm = weekKm[0];
+  const priorWeeksWithData = weekKm.slice(1).filter(k => k > 0).length;
+  if (currentKm > 0 && priorWeeksWithData >= 4 && currentKm === Math.max(...weekKm)) {
+    return '🏆 Paras juoksuviikkosi 3 kk aikana';
+  }
+  return null;
+}
+
+async function checkPlateau() {
+  const mon = wStart(wOff);
+  const sun = new Date(mon.date);
+  sun.setDate(mon.date.getDate() + 6);
+  const { data: thisWeekSets } = await sb.from('workout_sets').select('exercise_name')
+    .gte('workout_date', mon.iso).lte('workout_date', localIso(sun));
+  const exercisesThisWeek = [...new Set((thisWeekSets || []).map(r => r.exercise_name))];
+  if (!exercisesThisWeek.length) return null;
+
+  const mon3 = wStart(wOff - 2);
+  const { data: historySets } = await sb.from('workout_sets').select('exercise_name,weight_kg,workout_date')
+    .in('exercise_name', exercisesThisWeek)
+    .gte('workout_date', mon3.iso).lte('workout_date', localIso(sun));
+
+  for (const exName of exercisesThisWeek) {
+    const weekMax = [0, 1, 2].map(i => {
+      const wm = wStart(wOff - i);
+      const ws = new Date(wm.date);
+      ws.setDate(wm.date.getDate() + 6);
+      const from = wm.iso, to = localIso(ws);
+      const weights = (historySets || [])
+        .filter(r => r.exercise_name === exName && r.workout_date >= from && r.workout_date <= to)
+        .map(r => r.weight_kg || 0);
+      return weights.length ? Math.max(...weights) : null;
+    });
+    if (weekMax[0] != null && weekMax[1] != null && weekMax[2] != null && weekMax[2] >= weekMax[0]) {
+      return `📊 ${escapeHtml(exName)} ei ole edistynyt 3 viikkoon`;
+    }
+  }
+  return null;
 }
 
 async function loadMotivationSummary() {
