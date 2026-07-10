@@ -50,7 +50,7 @@ self.addEventListener('notificationclick', e => {
   e.waitUntil(
     self.clients.matchAll({ type: 'window' }).then(clients => {
       for (const c of clients) { if ('focus' in c) return c.focus(); }
-      return self.clients.openWindow('/');
+      return self.clients.openWindow('./');
     })
   );
 });
