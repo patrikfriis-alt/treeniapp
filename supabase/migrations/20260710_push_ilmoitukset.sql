@@ -1,3 +1,5 @@
+-- Push-ilmoitukset: push_subscriptions-taulu + app_settings.push_enabled
+
 create table push_subscriptions (
   id         uuid primary key default gen_random_uuid(),
   endpoint   text not null unique,
@@ -12,6 +14,8 @@ create policy push_subscriptions_select on push_subscriptions
   for select to anon, authenticated using (true);
 create policy push_subscriptions_insert on push_subscriptions
   for insert to anon, authenticated with check (true);
+create policy push_subscriptions_update on push_subscriptions
+  for update to anon, authenticated using (true) with check (true);
 create policy push_subscriptions_delete on push_subscriptions
   for delete to anon, authenticated using (true);
 
