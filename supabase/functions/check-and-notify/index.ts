@@ -21,10 +21,12 @@ function yesterdayHelsinkiIso(): string {
 }
 
 async function hasActivityOn(sb: ReturnType<typeof createClient>, dateIso: string): Promise<boolean> {
-  const [{ count: c1 }, { count: c2 }] = await Promise.all([
+  const [{ count: c1, error: e1 }, { count: c2, error: e2 }] = await Promise.all([
     sb.from('activity_data').select('id', { count: 'exact', head: true }).eq('activity_date', dateIso),
     sb.from('workout_sets').select('id', { count: 'exact', head: true }).eq('workout_date', dateIso),
   ]);
+  if (e1) console.error('activity_data count query failed:', e1.message);
+  if (e2) console.error('workout_sets count query failed:', e2.message);
   return (c1 || 0) > 0 || (c2 || 0) > 0;
 }
 
@@ -39,7 +41,8 @@ Deno.serve(async (req) => {
 
   const sb = createClient(SB_URL, SB_SERVICE_KEY);
 
-  const { data: settings } = await sb.from('app_settings').select('push_enabled').eq('id', 1).maybeSingle();
+  const { data: settings, error: settingsError } = await sb.from('app_settings').select('push_enabled').eq('id', 1).maybeSingle();
+  if (settingsError) console.error('app_settings query failed:', settingsError.message);
   if (!settings || !settings.push_enabled) return new Response('push disabled', { status: 200 });
 
   const today = todayHelsinkiIso();
@@ -57,7 +60,8 @@ Deno.serve(async (req) => {
     body = 'Et ole vielä liikkunut tänään 💪';
   }
 
-  const { data: subs } = await sb.from('push_subscriptions').select('*');
+  const { data: subs, error: subsError } = await sb.from('push_subscriptions').select('*');
+  if (subsError) console.error('push_subscriptions query failed:', subsError.message);
   for (const sub of subs || []) {
     try {
       await webpush.sendNotification(
