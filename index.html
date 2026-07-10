@@ -2482,11 +2482,18 @@ async function toggleNotifications() {
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') return;
 
-  const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-  });
+  let sub;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+  } catch (e) {
+    console.error('pushManager.subscribe failed:', e.message);
+    alert('Tilaus epäonnistui: ' + e.message);
+    return;
+  }
   const subJson = sub.toJSON();
   const { error: subError } = await sbWrite({
     table: 'push_subscriptions',
