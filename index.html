@@ -1227,6 +1227,10 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <button onclick="openCalorieSettingsModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="watch" style="display:inline-flex"></span> Kalorikerroin
   </button>
+  <button onclick="toggleNotifications()" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
+    <span style="display:flex;align-items:center;gap:10px;"><span data-icon="bell" style="display:inline-flex"></span> Ilmoitukset</span>
+    <span id="notif-toggle-state" style="color:var(--text2);font-size:13px;"></span>
+  </button>
   <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:20px;margin-bottom:12px;">Vie data</div>
   <button id="export-activities-btn" onclick="exportActivitiesCSV();closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="upload" style="display:inline-flex"></span> Vie aktiviteetit (CSV)
@@ -2431,6 +2435,73 @@ async function saveOnboardingCompleted() {
     payload: { id: 1, onboarding_completed: true, updated_at: new Date().toISOString() },
   });
   if (error) { console.error('saveOnboardingCompleted failed:', error.message); throw error; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PUSH-ILMOITUKSET
+═══════════════════════════════════════════════════════════════ */
+const VAPID_PUBLIC_KEY = 'REPLACE_WITH_VAPID_PUBLIC_KEY';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+function renderNotifToggleState(enabled) {
+  const el = document.getElementById('notif-toggle-state');
+  if (el) el.textContent = enabled ? 'Päällä' : 'Pois';
+}
+
+async function initNotifToggle() {
+  const settings = await loadAppSettings();
+  renderNotifToggleState(!!(settings && settings.push_enabled));
+}
+
+async function toggleNotifications() {
+  const settings = await loadAppSettings();
+  const currentlyEnabled = !!(settings && settings.push_enabled);
+
+  if (currentlyEnabled) {
+    const { error } = await sbWrite({
+      table: 'app_settings',
+      op: 'upsert',
+      payload: { id: 1, push_enabled: false, updated_at: new Date().toISOString() },
+    });
+    if (!error) renderNotifToggleState(false);
+    return;
+  }
+
+  if (Notification.permission === 'denied') {
+    alert('Ilmoitukset on estetty puhelimen asetuksista. Salli ne Asetukset → Safari/Valkku → Ilmoitukset.');
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') return;
+
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+  });
+  const subJson = sub.toJSON();
+  const { error: subError } = await sbWrite({
+    table: 'push_subscriptions',
+    op: 'upsert',
+    payload: { endpoint: subJson.endpoint, p256dh: subJson.keys.p256dh, auth: subJson.keys.auth },
+    opts: { onConflict: 'endpoint' },
+  });
+  if (subError) { console.error('push subscribe failed:', subError.message); return; }
+
+  const { error: settingsError } = await sbWrite({
+    table: 'app_settings',
+    op: 'upsert',
+    payload: { id: 1, push_enabled: true, updated_at: new Date().toISOString() },
+  });
+  if (settingsError) { console.error('push_enabled save failed:', settingsError.message); return; }
+  renderNotifToggleState(true);
 }
 
 async function renderOnboardingCard() {
@@ -4092,6 +4163,7 @@ async function loadKoonti() {
   loadWeekSummary();
   loadMotivationSummary();
   renderOnboardingCard();
+  initNotifToggle();
   loadWeeklyReportCard();
 
   const todayIso = localIso(new Date());
