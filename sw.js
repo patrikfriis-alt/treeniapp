@@ -1,7 +1,7 @@
 const CACHE = 'treeniapp-v1';
 const PRECACHE = [
-  '/',
-  '/index.html',
+  './',
+  './index.html',
 ];
 
 self.addEventListener('install', e => {
