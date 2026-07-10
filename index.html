@@ -4525,7 +4525,7 @@ async function sbWrite({ table, op, payload, eq, opts }) {
 }
 
 async function flushQueue() {
-  if (flushInFlight) return;
+  if (flushInFlight || !navigator.onLine) return;
   flushInFlight = true;
   try {
     let q = loadQueue();
