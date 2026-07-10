@@ -2469,7 +2469,8 @@ async function toggleNotifications() {
       op: 'upsert',
       payload: { id: 1, push_enabled: false, updated_at: new Date().toISOString() },
     });
-    if (!error) renderNotifToggleState(false);
+    if (!error) { renderNotifToggleState(false); return; }
+    alert('Tallennus epäonnistui, yritä uudelleen.');
     return;
   }
 
@@ -2493,14 +2494,14 @@ async function toggleNotifications() {
     payload: { endpoint: subJson.endpoint, p256dh: subJson.keys.p256dh, auth: subJson.keys.auth },
     opts: { onConflict: 'endpoint' },
   });
-  if (subError) { console.error('push subscribe failed:', subError.message); return; }
+  if (subError) { console.error('push subscribe failed:', subError.message); alert('Tallennus epäonnistui, yritä uudelleen.'); return; }
 
   const { error: settingsError } = await sbWrite({
     table: 'app_settings',
     op: 'upsert',
     payload: { id: 1, push_enabled: true, updated_at: new Date().toISOString() },
   });
-  if (settingsError) { console.error('push_enabled save failed:', settingsError.message); return; }
+  if (settingsError) { console.error('push_enabled save failed:', settingsError.message); alert('Tallennus epäonnistui, yritä uudelleen.'); return; }
   renderNotifToggleState(true);
 }
 
