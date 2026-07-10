@@ -2479,21 +2479,29 @@ async function toggleNotifications() {
     return;
   }
 
+  const notifStateEl = document.getElementById('notif-toggle-state');
+  const setStatus = (t) => { if (notifStateEl) notifStateEl.textContent = t; };
+
+  setStatus('Pyydetään lupaa…');
   const permission = await Notification.requestPermission();
-  if (permission !== 'granted') return;
+  if (permission !== 'granted') { setStatus('Pois'); return; }
 
   let sub;
   try {
+    setStatus('Odotetaan service workeria…');
     const reg = await navigator.serviceWorker.ready;
+    setStatus('Tilataan…');
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
     });
   } catch (e) {
     console.error('pushManager.subscribe failed:', e.message);
-    alert('Tilaus epäonnistui: ' + e.message);
+    setStatus('Pois');
+    alert('Tilaus epäonnistui: ' + e.name + ': ' + e.message);
     return;
   }
+  setStatus('Tallennetaan tilausta…');
   const subJson = sub.toJSON();
   const { error: subError } = await sbWrite({
     table: 'push_subscriptions',
@@ -2501,14 +2509,15 @@ async function toggleNotifications() {
     payload: { endpoint: subJson.endpoint, p256dh: subJson.keys.p256dh, auth: subJson.keys.auth },
     opts: { onConflict: 'endpoint' },
   });
-  if (subError) { console.error('push subscribe failed:', subError.message); alert('Tallennus epäonnistui, yritä uudelleen.'); return; }
+  if (subError) { console.error('push subscribe failed:', subError.message); setStatus('Pois'); alert('Tallennus epäonnistui: ' + subError.message); return; }
 
+  setStatus('Tallennetaan asetusta…');
   const { error: settingsError } = await sbWrite({
     table: 'app_settings',
     op: 'upsert',
     payload: { id: 1, push_enabled: true, updated_at: new Date().toISOString() },
   });
-  if (settingsError) { console.error('push_enabled save failed:', settingsError.message); alert('Tallennus epäonnistui, yritä uudelleen.'); return; }
+  if (settingsError) { console.error('push_enabled save failed:', settingsError.message); setStatus('Pois'); alert('Tallennus epäonnistui: ' + settingsError.message); return; }
   renderNotifToggleState(true);
 }
 
