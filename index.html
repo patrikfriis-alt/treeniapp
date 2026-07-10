@@ -2488,8 +2488,17 @@ async function toggleNotifications() {
 
   let sub;
   try {
+    setStatus('Tarkistetaan service workeria…');
+    const existingReg = await navigator.serviceWorker.getRegistration();
+    if (!existingReg) {
+      setStatus('Rekisteröidään service workeria…');
+      await navigator.serviceWorker.register('sw.js');
+    }
     setStatus('Odotetaan service workeria…');
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Aikakatkaisu 10s — service worker ei aktivoitunut. Rekisteröinti: ' + (existingReg ? existingReg.active ? 'active' : existingReg.installing ? 'installing' : existingReg.waiting ? 'waiting' : 'unknown' : 'ei rekisteröityä'))), 10000)),
+    ]);
     setStatus('Tilataan…');
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
