@@ -1362,6 +1362,12 @@ function isoWeek(d) {
   const w1 = new Date(x.getFullYear(), 0, 4);
   return 1 + Math.round(((x - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7);
 }
+function isoWeekYear(d) {
+  const x = new Date(d);
+  x.setHours(0,0,0,0);
+  x.setDate(x.getDate() + 3 - (x.getDay() + 6) % 7);
+  return x.getFullYear();
+}
 function localIso(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
@@ -2052,7 +2058,7 @@ async function renderTreeni() {
   await loadWeekActivityData(wOff);
 
   const ws = wStart(wOff), wk = isoWeek(ws.date);
-  document.getElementById('week-label').textContent = `Viikko ${wk} / ${ws.date.getFullYear()}`;
+  document.getElementById('week-label').textContent = `Viikko ${wk} / ${isoWeekYear(ws.date)}`;
 
   const st   = getActiveSession(wOff, aDay);
   const sess = SESS[st];
