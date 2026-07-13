@@ -2757,7 +2757,11 @@ function openEditActivityDialog(activityId) {
 }
 
 function downloadCSV(filename, headers, rows) {
-  const escapeCSV = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+  const escapeCSV = (val) => {
+    let s = String(val ?? '');
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
+    return `"${s.replace(/"/g, '""')}"`;
+  };
   const lines = [headers.map(escapeCSV).join(',')];
   rows.forEach(row => lines.push(row.map(escapeCSV).join(',')));
   const csv = '﻿' + lines.join('\r\n');
@@ -3647,7 +3651,7 @@ function renderExerciseResults(items, exactMatch) {
       </div>`).join('');
   }
   if (q.length >= 2 && !exactMatch) {
-    html += `<div class="ex-search-custom-link" onclick="createNewExerciseAndAdd('${q.replace(/'/g, "\\'")}')">+ Lisää uusi liike "${q}"</div>`;
+    html += `<div class="ex-search-custom-link" onclick="createNewExerciseAndAdd('${jsAttrEscape(q)}')">+ Lisää uusi liike "${escapeHtml(q)}"</div>`;
   }
   el.innerHTML = html;
 }
