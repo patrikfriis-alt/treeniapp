@@ -4182,6 +4182,7 @@ async function openProfileModal() {
     <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5;">Käytetään kalorivajeen laskentaan (lepoaineenvaihdunta). Paino haetaan aina tuoreimmasta Keho-mittauksesta.</div>
     <div class="form-row"><label>Sukupuoli</label>
       <select id="profile-sex">
+        <option value="" ${!profile.sex ? 'selected' : ''} disabled>Valitse…</option>
         <option value="male" ${profile.sex === 'male' ? 'selected' : ''}>Mies</option>
         <option value="female" ${profile.sex === 'female' ? 'selected' : ''}>Nainen</option>
       </select>
@@ -4202,6 +4203,10 @@ async function openProfileModal() {
     const sex = document.getElementById('profile-sex').value;
     const height = parseNum('profile-height');
     const birthDate = document.getElementById('profile-birthdate').value;
+    if (!sex) {
+      showStatus('profile-settings-status', 'Valitse sukupuoli', true);
+      return;
+    }
     if (!height || height < 100 || height > 250) {
       showStatus('profile-settings-status', 'Syötä pituus välillä 100-250 cm', true);
       return;
@@ -4219,8 +4224,8 @@ async function openProfileModal() {
     saveBtn.disabled = false;
     if (error) { showStatus('profile-settings-status', 'Virhe: ' + error.message, true); return; }
     showStatus('profile-settings-status', 'Tallennettu!', false);
-    loadDeficitHeroMetric();
     loadWeeklyReportCard();
+    if (typeof loadDeficitHeroMetric === 'function') loadDeficitHeroMetric();
     setTimeout(() => { const ov = document.getElementById('profile-settings-overlay'); if (ov) ov.remove(); }, 800);
   };
 
