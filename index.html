@@ -1882,6 +1882,21 @@ async function loadWeeklyReportCard() {
     rows.push(`<div class="hist-item"><div class="hist-label">Painon muutos</div><div class="hist-val">${sign}${thisWeek.weightDelta} kg</div></div>`);
   }
 
+  const bmrInfo = await getBmrInfo();
+  if (bmrInfo.bmr != null) {
+    const mon = wStart(wOff);
+    const sun = new Date(mon.date);
+    sun.setDate(mon.date.getDate() + 6);
+    const [exerciseKcal, foodKcal] = await Promise.all([
+      getExerciseCalories(mon.iso, localIso(sun)),
+      getFoodCalories(mon.iso, localIso(sun)),
+    ]);
+    const elapsedDays = wOff === 0 ? (todayIdx() + 1) : 7;
+    const weeklyDeficit = Math.round(bmrInfo.bmr * elapsedDays + exerciseKcal - foodKcal);
+    const weeklySign = weeklyDeficit >= 0 ? '+' : '';
+    rows.push(`<div class="hist-item"><div class="hist-label">Viikon vaje</div><div class="hist-val">${weeklySign}${weeklyDeficit} kcal</div></div>`);
+  }
+
   document.getElementById('kc-weekly-rows').innerHTML = rows.join('');
 
   const [bestWeekInsight, plateauInsight] = await Promise.all([
