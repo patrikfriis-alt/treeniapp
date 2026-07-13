@@ -883,7 +883,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     </div>
   </div>
 
-  <div class="hero-metrics" style="grid-template-columns:1fr 1fr">
+  <div class="hero-metrics">
     <div class="hero-metric">
       <div class="hero-metric-icon" data-icon="calendar" data-icon-color="var(--text2)" data-icon-bg="var(--surface2)"></div>
       <div class="hero-metric-val" id="koonti-ms-week">—</div>
@@ -893,6 +893,11 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
       <div class="hero-metric-icon" data-icon="calendar" data-icon-color="var(--text2)" data-icon-bg="var(--surface2)"></div>
       <div class="hero-metric-val" id="koonti-ms-month">—</div>
       <div class="hero-metric-label">kuukausi</div>
+    </div>
+    <div class="hero-metric" id="koonti-deficit-wrap">
+      <div class="hero-metric-icon" data-icon="scale" data-icon-color="var(--text2)" data-icon-bg="var(--surface2)"></div>
+      <div class="hero-metric-val" id="koonti-deficit-val">—</div>
+      <div class="hero-metric-label" id="koonti-deficit-label">päivän vaje</div>
     </div>
   </div>
 
@@ -4319,6 +4324,7 @@ async function loadKoonti() {
   renderOnboardingCard();
   initNotifToggle();
   loadWeeklyReportCard();
+  loadDeficitHeroMetric();
 
   const todayIso = localIso(new Date());
 
@@ -4417,6 +4423,31 @@ async function loadKoonti() {
   kcRuokaCard.classList.toggle('koonti-card--done', entries.length > 0);
   const totalKcal = entries.reduce((s, e) => s + (e.kcal || 0), 0);
   kcRuokaSub.textContent = entries.length ? `${Math.round(totalKcal)} kcal tänään` : 'Ei kirjauksia tänään';
+}
+
+async function loadDeficitHeroMetric() {
+  const wrap  = document.getElementById('koonti-deficit-wrap');
+  const valEl = document.getElementById('koonti-deficit-val');
+  const lblEl = document.getElementById('koonti-deficit-label');
+  const bmrInfo = await getBmrInfo();
+  if (bmrInfo.missingProfile || bmrInfo.missingWeight) {
+    valEl.textContent = 'Aseta →';
+    lblEl.textContent = 'profiili';
+    wrap.style.cursor = 'pointer';
+    wrap.onclick = () => openProfileModal();
+    return;
+  }
+  wrap.style.cursor = '';
+  wrap.onclick = null;
+  const todayIso = localIso(new Date());
+  const [exerciseKcal, foodKcal] = await Promise.all([
+    getExerciseCalories(todayIso, todayIso),
+    getFoodCalories(todayIso, todayIso),
+  ]);
+  const deficit = Math.round(bmrInfo.bmr + exerciseKcal - foodKcal);
+  const sign = deficit >= 0 ? '+' : '';
+  valEl.textContent = `${sign}${deficit} kcal`;
+  lblEl.textContent = 'päivän vaje';
 }
 
 
