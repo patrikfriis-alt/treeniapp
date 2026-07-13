@@ -3345,6 +3345,7 @@ const MEAL_DEFS = [
 ];
 
 let foodDayOffset = 0;
+let foodDayRequestId = 0;
 let foodDayEntries = [];
 let foodGoals = null;
 
@@ -3428,6 +3429,7 @@ async function renderRuoka() {
 }
 
 async function loadFoodDay() {
+  const requestId = ++foodDayRequestId;
   const selectedDate = addDays(new Date(), foodDayOffset);
   const dateIso = localIso(selectedDate);
   const monday = mondayOf(selectedDate);
@@ -3439,6 +3441,7 @@ async function loadFoodDay() {
     loadFoodDayEntries(dateIso),
     loadFoodWeekKcal(localIso(monday), localIso(sunday)),
   ]);
+  if (requestId !== foodDayRequestId) return;
   foodDayEntries = entries;
 
   renderFoodHero(entries, weekKcal);
@@ -4428,16 +4431,7 @@ async function saveSessionField(id, field, value) {
 }
 
 async function toggleSessionWeekday(id, dayIndex) {
-  const s = programSessionsRaw.find(r => r.id === id);
-  if (!s) return;
-  const days = new Set(s.default_weekdays || []);
-  if (days.has(dayIndex)) days.delete(dayIndex); else days.add(dayIndex);
-  const { error } = await sbWrite({
-    table: 'program_sessions',
-    op: 'update',
-    payload: { default_weekdays: [...days].sort((a, b) => a - b) },
-    eq: { column: 'id', value: id },
-  });
+  const { error } = await sb.rpc('toggle_session_weekday', { p_session_id: id, p_day_index: dayIndex });
   if (error) { console.error('toggleSessionWeekday failed:', error.message); return; }
   await loadProgram();
   renderOhjelma();
