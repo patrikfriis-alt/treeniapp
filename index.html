@@ -1206,6 +1206,9 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <button onclick="openCalorieSettingsModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="watch" style="display:inline-flex"></span> Kalorikerroin
   </button>
+  <button onclick="openProfileModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
+    <span data-icon="scale" style="display:inline-flex"></span> Profiili
+  </button>
   <button onclick="toggleNotifications()" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span style="display:flex;align-items:center;gap:10px;"><span data-icon="bell" style="display:inline-flex"></span> Ilmoitukset</span>
     <span id="notif-toggle-state" style="color:var(--text2);font-size:13px;"></span>
@@ -4158,6 +4161,70 @@ async function openGoalsModal() {
     }
   };
   document.getElementById('goals-cancel-btn').onclick = () => overlay.remove();
+}
+
+async function openProfileModal() {
+  closeSidebar();
+  const profile = (await loadUserProfile()) || {};
+
+  const existing = document.getElementById('profile-settings-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'profile-settings-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
+
+  modal.innerHTML = `
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Profiili</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5;">Käytetään kalorivajeen laskentaan (lepoaineenvaihdunta). Paino haetaan aina tuoreimmasta Keho-mittauksesta.</div>
+    <div class="form-row"><label>Sukupuoli</label>
+      <select id="profile-sex">
+        <option value="male" ${profile.sex === 'male' ? 'selected' : ''}>Mies</option>
+        <option value="female" ${profile.sex === 'female' ? 'selected' : ''}>Nainen</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Pituus (cm)</label><input type="text" inputmode="numeric" id="profile-height" value="${profile.height_cm ?? ''}"></div>
+    <div class="form-row"><label>Syntymäaika</label><input type="date" id="profile-birthdate" value="${profile.birth_date ?? ''}"></div>
+    <button class="btn btn-primary" id="profile-settings-save-btn">Tallenna</button>
+    <button class="btn" id="profile-settings-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Sulje</button>
+    <div class="status" id="profile-settings-status"></div>
+  `;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  document.getElementById('profile-settings-save-btn').onclick = async () => {
+    const saveBtn = document.getElementById('profile-settings-save-btn');
+    const sex = document.getElementById('profile-sex').value;
+    const height = parseNum('profile-height');
+    const birthDate = document.getElementById('profile-birthdate').value;
+    if (!height || height < 100 || height > 250) {
+      showStatus('profile-settings-status', 'Syötä pituus välillä 100-250 cm', true);
+      return;
+    }
+    if (!birthDate) {
+      showStatus('profile-settings-status', 'Valitse syntymäaika', true);
+      return;
+    }
+    saveBtn.disabled = true;
+    const { error } = await sbWrite({
+      table: 'user_profile',
+      op: 'upsert',
+      payload: { id: 1, sex, height_cm: height, birth_date: birthDate, updated_at: new Date().toISOString() },
+    });
+    saveBtn.disabled = false;
+    if (error) { showStatus('profile-settings-status', 'Virhe: ' + error.message, true); return; }
+    showStatus('profile-settings-status', 'Tallennettu!', false);
+    loadDeficitHeroMetric();
+    loadWeeklyReportCard();
+    setTimeout(() => { const ov = document.getElementById('profile-settings-overlay'); if (ov) ov.remove(); }, 800);
+  };
+
+  document.getElementById('profile-settings-cancel-btn').onclick = () => overlay.remove();
 }
 
 async function openCalorieSettingsModal() {
