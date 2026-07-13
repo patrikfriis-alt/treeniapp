@@ -2398,6 +2398,70 @@ async function saveBodyMetrics() {
 let appSettings = null;
 let lastActivities = [];
 
+/* ═══════════════════════════════════════════════════════════════
+   KALORIVAJE
+═══════════════════════════════════════════════════════════════ */
+function calcAge(birthDateIso) {
+  const today = new Date();
+  const birth = new Date(birthDateIso);
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
+async function loadUserProfile() {
+  const { data, error } = await sb.from('user_profile').select('*').eq('id', 1).maybeSingle();
+  if (error) { console.error('loadUserProfile failed:', error.message); return null; }
+  return data;
+}
+
+function calcBmr(profile, weightRow) {
+  const weight = weightRow.weight_kg;
+  const height = profile.height_cm;
+  if (weightRow.fat_pct != null) {
+    const leanMass = weight * (1 - weightRow.fat_pct / 100);
+    return Math.round(370 + 21.6 * leanMass);
+  }
+  const age = calcAge(profile.birth_date);
+  const base = 10 * weight + 6.25 * height - 5 * age;
+  return Math.round(profile.sex === 'male' ? base + 5 : base - 161);
+}
+
+async function getBmrInfo() {
+  const profile = await loadUserProfile();
+  if (!profile || !profile.sex || !profile.height_cm || !profile.birth_date) {
+    return { bmr: null, missingProfile: true, missingWeight: false };
+  }
+  const { data: weightRows, error } = await sb.from('body_metrics').select('weight_kg,fat_pct')
+    .order('measured_at', { ascending: false }).limit(1);
+  if (error) console.error('getBmrInfo weight fetch failed:', error.message);
+  const weightRow = weightRows && weightRows[0];
+  if (!weightRow || weightRow.weight_kg == null) {
+    return { bmr: null, missingProfile: false, missingWeight: true };
+  }
+  return { bmr: calcBmr(profile, weightRow), missingProfile: false, missingWeight: false };
+}
+
+async function getExerciseCalories(fromIso, toIso) {
+  if (!appSettings) appSettings = await loadAppSettings();
+  const correction = (appSettings && appSettings.calorie_correction) ?? 1;
+  const [{ data: actData }, { data: sessData }] = await Promise.all([
+    sb.from('activity_data').select('calories').gte('activity_date', fromIso).lte('activity_date', toIso),
+    sb.from('workout_sessions').select('calories').gte('workout_date', fromIso).lte('workout_date', toIso),
+  ]);
+  const actKcal  = (actData  || []).reduce((s, r) => s + (r.calories != null ? r.calories * correction : 0), 0);
+  const sessKcal = (sessData || []).reduce((s, r) => s + (r.calories || 0), 0);
+  return actKcal + sessKcal;
+}
+
+async function getFoodCalories(fromIso, toIso) {
+  const { data, error } = await sb.from('food_log_entries').select('kcal')
+    .gte('logged_at', fromIso).lte('logged_at', toIso);
+  if (error) { console.error('getFoodCalories failed:', error.message); return 0; }
+  return (data || []).reduce((s, r) => s + (r.kcal || 0), 0);
+}
+
 async function loadAppSettings() {
   const { data, error } = await sb.from('app_settings').select('*').eq('id', 1).maybeSingle();
   if (error) { console.error('loadAppSettings failed:', error.message); return null; }
