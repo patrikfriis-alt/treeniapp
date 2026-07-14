@@ -3346,7 +3346,7 @@ async function loadWorkoutHistory() {
       <div class="hist-day-header">${date}</div>
       ${Object.entries(exMap).map(([exName, sets]) => `
         <div class="hist-item hist-item-indent">
-          <div class="hist-label">${escapeHtml(exName)}</div>
+          <div class="hist-label" data-ex="${exName.replace(/"/g,'&quot;')}" onclick="openExerciseModal(this.dataset.ex)" style="cursor:pointer">${escapeHtml(exName)}</div>
           <div style="font-size:12px;color:var(--text3)">${sets.sort((a,b)=>a.set_number-b.set_number).map(s=>`${s.weight_kg||'?'}×${s.reps||'?'}`).join(' | ')}</div>
         </div>`).join('')}
     </div>`).join('');
