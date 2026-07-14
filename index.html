@@ -2562,6 +2562,34 @@ async function getFoodCalories(fromIso, toIso) {
   return (data || []).reduce((s, r) => s + (r.kcal || 0), 0);
 }
 
+async function getDailyExerciseCalories(fromIso, toIso) {
+  if (!appSettings) appSettings = await loadAppSettings();
+  const correction = (appSettings && appSettings.calorie_correction) ?? 1;
+  const [{ data: actData }, { data: sessData }] = await Promise.all([
+    sb.from('activity_data').select('calories,activity_date').gte('activity_date', fromIso).lte('activity_date', toIso),
+    sb.from('workout_sessions').select('calories,workout_date').gte('workout_date', fromIso).lte('workout_date', toIso),
+  ]);
+  const byDate = {};
+  (actData || []).forEach(r => {
+    if (r.calories != null) byDate[r.activity_date] = (byDate[r.activity_date] || 0) + r.calories * correction;
+  });
+  (sessData || []).forEach(r => {
+    if (r.calories != null) byDate[r.workout_date] = (byDate[r.workout_date] || 0) + r.calories;
+  });
+  return byDate;
+}
+
+async function getDailyFoodCalories(fromIso, toIso) {
+  const { data, error } = await sb.from('food_log_entries').select('kcal,logged_at')
+    .gte('logged_at', fromIso).lte('logged_at', toIso);
+  if (error) { console.error('getDailyFoodCalories failed:', error.message); return {}; }
+  const byDate = {};
+  (data || []).forEach(r => {
+    if (r.kcal != null) byDate[r.logged_at] = (byDate[r.logged_at] || 0) + r.kcal;
+  });
+  return byDate;
+}
+
 async function loadAppSettings() {
   const { data, error } = await sb.from('app_settings').select('*').eq('id', 1).maybeSingle();
   if (error) { console.error('loadAppSettings failed:', error.message); return null; }
