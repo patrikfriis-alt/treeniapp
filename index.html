@@ -4394,6 +4394,73 @@ function openMetricModal(title, bodyHtml) {
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 }
 
+function openStreakModal() {
+  const c = motivationCache;
+  const dots = (c.last14 || []).map(on => `<div class="metric-modal-dot${on ? ' on' : ''}"></div>`).join('');
+  const body = `
+    <div class="metric-modal-row"><span>Nykyinen putki</span><span class="val">${c.streak ?? 0} pv</span></div>
+    <div class="metric-modal-row"><span>Pisin putki (90 pv)</span><span class="val">${c.longestStreak ?? 0} pv</span></div>
+    <div class="metric-modal-sub">Viimeiset 14 päivää</div>
+    <div class="metric-modal-dots">${dots}</div>
+  `;
+  openMetricModal('Streak', body);
+}
+
+function openWeeklyGymModal() {
+  const byDate = weekCardCache.gymByDate || {};
+  const mon = wStart(wOff);
+  const rows = DAYS.map((label, i) => {
+    const d = new Date(mon.date);
+    d.setDate(mon.date.getDate() + i);
+    const iso = localIso(d);
+    const sessType = byDate[iso];
+    const name = sessType && SESS[sessType] ? escapeHtml(SESS[sessType].name) : '—';
+    return `<div class="metric-modal-row"><span>${label}</span><span class="val">${name}</span></div>`;
+  }).join('');
+  openMetricModal('Viikon sali', rows);
+}
+
+function openWeeklyActivityModal() {
+  const list = weekCardCache.actList || [];
+  if (!list.length) {
+    openMetricModal('Viikon aktiviteetit', '<div class="metric-modal-row"><span>Ei aktiviteetteja tällä viikolla</span></div>');
+    return;
+  }
+  const sorted = [...list].sort((a, b) => a.activity_date.localeCompare(b.activity_date));
+  const rows = sorted.map(r => {
+    const d = new Date(r.activity_date + 'T00:00:00');
+    const dayIdx = d.getDay() === 0 ? 6 : d.getDay() - 1;
+    return `<div class="metric-modal-row"><span>${DAYS[dayIdx]}: ${escapeHtml(r.activity_type)}</span><span class="val">${r.duration_min ?? '—'} min</span></div>`;
+  }).join('');
+  openMetricModal('Viikon aktiviteetit', rows);
+}
+
+function openWeeklyPercentModal() {
+  const c = motivationCache;
+  const marks = c.weekDayMarks || [];
+  const rows = marks.map(m =>
+    `<div class="metric-modal-row"><span>${m.day}</span><span class="val">${m.active ? '✓ Aktiivinen' : '—'}</span></div>`
+  ).join('');
+  const body = `
+    <div class="metric-modal-row"><span>Aktiivisia päiviä</span><span class="val">${marks.filter(m => m.active).length}/6</span></div>
+    ${rows}
+  `;
+  openMetricModal('Viikon aktiivisuus', body);
+}
+
+function openMonthModal() {
+  const c = motivationCache;
+  const entries = Object.entries(c.monthByType || {}).sort((a, b) => b[1] - a[1]);
+  const rows = entries.length
+    ? entries.map(([type, count]) => `<div class="metric-modal-row"><span>${escapeHtml(type)}</span><span class="val">${count}</span></div>`).join('')
+    : '<div class="metric-modal-row"><span>Ei aktiviteetteja vielä tässä kuussa</span></div>';
+  const body = `
+    <div class="metric-modal-row"><span>Yhteensä</span><span class="val">${c.monthCount ?? 0} krt</span></div>
+    ${rows}
+  `;
+  openMetricModal('Kuukausi', body);
+}
+
 async function openCalorieSettingsModal() {
   closeSidebar();
   const settings = (await loadAppSettings()) || { calorie_correction: 0.72 };
