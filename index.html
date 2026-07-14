@@ -4669,15 +4669,12 @@ async function loadDeficitHeroMetric() {
   const sign = net >= 0 ? '+' : '';
   valEl.textContent = `${sign}${net} kcal`;
   lblEl.textContent = 'päivän kalorit';
-  wrap.onclick = () => openDeficitBreakdownModal(bmrInfo, exerciseKcal, foodKcal);
+  wrap.onclick = () => openDeficitBreakdownModal(bmrInfo);
 }
 
-async function openDeficitBreakdownModal(bmrInfo, exerciseKcal, foodKcal) {
+async function openDeficitBreakdownModal(bmrInfo) {
   const today = new Date();
   const todayIso = localIso(today);
-  const netToday = Math.round(foodKcal - bmrInfo.bmr - exerciseKcal);
-  const sign = netToday >= 0 ? '+' : '';
-  const label = netToday < 0 ? 'nettovaje' : (netToday > 0 ? 'nettoylijäämä' : 'tasan');
 
   const from7 = new Date(today);
   from7.setDate(today.getDate() - 6);
@@ -4687,6 +4684,12 @@ async function openDeficitBreakdownModal(bmrInfo, exerciseKcal, foodKcal) {
     getDailyExerciseCalories(from7Iso, todayIso),
     getDailyFoodCalories(from7Iso, todayIso),
   ]);
+
+  const exerciseKcalToday = exByDate[todayIso] || 0;
+  const foodKcalToday = foodByDate[todayIso] || 0;
+  const netToday = Math.round(foodKcalToday - bmrInfo.bmr - exerciseKcalToday);
+  const sign = netToday >= 0 ? '+' : '';
+  const label = netToday < 0 ? 'nettovaje' : (netToday > 0 ? 'nettoylijäämä' : 'tasan');
 
   const bars = [];
   for (let i = 6; i >= 0; i--) {
@@ -4706,8 +4709,8 @@ async function openDeficitBreakdownModal(bmrInfo, exerciseKcal, foodKcal) {
 
   const body = `
     <div class="metric-modal-row"><span>BMR</span><span class="val">${Math.round(bmrInfo.bmr)} kcal</span></div>
-    <div class="metric-modal-row"><span>+ Liikunta</span><span class="val">+${Math.round(exerciseKcal)} kcal</span></div>
-    <div class="metric-modal-row"><span>− Syöty ruoka</span><span class="val">−${Math.round(foodKcal)} kcal</span></div>
+    <div class="metric-modal-row"><span>+ Liikunta</span><span class="val">+${Math.round(exerciseKcalToday)} kcal</span></div>
+    <div class="metric-modal-row"><span>− Syöty ruoka</span><span class="val">−${Math.round(foodKcalToday)} kcal</span></div>
     <div class="metric-modal-total"><span>Tänään (${label})</span><span>${sign}${netToday} kcal</span></div>
     <div class="metric-modal-sub">Viimeiset 7 päivää (miinus=vaje, plus=ylijäämä)</div>
     <div class="metric-modal-bars">${barsHtml}</div>
