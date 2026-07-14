@@ -1113,9 +1113,9 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <div class="card">
       <div class="card-title">Kirjaa mittaus</div>
       <div class="form-row"><label>Päivämäärä</label><input type="date" id="body-date"></div>
-      <div class="form-row"><label>Paino (kg)</label><input type="text" inputmode="decimal" id="body-weight" placeholder="114,8"></div>
-      <div class="form-row"><label>Rasva%</label><input type="text" inputmode="decimal" id="body-fat" placeholder="37,7"></div>
-      <div class="form-row"><label>Lihas%</label><input type="text" inputmode="decimal" id="body-muscle" placeholder="29,3"></div>
+      <div class="form-row"><label>Paino (kg)</label><input type="text" inputmode="decimal" id="body-weight" placeholder="esim. 114,8"></div>
+      <div class="form-row"><label>Rasva%</label><input type="text" inputmode="decimal" id="body-fat" placeholder="esim. 37,7"></div>
+      <div class="form-row"><label>Lihas%</label><input type="text" inputmode="decimal" id="body-muscle" placeholder="esim. 29,3"></div>
       <button class="btn btn-primary" onclick="saveBodyMetrics()">Tallenna</button>
       <div class="status" id="body-status"></div>
     </div>
@@ -1145,10 +1145,10 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <div class="card">
       <div class="card-title">Kirjaa uni</div>
       <div class="form-row"><label>Päivämäärä</label><input type="date" id="sleep-date"></div>
-      <div class="form-row"><label>Kesto (min)</label><input type="text" inputmode="numeric" id="sleep-dur" placeholder="450"></div>
-      <div class="form-row"><label>Syvä uni (min)</label><input type="text" inputmode="numeric" id="sleep-deep" placeholder="90"></div>
-      <div class="form-row"><label>REM (min)</label><input type="text" inputmode="numeric" id="sleep-rem" placeholder="100"></div>
-      <div class="form-row"><label>Heräilyt</label><input type="text" inputmode="numeric" id="sleep-awk" placeholder="2"></div>
+      <div class="form-row"><label>Kesto (min)</label><input type="text" inputmode="numeric" id="sleep-dur" placeholder="esim. 450"></div>
+      <div class="form-row"><label>Syvä uni (min)</label><input type="text" inputmode="numeric" id="sleep-deep" placeholder="esim. 90"></div>
+      <div class="form-row"><label>REM (min)</label><input type="text" inputmode="numeric" id="sleep-rem" placeholder="esim. 100"></div>
+      <div class="form-row"><label>Heräilyt</label><input type="text" inputmode="numeric" id="sleep-awk" placeholder="esim. 2"></div>
       <button class="btn btn-primary" onclick="saveSleep()">Tallenna</button>
       <div class="status" id="sleep-status"></div>
     </div>
