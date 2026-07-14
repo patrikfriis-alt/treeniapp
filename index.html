@@ -1816,6 +1816,7 @@ function calcPace() {
 /* ═══════════════════════════════════════════════════════════════
    RENDER — WEEK
 ═══════════════════════════════════════════════════════════════ */
+let weekCardCache = {};
 async function loadWeekSummary() {
   const mon = wStart(wOff);
   const sun = new Date(mon.date);
@@ -1827,8 +1828,8 @@ async function loadWeekSummary() {
     { data: actData, error: actErr },
     { data: sleepData, error: sleepErr },
   ] = await Promise.all([
-    sb.from('workout_sets').select('workout_date').gte('workout_date', from).lte('workout_date', to),
-    sb.from('activity_data').select('id').gte('activity_date', from).lte('activity_date', to),
+    sb.from('workout_sets').select('workout_date,session_type').gte('workout_date', from).lte('workout_date', to),
+    sb.from('activity_data').select('activity_type,activity_date,duration_min').gte('activity_date', from).lte('activity_date', to),
     sb.from('sleep_data').select('duration_min').gte('sleep_date', from).lte('sleep_date', to),
   ]);
 
@@ -1838,11 +1839,18 @@ async function loadWeekSummary() {
   const kGymEl = document.getElementById('koonti-ws-gym');
   if (kGymEl) kGymEl.textContent = gymDays.size;
 
+  weekCardCache.gymByDate = {};
+  (gymData || []).forEach(r => {
+    if (!weekCardCache.gymByDate[r.workout_date]) weekCardCache.gymByDate[r.workout_date] = r.session_type;
+  });
+
   if (actErr) { console.error('loadWeekSummary (act) failed:', actErr.message); }
   const actEl = document.getElementById('ws-act');
   if (actEl) actEl.textContent = actData ? actData.length : '—';
   const kActEl = document.getElementById('koonti-ws-act');
   if (kActEl) kActEl.textContent = actData ? actData.length : '—';
+
+  weekCardCache.actList = actData || [];
 
   if (sleepErr) { console.error('loadWeekSummary (sleep) failed:', sleepErr.message); }
   const withDur = sleepData ? sleepData.filter(r => r.duration_min !== null) : [];
