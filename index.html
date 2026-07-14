@@ -881,17 +881,17 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   </div>
 
   <div class="hero-metrics">
-    <div class="hero-metric">
+    <div class="hero-metric hero-metric--clickable" onclick="openStreakModal()">
       <div class="hero-metric-icon" data-icon="flame" data-icon-color="var(--amber)" data-icon-bg="var(--amber-bg)"></div>
       <div class="hero-metric-val" id="koonti-ms-streak">—</div>
       <div class="hero-metric-label">streak</div>
     </div>
-    <div class="hero-metric">
+    <div class="hero-metric hero-metric--clickable" onclick="openWeeklyGymModal()">
       <div class="hero-metric-icon" data-icon="dumbbell" data-icon-color="var(--accent)" data-icon-bg="var(--accent-bg)"></div>
       <div class="hero-metric-val" id="koonti-ws-gym">—</div>
       <div class="hero-metric-label">viikon sali</div>
     </div>
-    <div class="hero-metric">
+    <div class="hero-metric hero-metric--clickable" onclick="openWeeklyActivityModal()">
       <div class="hero-metric-icon" data-icon="running" data-icon-color="var(--red)" data-icon-bg="var(--red-bg)"></div>
       <div class="hero-metric-val" id="koonti-ws-act">—</div>
       <div class="hero-metric-label">viikon aktiiv.</div>
@@ -899,20 +899,20 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   </div>
 
   <div class="hero-metrics">
-    <div class="hero-metric">
+    <div class="hero-metric hero-metric--clickable" onclick="openWeeklyPercentModal()">
       <div class="hero-metric-icon" data-icon="calendar" data-icon-color="var(--text2)" data-icon-bg="var(--surface2)"></div>
       <div class="hero-metric-val" id="koonti-ms-week">—</div>
       <div class="hero-metric-label">viikon aktiivisuus</div>
     </div>
-    <div class="hero-metric">
+    <div class="hero-metric hero-metric--clickable" onclick="openMonthModal()">
       <div class="hero-metric-icon" data-icon="calendar" data-icon-color="var(--text2)" data-icon-bg="var(--surface2)"></div>
       <div class="hero-metric-val" id="koonti-ms-month">—</div>
       <div class="hero-metric-label">kuukausi</div>
     </div>
-    <div class="hero-metric" id="koonti-deficit-wrap">
+    <div class="hero-metric hero-metric--clickable" id="koonti-deficit-wrap">
       <div class="hero-metric-icon" data-icon="scale" data-icon-color="var(--text2)" data-icon-bg="var(--surface2)"></div>
       <div class="hero-metric-val" id="koonti-deficit-val">—</div>
-      <div class="hero-metric-label" id="koonti-deficit-label">päivän vaje</div>
+      <div class="hero-metric-label" id="koonti-deficit-label">päivän kalorit</div>
     </div>
   </div>
 
