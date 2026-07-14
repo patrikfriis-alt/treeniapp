@@ -1932,9 +1932,9 @@ async function loadWeeklyReportCard() {
       getFoodCalories(mon.iso, localIso(sun)),
     ]);
     const elapsedDays = wOff === 0 ? (todayIdx() + 1) : 7;
-    const weeklyDeficit = Math.round(bmrInfo.bmr * elapsedDays + exerciseKcal - foodKcal);
-    const weeklySign = weeklyDeficit >= 0 ? '+' : '';
-    rows.push(`<div class="hist-item"><div class="hist-label">Viikon vaje</div><div class="hist-val">${weeklySign}${weeklyDeficit} kcal</div></div>`);
+    const weeklyNet = Math.round(foodKcal - bmrInfo.bmr * elapsedDays - exerciseKcal);
+    const weeklySign = weeklyNet >= 0 ? '+' : '';
+    rows.push(`<div class="hist-item"><div class="hist-label">Viikon kalorit</div><div class="hist-val">${weeklySign}${weeklyNet} kcal</div></div>`);
   }
 
   document.getElementById('kc-weekly-rows').innerHTML = rows.join('');
