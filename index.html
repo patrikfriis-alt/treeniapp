@@ -1740,6 +1740,19 @@ function updateSetBox(o, d, e, s) {
       ormEl.classList.remove('visible');
     }
   }
+
+  const exTarget = sess && sess.ex && sess.ex[e];
+  if (exTarget) {
+    const doneCount = (ed.sets || []).filter(row => {
+      const rd = row || {};
+      return (parseFloat(rd.kg) || null) !== null || (parseInt(rd.reps) || null) !== null;
+    }).length;
+    const progPct = exTarget.s > 0 ? Math.round(doneCount / exTarget.s * 100) : 0;
+    const labelEl = document.getElementById(`ex-prog-label-${o}-${d}-${e}`);
+    const fillEl  = document.getElementById(`ex-prog-fill-${o}-${d}-${e}`);
+    if (labelEl) labelEl.textContent = `${doneCount}/${exTarget.s} sarjaa`;
+    if (fillEl)  fillEl.style.width  = `${progPct}%`;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -2279,8 +2292,8 @@ async function renderSession() {
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
           <div class="ex-block-progress">
-            <div class="ex-block-prog-label">${doneCount}/${ex.s} sarjaa</div>
-            <div class="ex-block-prog-bar"><div class="ex-block-prog-fill" style="width:${progPct}%"></div></div>
+            <div class="ex-block-prog-label" id="ex-prog-label-${wOff}-${aDay}-${ei}">${doneCount}/${ex.s} sarjaa</div>
+            <div class="ex-block-prog-bar"><div class="ex-block-prog-fill" id="ex-prog-fill-${wOff}-${aDay}-${ei}" style="width:${progPct}%"></div></div>
           </div>
           ${prefillBtn}
         </div>
