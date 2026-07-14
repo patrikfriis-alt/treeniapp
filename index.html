@@ -2012,19 +2012,25 @@ async function checkPlateau() {
   return null;
 }
 
+let motivationCache = {};
 async function loadMotivationSummary() {
   // Kuukauden aktiviteettikertoja
   const now = new Date();
   const monthStart = localIso(new Date(now.getFullYear(), now.getMonth(), 1));
   const monthEnd   = localIso(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 
-  const { data: actMonth } = await sb.from('activity_data').select('id')
+  const { data: actMonth } = await sb.from('activity_data').select('activity_type')
     .gte('activity_date', monthStart).lte('activity_date', monthEnd);
   const monthCount = actMonth ? actMonth.length : 0;
   const msMonthEl = document.getElementById('ms-month');
   if (msMonthEl) msMonthEl.textContent = monthCount + ' krt';
   const kMonthEl = document.getElementById('koonti-ms-month');
   if (kMonthEl) kMonthEl.textContent = monthCount + ' krt';
+
+  const monthByType = {};
+  (actMonth || []).forEach(r => { monthByType[r.activity_type] = (monthByType[r.activity_type] || 0) + 1; });
+  motivationCache.monthCount = monthCount;
+  motivationCache.monthByType = monthByType;
 
   // Streak + viikko% — yksi kysely 90 päivälle kattaa molemmat
   const today = new Date();
@@ -2034,6 +2040,7 @@ async function loadMotivationSummary() {
   const streakFrom = localIso(ninetyAgo);
   const streakTo   = localIso(today);
   const activeDays90 = await fetchActiveDays(streakFrom, streakTo);
+  motivationCache.activeDays90 = activeDays90;
 
   const mon2 = wStart(wOff);
   const sun2 = new Date(mon2.date);
@@ -2045,6 +2052,14 @@ async function loadMotivationSummary() {
   if (msWeekEl) msWeekEl.textContent = weekPct + '%';
   const kWeekEl = document.getElementById('koonti-ms-week');
   if (kWeekEl) kWeekEl.textContent = weekPct + '%';
+
+  const weekDayMarks = [];
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(mon2.date);
+    d.setDate(mon2.date.getDate() + i);
+    weekDayMarks.push({ day: DAYS[i], active: activeDays90.has(localIso(d)) });
+  }
+  motivationCache.weekDayMarks = weekDayMarks;
 
   let streak = 0;
   for (let i = 0; i < 90; i++) {
@@ -2062,6 +2077,28 @@ async function loadMotivationSummary() {
   if (msStreakEl) msStreakEl.textContent = streak + ' pv';
   const kStreakEl = document.getElementById('koonti-ms-streak');
   if (kStreakEl) kStreakEl.textContent = streak + ' pv';
+  motivationCache.streak = streak;
+
+  let longestStreak = 0, currentRun = 0;
+  for (let i = 89; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    if (activeDays90.has(localIso(d))) {
+      currentRun++;
+      longestStreak = Math.max(longestStreak, currentRun);
+    } else {
+      currentRun = 0;
+    }
+  }
+  motivationCache.longestStreak = longestStreak;
+
+  const last14 = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    last14.push(activeDays90.has(localIso(d)));
+  }
+  motivationCache.last14 = last14;
 
   const streakMilestones = [7, 14, 30, 50, 100];
   const isStreakMilestone = streakMilestones.includes(streak) || (streak > 100 && streak % 50 === 0);
