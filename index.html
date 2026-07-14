@@ -2808,7 +2808,9 @@ async function loadActivities() {
   const correction = (appSettings && appSettings.calorie_correction) ?? 1;
 
   const { data, error } = await sb.from('activity_data').select('*')
-    .order('activity_date',{ ascending:false }).limit(10);
+    .order('activity_date',{ ascending:false })
+    .order('created_at',{ ascending:false })
+    .limit(10);
   if (error) { console.error('loadActivities failed:', error.message); return; }
   lastActivities = data || [];
   const el = document.getElementById('act-history');
