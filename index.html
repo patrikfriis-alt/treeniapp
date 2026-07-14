@@ -4594,7 +4594,7 @@ function renderSessionExpand(s) {
   });
   html += `</div>
     <div class="sess-add-ex-btn" onclick="openExercisePicker('${s.id}')">+ Lisää liike</div>
-    <button class="sess-delete-btn" onclick="deleteProgramSession('${s.id}')">Poista sessio</button>
+    <button class="sess-delete-btn" onclick="if (confirm('Poistetaanko sessio pysyvästi? Kaikki sen liikkeet poistuvat mukana.')) deleteProgramSession('${s.id}')">Poista sessio</button>
   </div>`;
   return html;
 }
