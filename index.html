@@ -209,6 +209,20 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .hero-metric-icon  { font-size:20px; margin-bottom:4px; }
 .hero-metric-val   { font-size:20px; font-weight:700; line-height:1; }
 .hero-metric-label { font-size:10px; color:var(--text3); margin-top:2px; }
+.hero-metric--clickable { cursor:pointer; }
+.metric-modal-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:13.5px; color:var(--text2); border-bottom:1px solid var(--border); }
+.metric-modal-row:last-of-type { border-bottom:none; }
+.metric-modal-row .val { color:var(--text); font-weight:600; font-variant-numeric:tabular-nums; }
+.metric-modal-total { display:flex; justify-content:space-between; align-items:center; padding:10px 0 4px; margin-top:4px; border-top:1px solid var(--border2); font-size:14px; font-weight:600; color:var(--text); }
+.metric-modal-sub { font-size:12px; color:var(--text3); margin:10px 0 6px; }
+.metric-modal-dots { display:flex; gap:4px; flex-wrap:wrap; }
+.metric-modal-dot { width:12px; height:12px; border-radius:50%; background:var(--surface2); }
+.metric-modal-dot.on { background:var(--accent); }
+.metric-modal-bars { display:flex; align-items:flex-end; gap:5px; height:60px; }
+.metric-modal-bar-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
+.metric-modal-bar { width:100%; border-radius:3px 3px 0 0; background:var(--accent); min-height:2px; }
+.metric-modal-bar.neg { background:var(--red); }
+.metric-modal-bar-label { font-size:9px; color:var(--text3); }
 
 /* ─── Koonti (dashboard) ─────────────────────────────────────── */
 .page-header {
@@ -4281,6 +4295,30 @@ async function openProfileModal() {
   };
 
   document.getElementById('profile-settings-cancel-btn').onclick = () => overlay.remove();
+}
+
+function openMetricModal(title, bodyHtml) {
+  const existing = document.getElementById('metric-info-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'metric-info-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;max-height:80vh;overflow-y:auto;';
+
+  modal.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="font-size:16px;font-weight:600;color:var(--text)">${title}</div>
+      <button onclick="document.getElementById('metric-info-overlay').remove()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
+    </div>
+    ${bodyHtml}
+  `;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 }
 
 async function openCalorieSettingsModal() {
