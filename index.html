@@ -3841,10 +3841,23 @@ function goToAmountStep() {
   document.getElementById('food-search-step-amount').style.display = 'block';
   document.getElementById('food-amount-name').textContent = foodModalSelected.name;
   document.getElementById('food-amount-grams').value = 100;
+  updateFoodAmountPreview();
 }
 
 function setFoodAmount(g) {
   document.getElementById('food-amount-grams').value = g;
+  updateFoodAmountPreview();
+}
+
+function updateFoodAmountPreview() {
+  const el = document.getElementById('food-amount-preview');
+  if (!el || !foodModalSelected) return;
+  const grams = parseFloat(document.getElementById('food-amount-grams').value) || 0;
+  const kcal    = Math.round(foodModalSelected.kcalPer100g * grams / 100);
+  const protein = Math.round(foodModalSelected.proteinPer100g * grams / 100 * 10) / 10;
+  const carbs   = Math.round(foodModalSelected.carbsPer100g * grams / 100 * 10) / 10;
+  const fat     = Math.round(foodModalSelected.fatPer100g * grams / 100 * 10) / 10;
+  el.textContent = `${kcal} kcal · ${protein}g proteiini · ${carbs}g hiilarit · ${fat}g rasva`;
 }
 
 function goToCustomFoodStep() {
@@ -4913,7 +4926,8 @@ if ('serviceWorker' in navigator) {
 
     <div id="food-search-step-amount" style="display:none">
       <div class="food-amount-name" id="food-amount-name">—</div>
-      <div class="form-row"><label>Määrä (g)</label><input type="number" id="food-amount-grams" value="100"></div>
+      <div class="form-row"><label>Määrä (g)</label><input type="number" id="food-amount-grams" value="100" oninput="updateFoodAmountPreview()"></div>
+      <div id="food-amount-preview" style="font-size:13px;color:var(--text2);margin:-4px 0 10px;"></div>
       <div class="food-amount-presets">
         <button class="stab" onclick="setFoodAmount(50)">50g</button>
         <button class="stab" onclick="setFoodAmount(100)">100g</button>
