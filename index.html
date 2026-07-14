@@ -4657,21 +4657,62 @@ async function loadDeficitHeroMetric() {
   if (bmrInfo.missingProfile || bmrInfo.missingWeight) {
     valEl.textContent = 'Aseta →';
     lblEl.textContent = 'profiili';
-    wrap.style.cursor = 'pointer';
     wrap.onclick = () => openProfileModal();
     return;
   }
-  wrap.style.cursor = '';
-  wrap.onclick = null;
   const todayIso = localIso(new Date());
   const [exerciseKcal, foodKcal] = await Promise.all([
     getExerciseCalories(todayIso, todayIso),
     getFoodCalories(todayIso, todayIso),
   ]);
-  const deficit = Math.round(bmrInfo.bmr + exerciseKcal - foodKcal);
-  const sign = deficit >= 0 ? '+' : '';
-  valEl.textContent = `${sign}${deficit} kcal`;
-  lblEl.textContent = 'päivän vaje';
+  const net = Math.round(foodKcal - bmrInfo.bmr - exerciseKcal);
+  const sign = net >= 0 ? '+' : '';
+  valEl.textContent = `${sign}${net} kcal`;
+  lblEl.textContent = 'päivän kalorit';
+  wrap.onclick = () => openDeficitBreakdownModal(bmrInfo, exerciseKcal, foodKcal);
+}
+
+async function openDeficitBreakdownModal(bmrInfo, exerciseKcal, foodKcal) {
+  const today = new Date();
+  const todayIso = localIso(today);
+  const netToday = Math.round(foodKcal - bmrInfo.bmr - exerciseKcal);
+  const sign = netToday >= 0 ? '+' : '';
+  const label = netToday < 0 ? 'nettovaje' : (netToday > 0 ? 'nettoylijäämä' : 'tasan');
+
+  const from7 = new Date(today);
+  from7.setDate(today.getDate() - 6);
+  const from7Iso = localIso(from7);
+
+  const [exByDate, foodByDate] = await Promise.all([
+    getDailyExerciseCalories(from7Iso, todayIso),
+    getDailyFoodCalories(from7Iso, todayIso),
+  ]);
+
+  const bars = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const iso = localIso(d);
+    const dayIdx = d.getDay() === 0 ? 6 : d.getDay() - 1;
+    const net = (foodByDate[iso] || 0) - bmrInfo.bmr - (exByDate[iso] || 0);
+    bars.push({ label: DAYS[dayIdx], net });
+  }
+  const maxAbs = Math.max(1, ...bars.map(b => Math.abs(b.net)));
+  const barsHtml = bars.map(b => {
+    const heightPct = Math.max(4, Math.round(Math.abs(b.net) / maxAbs * 100));
+    const cls = b.net < 0 ? ' neg' : '';
+    return `<div class="metric-modal-bar-col"><div class="metric-modal-bar${cls}" style="height:${heightPct}%"></div><div class="metric-modal-bar-label">${b.label}</div></div>`;
+  }).join('');
+
+  const body = `
+    <div class="metric-modal-row"><span>BMR</span><span class="val">${Math.round(bmrInfo.bmr)} kcal</span></div>
+    <div class="metric-modal-row"><span>+ Liikunta</span><span class="val">+${Math.round(exerciseKcal)} kcal</span></div>
+    <div class="metric-modal-row"><span>− Syöty ruoka</span><span class="val">−${Math.round(foodKcal)} kcal</span></div>
+    <div class="metric-modal-total"><span>Tänään (${label})</span><span>${sign}${netToday} kcal</span></div>
+    <div class="metric-modal-sub">Viimeiset 7 päivää (miinus=vaje, plus=ylijäämä)</div>
+    <div class="metric-modal-bars">${barsHtml}</div>
+  `;
+  openMetricModal('Päivän kalorit', body);
 }
 
 
