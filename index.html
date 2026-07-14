@@ -775,6 +775,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .food-search-result-kcal { color: var(--text3); }
 .food-search-empty { color: var(--text3); font-size:13px; text-align:center; padding:20px 0; }
 .food-search-custom-link { color: var(--green); font-size:13px; cursor:pointer; }
+.food-amount-centered { flex-direction: column; justify-content: center; min-height: 50vh; }
 .ex-search-result-row {
   display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border2);
   font-size:13px; color:var(--text); cursor:pointer;
@@ -3838,7 +3839,7 @@ function selectFoodItem(i) {
 function goToAmountStep() {
   document.getElementById('food-search-step-list').style.display = 'none';
   document.getElementById('food-search-step-custom').style.display = 'none';
-  document.getElementById('food-search-step-amount').style.display = 'block';
+  document.getElementById('food-search-step-amount').style.display = 'flex';
   document.getElementById('food-amount-name').textContent = foodModalSelected.name;
   document.getElementById('food-amount-grams').value = 100;
   updateFoodAmountPreview();
@@ -4924,7 +4925,7 @@ if ('serviceWorker' in navigator) {
       </div>
     </div>
 
-    <div id="food-search-step-amount" style="display:none">
+    <div id="food-search-step-amount" class="food-amount-centered" style="display:none">
       <div class="food-amount-name" id="food-amount-name">—</div>
       <div class="form-row"><label>Määrä (g)</label><input type="number" id="food-amount-grams" value="100" oninput="updateFoodAmountPreview()"></div>
       <div id="food-amount-preview" style="font-size:13px;color:var(--text2);margin:-4px 0 10px;"></div>
