@@ -4577,8 +4577,10 @@ async function loadKoonti() {
   }
 
   const { data: actRows } = await sb.from('activity_data')
-    .select('activity_type,activity_date,duration_min')
-    .order('activity_date', { ascending: false }).limit(1);
+    .select('activity_type,activity_date,duration_min,created_at')
+    .order('activity_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(1);
   const kcAerobiaCard = document.getElementById('kc-aerobia');
   const kcAerobiaSub = document.getElementById('kc-aerobia-sub');
   kcAerobiaSub.classList.remove('skel-sub');
