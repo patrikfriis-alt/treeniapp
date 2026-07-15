@@ -4734,22 +4734,22 @@ async function sendCoachMessage() {
     res = null;
   }
 
-  if (coachActiveConversationId !== conversationId) return;
-
-  const pendingEl = document.getElementById('coach-pending');
+  const stillViewing = coachActiveConversationId === conversationId;
+  const pendingEl = stillViewing ? document.getElementById('coach-pending') : null;
   input.disabled = false;
 
   if (!res || !res.ok) {
     if (pendingEl) pendingEl.remove();
     if (res && res.status === 401) {
       localStorage.removeItem('coachSecret');
-      promptCoachSecret(() => {});
-    } else if (res && res.status === 429) {
-      thread.insertAdjacentHTML('beforeend', `<div class="status err">Päivän viestiraja täynnä, yritä huomenna.</div>`);
-    } else {
-      thread.insertAdjacentHTML('beforeend', `<div class="status err">Virhe, yritä uudelleen.</div>`);
+      if (stillViewing) promptCoachSecret(() => {});
+    } else if (stillViewing) {
+      const msg = res && res.status === 429
+        ? 'Päivän viestiraja täynnä, yritä huomenna.'
+        : 'Virhe, yritä uudelleen.';
+      thread.insertAdjacentHTML('beforeend', `<div class="status err">${msg}</div>`);
+      thread.scrollTop = thread.scrollHeight;
     }
-    thread.scrollTop = thread.scrollHeight;
     return;
   }
 
@@ -4762,11 +4762,11 @@ async function sendCoachMessage() {
   });
   if (replyErr) console.error('sendCoachMessage reply insert failed:', replyErr.message);
 
-  if (pendingEl) {
+  if (stillViewing && pendingEl) {
     pendingEl.textContent = data.reply;
     pendingEl.removeAttribute('id');
+    thread.scrollTop = thread.scrollHeight;
   }
-  thread.scrollTop = thread.scrollHeight;
 }
 
 async function loadKoonti() {
