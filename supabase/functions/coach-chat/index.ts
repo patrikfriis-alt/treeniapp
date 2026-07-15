@@ -21,6 +21,8 @@ Säännöt:
 - Ole ytimekäs — muutama virke riittää useimpiin vastauksiin, ellei käyttäjä pyydä pidempää analyysiä.
 - Vastaa suomeksi.`;
 
+const NOTES_SYSTEM_PROMPT = `Sinun tehtäväsi on ylläpitää lyhyttä muistiinpanoa käyttäjästä havaintojen perusteella. Tässä ovat nykyiset muistiinpanot ja äskeinen keskusteluvaihto. Päivitä muistiinpanot jos jotain uutta ja pysyvästi hyödyllistä ilmeni (esim. toistuvia tapoja, mieltymyksiä, poikkeamia) — älä toista dataa jonka valmentaja jo näkee joka viestillä (esim. tarkkoja lukuja), keskity havaintoihin jotka eivät muuten näkyisi. Jos mikään ei ole muuttunut, palauta muistiinpanot muuttumattomina. Pidä muistiinpanot lyhyinä (muutama virke). Vastaa PELKÄSTÄÄN päivitetyillä muistiinpanoilla, ei muuta tekstiä.`;
+
 async function callClaude(
   systemPrompt: string,
   messages: { role: string; content: string }[],
@@ -46,6 +48,39 @@ async function callClaude(
   const data = await res.json();
   const textBlock = (data.content || []).find((b: any) => b.type === 'text');
   return textBlock?.text || '(ei vastausta)';
+}
+
+async function updateCoachNotes(
+  sb: ReturnType<typeof createClient>,
+  userMessage: string,
+  assistantReply: string,
+): Promise<void> {
+  const { data: currentNotesRow, error: fetchErr } = await sb
+    .from('coach_notes')
+    .select('notes')
+    .eq('id', 1)
+    .maybeSingle();
+  if (fetchErr) {
+    console.error('coach_notes fetch failed:', fetchErr.message);
+    return;
+  }
+  const currentNotes = (currentNotesRow as any)?.notes || '(ei vielä muistiinpanoja)';
+
+  const notesPrompt = `Nykyiset muistiinpanot:\n${currentNotes}\n\nÄskeinen keskusteluvaihto:\nKäyttäjä: ${userMessage}\nValmentaja: ${assistantReply}`;
+
+  let updatedNotes: string;
+  try {
+    updatedNotes = await callClaude(NOTES_SYSTEM_PROMPT, [{ role: 'user', content: notesPrompt }]);
+  } catch (err) {
+    console.error('notes update Claude call failed:', err instanceof Error ? err.message : String(err));
+    return;
+  }
+
+  const { error: updateErr } = await sb
+    .from('coach_notes')
+    .update({ notes: updatedNotes.trim(), updated_at: new Date().toISOString() })
+    .eq('id', 1);
+  if (updateErr) console.error('coach_notes update failed:', updateErr.message);
 }
 
 Deno.serve(async (req) => {
@@ -119,6 +154,9 @@ Deno.serve(async (req) => {
     console.error('Claude call failed:', err instanceof Error ? err.message : String(err));
     return new Response('AI request failed', { status: 502, headers: CORS_HEADERS });
   }
+
+  const lastUserMessage = messages[messages.length - 1]?.content || '';
+  await updateCoachNotes(sb, lastUserMessage, reply);
 
   return new Response(JSON.stringify({ reply }), {
     headers: { ...CORS_HEADERS, 'content-type': 'application/json' },
