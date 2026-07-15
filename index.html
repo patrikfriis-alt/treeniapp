@@ -224,6 +224,15 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .metric-modal-bar.neg { background:var(--red); }
 .metric-modal-bar-label { font-size:9px; color:var(--text3); }
 
+.coach-list-item { cursor:pointer; }
+.coach-thread { display:flex; flex-direction:column; gap:10px; padding-bottom:80px; }
+.coach-bubble { max-width:85%; padding:10px 14px; border-radius:14px; font-size:14px; line-height:1.4; white-space:pre-wrap; }
+.coach-bubble.user { align-self:flex-end; background:var(--accent); color:#fff; border-bottom-right-radius:4px; }
+.coach-bubble.assistant { align-self:flex-start; background:var(--surface2); color:var(--text); border-bottom-left-radius:4px; }
+.coach-input-bar { position:fixed; bottom:0; left:0; right:0; display:flex; gap:8px; padding:10px 14px; background:var(--bg); border-top:1px solid var(--border); max-width:600px; margin:0 auto; box-sizing:border-box; }
+.coach-input-bar input { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:10px 16px; color:var(--text); font-size:14px; min-width:0; }
+.coach-input-bar button { background:var(--accent); color:#fff; border:none; border-radius:20px; padding:10px 18px; font-size:14px; cursor:pointer; flex:none; }
+
 /* ─── Koonti (dashboard) ─────────────────────────────────────── */
 .page-header {
   display: flex;
@@ -1182,6 +1191,14 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <div id="ohjelma-content"></div>
 </div>
 
+<div id="page-valmentaja" class="page">
+  <div class="page-header">
+    <button class="back-btn" onclick="showPage('koonti', document.getElementById('nav-koonti'))">‹</button>
+    <span class="page-title">Valmentaja</span>
+  </div>
+  <div id="valmentaja-content"></div>
+</div>
+
 <!-- ── RUOKA ───────────────────────────────────────────────────── -->
 <div id="page-ruoka" class="page">
   <div class="week-nav">
@@ -1217,8 +1234,11 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <div class="version-chip" style="margin:0">v1.19.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
-  <button onclick="showPage('ohjelma',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
+  <button onclick="showPage('ohjelma',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="clipboard" style="display:inline-flex"></span> Ohjelma
+  </button>
+  <button onclick="showPage('valmentaja',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
+    <span data-icon="chat" style="display:inline-flex"></span> Valmentaja
   </button>
   <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:20px;margin-bottom:12px;">Asetukset</div>
   <button onclick="openGoalsModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
@@ -1264,6 +1284,7 @@ const ICONS = {
   watch:     '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2 2M9 3h6l-1 3H10z"/>',
   upload:    '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>',
   bell:      '<path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/>',
+  chat:      '<path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>',
 };
 
 function svgIcon(name, color, size) {
@@ -4539,6 +4560,7 @@ function showPage(name, btn) {
   if (name === 'uni')       loadSleep();
   if (name === 'ohjelma')   renderOhjelma();
   if (name === 'ruoka')     renderRuoka();
+  if (name === 'valmentaja') renderCoachPage();
 }
 
 async function loadKoonti() {
