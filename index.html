@@ -4689,6 +4689,7 @@ async function sendCoachMessage() {
   const input = document.getElementById('coach-input');
   const text = input.value.trim();
   if (!text || !coachActiveConversationId) return;
+  const conversationId = coachActiveConversationId;
 
   const secret = getCoachSecret();
   if (!secret) {
@@ -4700,7 +4701,7 @@ async function sendCoachMessage() {
   input.disabled = true;
 
   const { error: insertErr } = await sb.from('coach_messages').insert({
-    conversation_id: coachActiveConversationId,
+    conversation_id: conversationId,
     role: 'user',
     content: text,
   });
@@ -4726,12 +4727,14 @@ async function sendCoachMessage() {
         'x-coach-secret': secret,
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ conversation_id: coachActiveConversationId }),
+      body: JSON.stringify({ conversation_id: conversationId }),
     });
   } catch (err) {
     console.error('coach-chat fetch failed:', err.message);
     res = null;
   }
+
+  if (coachActiveConversationId !== conversationId) return;
 
   const pendingEl = document.getElementById('coach-pending');
   input.disabled = false;
@@ -4752,11 +4755,12 @@ async function sendCoachMessage() {
 
   const data = await res.json();
 
-  await sb.from('coach_messages').insert({
-    conversation_id: coachActiveConversationId,
+  const { error: replyErr } = await sb.from('coach_messages').insert({
+    conversation_id: conversationId,
     role: 'assistant',
     content: data.reply,
   });
+  if (replyErr) console.error('sendCoachMessage reply insert failed:', replyErr.message);
 
   if (pendingEl) {
     pendingEl.textContent = data.reply;
