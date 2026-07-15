@@ -4563,6 +4563,91 @@ function showPage(name, btn) {
   if (name === 'valmentaja') renderCoachPage();
 }
 
+let coachActiveConversationId = null;
+
+async function renderCoachPage() {
+  coachActiveConversationId = null;
+  const el = document.getElementById('valmentaja-content');
+  el.innerHTML = '<div class="skel-sub" style="height:60px"></div>';
+
+  const { data, error } = await sb.from('coach_messages')
+    .select('conversation_id,role,content,created_at')
+    .order('created_at', { ascending: true });
+  if (error) {
+    console.error('renderCoachPage failed:', error.message);
+    el.innerHTML = '<div class="status err">Virhe ladattaessa keskusteluja</div>';
+    return;
+  }
+
+  const byConv = new Map();
+  (data || []).forEach(m => {
+    if (!byConv.has(m.conversation_id)) byConv.set(m.conversation_id, []);
+    byConv.get(m.conversation_id).push(m);
+  });
+
+  const conversations = [...byConv.entries()].map(([id, msgs]) => {
+    const firstUserMsg = msgs.find(m => m.role === 'user') || msgs[0];
+    return {
+      id,
+      title: firstUserMsg.content.slice(0, 60),
+      lastAt: msgs[msgs.length - 1].created_at,
+    };
+  }).sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+
+  const listHtml = conversations.length
+    ? conversations.map(c => `
+      <div class="hist-item coach-list-item" onclick="openCoachConversation('${c.id}')">
+        <div><div class="hist-label">${escapeHtml(c.title)}</div></div>
+        <div style="font-size:12px;color:var(--text3)">${c.lastAt.slice(0,10)}</div>
+      </div>`).join('')
+    : '<div class="status">Ei vielä keskusteluja</div>';
+
+  el.innerHTML = `
+    <button class="btn btn-primary" onclick="startNewCoachConversation()" style="margin-bottom:16px;">+ Uusi keskustelu</button>
+    <div id="coach-conversation-list">${listHtml}</div>
+  `;
+}
+
+async function openCoachConversation(id) {
+  coachActiveConversationId = id;
+  const el = document.getElementById('valmentaja-content');
+  el.innerHTML = '<div class="skel-sub" style="height:60px"></div>';
+
+  const { data, error } = await sb.from('coach_messages')
+    .select('role,content,created_at')
+    .eq('conversation_id', id)
+    .order('created_at', { ascending: true });
+  if (error) {
+    console.error('openCoachConversation failed:', error.message);
+    el.innerHTML = '<div class="status err">Virhe ladattaessa keskustelua</div>';
+    return;
+  }
+
+  renderCoachThread(data || []);
+}
+
+function renderCoachThread(messages) {
+  const el = document.getElementById('valmentaja-content');
+  const bubbles = messages.map(m =>
+    `<div class="coach-bubble ${m.role}">${escapeHtml(m.content)}</div>`
+  ).join('');
+  el.innerHTML = `
+    <button class="btn" onclick="renderCoachPage()" style="background:none;color:var(--text2);margin-bottom:10px;">‹ Keskustelut</button>
+    <div class="coach-thread" id="coach-thread">${bubbles}</div>
+    <div class="coach-input-bar">
+      <input type="text" id="coach-input" placeholder="Kysy jotain..." onkeydown="if(event.key==='Enter') sendCoachMessage()">
+      <button onclick="sendCoachMessage()">Lähetä</button>
+    </div>
+  `;
+  const thread = document.getElementById('coach-thread');
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function startNewCoachConversation() {
+  coachActiveConversationId = crypto.randomUUID();
+  renderCoachThread([]);
+}
+
 async function loadKoonti() {
   document.getElementById('koonti-date').textContent =
     new Date().toLocaleDateString('fi-FI', { weekday: 'long', day: 'numeric', month: 'long' });
