@@ -4654,6 +4654,117 @@ function startNewCoachConversation() {
   renderCoachThread([]);
 }
 
+function getCoachSecret() {
+  return localStorage.getItem('coachSecret');
+}
+
+function promptCoachSecret(onSet) {
+  const existing = document.getElementById('coach-secret-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'coach-secret-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
+  modal.innerHTML = `
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Valmentajan salasana</div>
+    <div class="form-row"><label>Salasana</label><input type="password" id="coach-secret-input"></div>
+    <button class="btn btn-primary" id="coach-secret-save-btn">Tallenna</button>
+  `;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  document.getElementById('coach-secret-save-btn').onclick = () => {
+    const val = document.getElementById('coach-secret-input').value;
+    if (!val) return;
+    localStorage.setItem('coachSecret', val);
+    overlay.remove();
+    onSet();
+  };
+}
+
+async function sendCoachMessage() {
+  const input = document.getElementById('coach-input');
+  const text = input.value.trim();
+  if (!text || !coachActiveConversationId) return;
+
+  const secret = getCoachSecret();
+  if (!secret) {
+    promptCoachSecret(() => sendCoachMessage());
+    return;
+  }
+
+  input.value = '';
+  input.disabled = true;
+
+  const { error: insertErr } = await sb.from('coach_messages').insert({
+    conversation_id: coachActiveConversationId,
+    role: 'user',
+    content: text,
+  });
+  if (insertErr) {
+    console.error('sendCoachMessage insert failed:', insertErr.message);
+    input.disabled = false;
+    input.value = text;
+    return;
+  }
+
+  const thread = document.getElementById('coach-thread');
+  thread.insertAdjacentHTML('beforeend', `<div class="coach-bubble user">${escapeHtml(text)}</div>`);
+  thread.insertAdjacentHTML('beforeend', `<div class="coach-bubble assistant" id="coach-pending">…</div>`);
+  thread.scrollTop = thread.scrollHeight;
+
+  let res;
+  try {
+    res = await fetch(`${SB_URL}/functions/v1/coach-chat`, {
+      method: 'POST',
+      headers: {
+        'apikey': SB_KEY,
+        'Authorization': `Bearer ${SB_KEY}`,
+        'x-coach-secret': secret,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ conversation_id: coachActiveConversationId }),
+    });
+  } catch (err) {
+    console.error('coach-chat fetch failed:', err.message);
+    res = null;
+  }
+
+  const pendingEl = document.getElementById('coach-pending');
+  input.disabled = false;
+
+  if (!res || !res.ok) {
+    if (pendingEl) pendingEl.remove();
+    if (res && res.status === 401) {
+      localStorage.removeItem('coachSecret');
+      promptCoachSecret(() => {});
+    } else if (res && res.status === 429) {
+      thread.insertAdjacentHTML('beforeend', `<div class="status err">Päivän viestiraja täynnä, yritä huomenna.</div>`);
+    } else {
+      thread.insertAdjacentHTML('beforeend', `<div class="status err">Virhe, yritä uudelleen.</div>`);
+    }
+    thread.scrollTop = thread.scrollHeight;
+    return;
+  }
+
+  const data = await res.json();
+
+  await sb.from('coach_messages').insert({
+    conversation_id: coachActiveConversationId,
+    role: 'assistant',
+    content: data.reply,
+  });
+
+  if (pendingEl) {
+    pendingEl.textContent = data.reply;
+    pendingEl.removeAttribute('id');
+  }
+  thread.scrollTop = thread.scrollHeight;
+}
+
 async function loadKoonti() {
   document.getElementById('koonti-date').textContent =
     new Date().toLocaleDateString('fi-FI', { weekday: 'long', day: 'numeric', month: 'long' });
