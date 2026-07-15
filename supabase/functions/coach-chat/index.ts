@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { buildDataContext } from './context.ts';
 
 const SB_URL = Deno.env.get('SUPABASE_URL')!;
 const SB_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -102,9 +103,18 @@ Deno.serve(async (req) => {
 
   const messages = history.map((m) => ({ role: m.role, content: m.content }));
 
+  let dataContext: string;
+  try {
+    dataContext = await buildDataContext(sb);
+  } catch (err) {
+    console.error('buildDataContext failed:', err instanceof Error ? err.message : String(err));
+    dataContext = '(datan haku epäonnistui, vastaa ilman sitä ja mainitse tämä käyttäjälle)';
+  }
+  const fullSystemPrompt = `${COACH_SYSTEM_PROMPT}\n\n---\n\nKäyttäjän data:\n${dataContext}`;
+
   let reply: string;
   try {
-    reply = await callClaude(COACH_SYSTEM_PROMPT, messages);
+    reply = await callClaude(fullSystemPrompt, messages);
   } catch (err) {
     console.error('Claude call failed:', err instanceof Error ? err.message : String(err));
     return new Response('AI request failed', { status: 502, headers: CORS_HEADERS });
