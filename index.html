@@ -4607,8 +4607,34 @@ async function renderCoachPage() {
 
   el.innerHTML = `
     <button class="btn btn-primary" onclick="startNewCoachConversation()" style="margin-bottom:16px;">+ Uusi keskustelu</button>
+    <button class="btn" onclick="openCoachNotesModal()" style="margin-bottom:16px;background:var(--surface2);color:var(--text2);">Mitä valmentaja tietää sinusta →</button>
     <div id="coach-conversation-list">${listHtml}</div>
   `;
+}
+
+async function openCoachNotesModal() {
+  const { data, error } = await sb.from('coach_notes').select('notes').eq('id', 1).maybeSingle();
+  if (error) {
+    console.error('openCoachNotesModal failed:', error.message);
+    openMetricModal('Mitä valmentaja tietää sinusta', '<div class="status err">Virhe ladattaessa muistiinpanoja</div>');
+    return;
+  }
+  const notes = (data && data.notes) || '';
+  const body = notes
+    ? `<div style="white-space:pre-wrap;font-size:14px;color:var(--text2);line-height:1.5;">${escapeHtml(notes)}</div>
+       <button class="btn" onclick="clearCoachNotes()" style="margin-top:16px;background:var(--surface2);color:var(--red);width:100%;">Tyhjennä muistiinpanot</button>`
+    : `<div class="status">Ei vielä muistiinpanoja — keskustele valmentajan kanssa niin se alkaa oppia.</div>`;
+  openMetricModal('Mitä valmentaja tietää sinusta', body);
+}
+
+async function clearCoachNotes() {
+  if (!confirm('Tyhjennetäänkö valmentajan muistiinpanot?')) return;
+  const { error } = await sb.from('coach_notes').update({ notes: '', updated_at: new Date().toISOString() }).eq('id', 1);
+  if (error) {
+    console.error('clearCoachNotes failed:', error.message);
+    return;
+  }
+  openCoachNotesModal();
 }
 
 async function openCoachConversation(id) {
