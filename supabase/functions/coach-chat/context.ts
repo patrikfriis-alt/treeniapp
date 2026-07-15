@@ -78,6 +78,8 @@ export async function buildDataContext(sb: SB): Promise<string> {
 
   const lines: string[] = [];
 
+  lines.push(`Tämän päivän päivämäärä: ${todayIso}.`);
+
   if (profile) {
     lines.push(`Profiili: sukupuoli ${profile.sex ?? '—'}, pituus ${profile.height_cm ?? '—'} cm, syntymäaika ${profile.birth_date ?? '—'}.`);
   } else {
@@ -91,6 +93,7 @@ export async function buildDataContext(sb: SB): Promise<string> {
     sunday.setUTCDate(monday.getUTCDate() + 6);
     const from = isoDate(monday);
     const to = isoDate(sunday);
+    const weekLabel = w === 0 ? ' (tämä viikko, ei vielä päättynyt)' : w === 1 ? ' (viime viikko)' : '';
 
     const gymDays = new Set(
       (gymSetsAll || []).filter((r: any) => r.workout_date >= from && r.workout_date <= to).map((r: any) => r.workout_date),
@@ -105,7 +108,7 @@ export async function buildDataContext(sb: SB): Promise<string> {
     const weekWeight = weekWeights.length ? weekWeights[weekWeights.length - 1].weight_kg : null;
 
     lines.push(
-      `${from}–${to}: salikäyntejä ${gymDays}, aktiviteetteja ${weekActivities.length} (${totalKm.toFixed(1)} km), ` +
+      `${from}–${to}${weekLabel}: salikäyntejä ${gymDays}, aktiviteetteja ${weekActivities.length} (${totalKm.toFixed(1)} km), ` +
       `uni keskim. ${avgSleepH != null ? avgSleepH.toFixed(1) + 'h' : '—'}, paino ${weekWeight != null ? weekWeight + ' kg' : '—'}.`,
     );
   }
