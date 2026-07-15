@@ -2,32 +2,39 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 type SB = ReturnType<typeof createClient>;
 
-function isoDaysAgo(days: number): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
-function mondayOfWeeksAgo(weeksAgo: number): Date {
-  const now = new Date();
-  const dow = now.getUTCDay();
-  const diff = dow === 0 ? -6 : 1 - dow;
-  const monday = new Date(now);
-  monday.setUTCDate(now.getUTCDate() + diff - weeksAgo * 7);
-  monday.setUTCHours(0, 0, 0, 0);
-  return monday;
+function todayHelsinkiIso(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Helsinki' });
 }
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+function helsinkiTodayAsUtcMidnight(): Date {
+  return new Date(`${todayHelsinkiIso()}T00:00:00Z`);
+}
+
+function isoDaysAgo(days: number): string {
+  const d = helsinkiTodayAsUtcMidnight();
+  d.setUTCDate(d.getUTCDate() - days);
+  return isoDate(d);
+}
+
+function mondayOfWeeksAgo(weeksAgo: number): Date {
+  const today = helsinkiTodayAsUtcMidnight();
+  const dow = today.getUTCDay();
+  const diff = dow === 0 ? -6 : 1 - dow;
+  const monday = new Date(today);
+  monday.setUTCDate(today.getUTCDate() + diff - weeksAgo * 7);
+  return monday;
+}
+
 function calcAge(birthDateIso: string): number {
-  const today = new Date();
-  const birth = new Date(birthDateIso);
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
+  const today = helsinkiTodayAsUtcMidnight();
+  const birth = new Date(`${birthDateIso}T00:00:00Z`);
+  let age = today.getUTCFullYear() - birth.getUTCFullYear();
+  const monthDiff = today.getUTCMonth() - birth.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getUTCDate() < birth.getUTCDate())) age--;
   return age;
 }
 
@@ -45,7 +52,7 @@ function calcBmr(profile: any, weightRow: any): number | null {
 }
 
 export async function buildDataContext(sb: SB): Promise<string> {
-  const todayIso = isoDate(new Date());
+  const todayIso = todayHelsinkiIso();
   const twelveWeeksAgoIso = isoDate(mondayOfWeeksAgo(11));
   const threeWeeksAgoIso = isoDaysAgo(21);
   const ninetyDaysAgoIso = isoDaysAgo(89);
@@ -149,8 +156,9 @@ export async function buildDataContext(sb: SB): Promise<string> {
   (activeDaysAct || []).forEach((r: any) => activeDays.add(r.activity_date));
   (activeDaysGym || []).forEach((r: any) => activeDays.add(r.workout_date));
   let streak = 0;
+  const todayForStreak = helsinkiTodayAsUtcMidnight();
   for (let i = 0; i < 90; i++) {
-    const d = new Date();
+    const d = new Date(todayForStreak);
     d.setUTCDate(d.getUTCDate() - i);
     const dateStr = isoDate(d);
     if (activeDays.has(dateStr)) {
