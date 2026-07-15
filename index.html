@@ -4564,15 +4564,18 @@ function showPage(name, btn) {
 }
 
 let coachActiveConversationId = null;
+let coachRequestId = 0;
 
 async function renderCoachPage() {
   coachActiveConversationId = null;
+  const requestId = ++coachRequestId;
   const el = document.getElementById('valmentaja-content');
   el.innerHTML = '<div class="skel-sub" style="height:60px"></div>';
 
   const { data, error } = await sb.from('coach_messages')
     .select('conversation_id,role,content,created_at')
     .order('created_at', { ascending: true });
+  if (requestId !== coachRequestId) return;
   if (error) {
     console.error('renderCoachPage failed:', error.message);
     el.innerHTML = '<div class="status err">Virhe ladattaessa keskusteluja</div>';
@@ -4610,6 +4613,7 @@ async function renderCoachPage() {
 
 async function openCoachConversation(id) {
   coachActiveConversationId = id;
+  const requestId = ++coachRequestId;
   const el = document.getElementById('valmentaja-content');
   el.innerHTML = '<div class="skel-sub" style="height:60px"></div>';
 
@@ -4617,6 +4621,7 @@ async function openCoachConversation(id) {
     .select('role,content,created_at')
     .eq('conversation_id', id)
     .order('created_at', { ascending: true });
+  if (requestId !== coachRequestId) return;
   if (error) {
     console.error('openCoachConversation failed:', error.message);
     el.innerHTML = '<div class="status err">Virhe ladattaessa keskustelua</div>';
@@ -4645,6 +4650,7 @@ function renderCoachThread(messages) {
 
 function startNewCoachConversation() {
   coachActiveConversationId = crypto.randomUUID();
+  ++coachRequestId;
   renderCoachThread([]);
 }
 
