@@ -4629,7 +4629,7 @@ async function openCoachNotesModal() {
 
 async function clearCoachNotes() {
   if (!confirm('Tyhjennetäänkö valmentajan muistiinpanot?')) return;
-  const { error } = await sb.from('coach_notes').update({ notes: '', updated_at: new Date().toISOString() }).eq('id', 1);
+  const { error } = await sbWrite({ table: 'coach_notes', op: 'update', payload: { notes: '', updated_at: new Date().toISOString() }, eq: { column: 'id', value: 1 } });
   if (error) {
     console.error('clearCoachNotes failed:', error.message);
     return;
