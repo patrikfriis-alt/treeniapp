@@ -73,13 +73,21 @@ Deno.serve(async (req) => {
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
   const { count: todayCount, error: countError } = await sb
-    .from('coach_messages')
+    .from('coach_api_calls')
     .select('id', { count: 'exact', head: true })
-    .eq('role', 'user')
     .gte('created_at', todayStart.toISOString());
-  if (countError) console.error('daily count query failed:', countError.message);
-  if ((todayCount || 0) > DAILY_MESSAGE_LIMIT) {
+  if (countError) {
+    console.error('daily count query failed:', countError.message);
+    return new Response('Rate limit check failed', { status: 500, headers: CORS_HEADERS });
+  }
+  if ((todayCount || 0) >= DAILY_MESSAGE_LIMIT) {
     return new Response('Daily message limit reached', { status: 429, headers: CORS_HEADERS });
+  }
+
+  const { error: trackError } = await sb.from('coach_api_calls').insert({});
+  if (trackError) {
+    console.error('failed to record api call:', trackError.message);
+    return new Response('Rate limit check failed', { status: 500, headers: CORS_HEADERS });
   }
 
   const { data: history, error: historyError } = await sb
