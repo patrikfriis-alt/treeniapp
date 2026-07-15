@@ -69,6 +69,7 @@ export async function buildDataContext(sb: SB): Promise<string> {
     { data: activeDaysGym },
     { data: todaySessions },
     { data: appSettings },
+    { data: notesRow },
   ] = await Promise.all([
     sb.from('user_profile').select('*').eq('id', 1).maybeSingle(),
     sb.from('body_metrics').select('weight_kg,fat_pct,measured_at').gte('measured_at', twelveWeeksAgoIso).order('measured_at', { ascending: true }),
@@ -81,9 +82,14 @@ export async function buildDataContext(sb: SB): Promise<string> {
     sb.from('workout_sets').select('workout_date').gte('workout_date', ninetyDaysAgoIso).lte('workout_date', todayIso),
     sb.from('workout_sessions').select('calories').eq('workout_date', todayIso),
     sb.from('app_settings').select('calorie_correction').eq('id', 1).maybeSingle(),
+    sb.from('coach_notes').select('notes').eq('id', 1).maybeSingle(),
   ]);
 
   const lines: string[] = [];
+
+  if (notesRow && (notesRow as any).notes) {
+    lines.push(`Muistiinpanot käyttäjästä (aiemmista keskusteluista): ${(notesRow as any).notes}`);
+  }
 
   lines.push(`Tämän päivän päivämäärä: ${todayIso}.`);
 
