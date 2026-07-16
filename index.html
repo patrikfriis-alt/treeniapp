@@ -1256,6 +1256,9 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <button onclick="openCalorieSettingsModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="watch" style="display:inline-flex"></span> Kalorikerroin
   </button>
+  <button onclick="openStepsGoalModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
+    <span data-icon="steps" style="display:inline-flex"></span> Askeltavoite
+  </button>
   <button onclick="openProfileModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="scale" style="display:inline-flex"></span> Profiili
   </button>
@@ -4569,6 +4572,65 @@ async function openCalorieSettingsModal() {
     }
   };
   document.getElementById('calorie-settings-cancel-btn').onclick = () => overlay.remove();
+}
+
+async function openStepsGoalModal() {
+  closeSidebar();
+  const settings = (await loadAppSettings()) || {};
+  const currentGoal = settings.daily_steps_goal || '';
+
+  const existing = document.getElementById('steps-goal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'steps-goal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
+
+  modal.innerHTML = `
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Askeltavoite</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5;">Päivittäinen askeltavoite. Jätä tyhjäksi jos et halua seurata tavoitetta.</div>
+    <div class="form-row"><label>Tavoite (askelta/pv)</label><input type="text" inputmode="numeric" id="steps-goal-input" value="${currentGoal}"></div>
+    <button class="btn btn-primary" id="steps-goal-save-btn">Tallenna</button>
+    <button class="btn" id="steps-goal-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Sulje</button>
+    <div class="status" id="steps-goal-status"></div>
+  `;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  document.getElementById('steps-goal-save-btn').onclick = async () => {
+    const saveBtn = document.getElementById('steps-goal-save-btn');
+    const raw = document.getElementById('steps-goal-input').value.trim();
+    const goal = raw === '' ? null : parseInt(raw, 10);
+    if (raw !== '' && (goal === null || isNaN(goal) || goal <= 0)) {
+      showStatus('steps-goal-status', 'Syötä positiivinen kokonaisluku tai jätä tyhjäksi', true);
+      return;
+    }
+    saveBtn.disabled = true;
+    try {
+      await saveStepsGoal(goal);
+      appSettings = null;
+      overlay.remove();
+      if (document.getElementById('page-koonti').classList.contains('active')) loadKoonti();
+    } catch (err) {
+      showStatus('steps-goal-status', 'Tallennus epäonnistui', true);
+      saveBtn.disabled = false;
+    }
+  };
+  document.getElementById('steps-goal-cancel-btn').onclick = () => overlay.remove();
+}
+
+async function saveStepsGoal(goal) {
+  const { error } = await sbWrite({
+    table: 'app_settings',
+    op: 'upsert',
+    payload: { id: 1, daily_steps_goal: goal, updated_at: new Date().toISOString() },
+  });
+  if (error) { console.error('saveStepsGoal failed:', error.message); throw error; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
