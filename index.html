@@ -2471,7 +2471,7 @@ async function renderSession() {
   </div>`;
 
   sess.ex.forEach((ex, ei) => {
-    const ed   = getED(wOff, aDay, st, ei);
+    let ed     = getED(wOff, aDay, st, ei);
     const prev = prevCache[ex.n];
 
     // PR-tarkistus
@@ -2485,6 +2485,30 @@ async function renderSession() {
       return (parseFloat(sd.kg) || null) !== null || (parseInt(sd.reps) || null) !== null;
     }).length;
     const progPct = ex.s > 0 ? Math.round(doneCount / ex.s * 100) : 0;
+
+    // Progressioehdotus: automaattinen esitäyttö kun liike avataan päivälle ensimmäistä kertaa.
+    // "Puhtaasti suoritettu" = toistomäärä ei laskenut sarjojen aikana viime kerralla -> +2.5% (pyöristys 2.5kg:aan).
+    // Muuten sama paino/toistot kuin viimeksi. Sama started/!done-ehto kuin manuaalisella "Käytä edell."-napilla.
+    if (prev && started && !done && doneCount === 0) {
+      const repsList = prev.map(s => s.reps).filter(r => r != null);
+      const cleanly = repsList.length > 0 && repsList.every(r => r >= repsList[0]);
+      const k = eKey(wOff, aDay, st, ei);
+      if (!LD[k]) LD[k] = { sets: [] };
+      let anyApplied = false;
+      for (let s = 0; s < ex.s; s++) {
+        const prevSet = getPrevSet(ex.n, s);
+        if (!prevSet || prevSet.weight_kg == null) continue;
+        const suggestedKg = cleanly
+          ? Math.round((prevSet.weight_kg * 1.025) / 2.5) * 2.5
+          : prevSet.weight_kg;
+        if (!LD[k].sets[s]) LD[k].sets[s] = {};
+        LD[k].sets[s].kg   = String(suggestedKg);
+        LD[k].sets[s].reps = prevSet.reps != null ? String(prevSet.reps) : '';
+        scheduleSyncSet(wOff, aDay, ei, s);
+        anyApplied = true;
+      }
+      if (anyApplied) { saveLD(); ed = LD[k]; }
+    }
 
     // Prefill-nappi
     const prefillBtn = prev && started && !done
