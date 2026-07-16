@@ -97,10 +97,10 @@ Askeleet eivät liity yksittäiseen treeniin, joten tämä tarvitsee toisen, eri
 
 ### Hae päivän askeleet
 
-1. Lisää toiminto **Find Health Samples** (Etsi terveysnäytteet)
+1. Lisää toiminto **Etsi terveysnäytteet** (Find Health Samples)
 2. Aseta: Näytetyyppi **Steps** (Askeleet), Ajankohta **Tänään**, yhdistelmä **Summa** (Sum)
 3. Lisää **Aseta muuttuja** -toiminto tuloksen tallentamiseksi muuttujaan `StepCount`
-4. Lisää **Format Date** -toiminto **Nykyiselle päivämäärälle**, muodossa `yyyy-MM-dd`, tallenna muuttujaan `Today`
+4. Lisää **Muotoile päivämäärä** -toiminto **Nykyiselle päivämäärälle**, muodossa `yyyy-MM-dd`, tallenna muuttujaan `Today`
 
 ### Lähetä Supabaseen
 
