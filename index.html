@@ -952,6 +952,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
       <div class="koonti-card-label">Uni</div>
       <div class="koonti-card-sub skel-sub" id="kc-uni-sub">&nbsp;</div>
     </div>
+    <div class="koonti-card" id="kc-steps" onclick="openStepsModal()">
+      <span class="koonti-card-icon" data-icon="steps" data-icon-color="var(--green)" data-icon-bg="var(--green-bg)"></span>
+      <div class="koonti-card-label">Askeleet</div>
+      <div class="koonti-card-sub skel-sub" id="kc-steps-sub">&nbsp;</div>
+      <div class="koonti-card-goal" id="kc-steps-goal" style="display:none"></div>
+    </div>
   </div>
 
   <div class="koonti-cards koonti-cards--wide">
@@ -1285,6 +1291,7 @@ const ICONS = {
   upload:    '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>',
   bell:      '<path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/>',
   chat:      '<path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>',
+  steps:     '<ellipse cx="8" cy="7" rx="2.5" ry="3.5"/><ellipse cx="16" cy="16" rx="2.5" ry="3.5"/><circle cx="8" cy="3" r="1"/><circle cx="16" cy="12" r="1"/>',
 };
 
 function svgIcon(name, color, size) {
@@ -4484,6 +4491,38 @@ function openMonthModal() {
   openMetricModal('Kuukausi', body);
 }
 
+async function openStepsModal() {
+  const weekStartIso = wStart(0).iso;
+  const todayIso = localIso(new Date());
+  const { data, error } = await sb.from('step_data')
+    .select('step_date,steps')
+    .gte('step_date', weekStartIso)
+    .order('step_date', { ascending: false });
+  if (error) {
+    console.error('openStepsModal failed:', error.message);
+    openMetricModal('Askeleet', '<div class="status err">Virhe ladattaessa askeltietoja</div>');
+    return;
+  }
+  const rows = data || [];
+  const today = rows.find(r => r.step_date === todayIso);
+  const avg = rows.length ? rows.reduce((s, r) => s + r.steps, 0) / rows.length : 0;
+
+  if (!appSettings) appSettings = await loadAppSettings();
+  const goal = appSettings && appSettings.daily_steps_goal;
+
+  let body = `
+    <div class="metric-modal-row"><span>Tänään</span><span class="val">${today ? today.steps.toLocaleString('fi-FI') : '—'}</span></div>
+    <div class="metric-modal-row"><span>Viikon keskiarvo</span><span class="val">${rows.length ? Math.round(avg).toLocaleString('fi-FI') : '—'}</span></div>
+  `;
+  if (goal) {
+    body += `<div class="metric-modal-row"><span>Tavoite</span><span class="val">${goal.toLocaleString('fi-FI')}</span></div>`;
+  }
+  if (!rows.length) {
+    body += `<div class="status" style="margin-top:8px;">Ei kirjauksia vielä tällä viikolla</div>`;
+  }
+  openMetricModal('Askeleet', body);
+}
+
 async function openCalorieSettingsModal() {
   closeSidebar();
   const settings = (await loadAppSettings()) || { calorie_correction: 0.72 };
@@ -4896,6 +4935,34 @@ async function loadKoonti() {
     kcUniSub.textContent = `${(sleepRows[0].duration_min / 60).toFixed(1)}h · ka ${(avg / 60).toFixed(1)}h`;
   } else {
     kcUniSub.textContent = 'Ei kirjauksia vielä';
+  }
+
+  const weekStartIso = wStart(0).iso;
+  const { data: stepsWeekRows } = await sb.from('step_data')
+    .select('step_date,steps')
+    .gte('step_date', weekStartIso)
+    .order('step_date', { ascending: false });
+  const kcStepsCard = document.getElementById('kc-steps');
+  const kcStepsSub = document.getElementById('kc-steps-sub');
+  kcStepsSub.classList.remove('skel-sub');
+  const todaySteps = (stepsWeekRows || []).find(r => r.step_date === todayIso);
+  kcStepsCard.classList.toggle('koonti-card--done', !!todaySteps);
+  if (stepsWeekRows && stepsWeekRows.length) {
+    const avgSteps = stepsWeekRows.reduce((s, r) => s + r.steps, 0) / stepsWeekRows.length;
+    kcStepsSub.textContent = todaySteps
+      ? `${todaySteps.steps.toLocaleString('fi-FI')} · ka ${Math.round(avgSteps).toLocaleString('fi-FI')}`
+      : `Ei tänään · ka ${Math.round(avgSteps).toLocaleString('fi-FI')}`;
+  } else {
+    kcStepsSub.textContent = 'Ei kirjauksia vielä';
+  }
+  if (!appSettings) appSettings = await loadAppSettings();
+  const kcStepsGoal = document.getElementById('kc-steps-goal');
+  const stepsGoal = appSettings && appSettings.daily_steps_goal;
+  if (stepsGoal && todaySteps) {
+    kcStepsGoal.textContent = `${todaySteps.steps.toLocaleString('fi-FI')}/${stepsGoal.toLocaleString('fi-FI')}`;
+    kcStepsGoal.style.display = '';
+  } else {
+    kcStepsGoal.style.display = 'none';
   }
 
   const entries = await loadFoodDayEntries(todayIso);
