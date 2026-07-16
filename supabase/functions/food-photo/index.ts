@@ -2,7 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SB_URL = Deno.env.get('SUPABASE_URL')!;
 const SB_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const COACH_SECRET = Deno.env.get('COACH_SECRET')!;
+const COACH_SECRET = Deno.env.get('COACH_SECRET')!; // shared AI-feature secret, same value gates coach-chat
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const DAILY_PHOTO_LIMIT = 20;
 
@@ -23,7 +23,7 @@ async function callClaudeVision(base64Image: string): Promise<string> {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-5',
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: FOOD_PHOTO_SYSTEM_PROMPT,
       messages: [{
         role: 'user',
@@ -45,13 +45,14 @@ async function callClaudeVision(base64Image: string): Promise<string> {
 
 function parseComponents(raw: string): { name: string; grams: number }[] {
   try {
-    const cleaned = raw.trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '');
+    const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) return [];
     return parsed
-      .filter((item: any) => item && typeof item.name === 'string' && typeof item.grams === 'number')
-      .map((item: any) => ({ name: item.name, grams: item.grams }));
-  } catch {
+      .filter((item: any) => item && typeof item.name === 'string' && Number.isFinite(Number(item.grams)))
+      .map((item: any) => ({ name: item.name, grams: Number(item.grams) }));
+  } catch (err) {
+    console.error('parseComponents failed:', err instanceof Error ? err.message : String(err), '| raw:', raw);
     return [];
   }
 }
