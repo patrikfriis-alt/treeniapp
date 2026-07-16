@@ -4508,13 +4508,13 @@ async function openStepsModal() {
   const avg = rows.length ? rows.reduce((s, r) => s + r.steps, 0) / rows.length : 0;
 
   if (!appSettings) appSettings = await loadAppSettings();
-  const goal = appSettings && appSettings.daily_steps_goal;
+  const goal = appSettings && appSettings.daily_steps_goal != null ? appSettings.daily_steps_goal : null;
 
   let body = `
     <div class="metric-modal-row"><span>Tänään</span><span class="val">${today ? today.steps.toLocaleString('fi-FI') : '—'}</span></div>
     <div class="metric-modal-row"><span>Viikon keskiarvo</span><span class="val">${rows.length ? Math.round(avg).toLocaleString('fi-FI') : '—'}</span></div>
   `;
-  if (goal) {
+  if (goal != null) {
     body += `<div class="metric-modal-row"><span>Tavoite</span><span class="val">${goal.toLocaleString('fi-FI')}</span></div>`;
   }
   if (!rows.length) {
@@ -4957,8 +4957,8 @@ async function loadKoonti() {
   }
   if (!appSettings) appSettings = await loadAppSettings();
   const kcStepsGoal = document.getElementById('kc-steps-goal');
-  const stepsGoal = appSettings && appSettings.daily_steps_goal;
-  if (stepsGoal && todaySteps) {
+  const stepsGoal = appSettings && appSettings.daily_steps_goal != null ? appSettings.daily_steps_goal : null;
+  if (stepsGoal != null && todaySteps) {
     kcStepsGoal.textContent = `${todaySteps.steps.toLocaleString('fi-FI')}/${stepsGoal.toLocaleString('fi-FI')}`;
     kcStepsGoal.style.display = '';
   } else {
