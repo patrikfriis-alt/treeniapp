@@ -70,6 +70,7 @@ export async function buildDataContext(sb: SB): Promise<string> {
     { data: todaySessions },
     { data: appSettings },
     { data: notesRow },
+    { data: stepsAll },
   ] = await Promise.all([
     sb.from('user_profile').select('*').eq('id', 1).maybeSingle(),
     sb.from('body_metrics').select('weight_kg,fat_pct,measured_at').gte('measured_at', twelveWeeksAgoIso).order('measured_at', { ascending: true }),
@@ -83,6 +84,7 @@ export async function buildDataContext(sb: SB): Promise<string> {
     sb.from('workout_sessions').select('calories').eq('workout_date', todayIso),
     sb.from('app_settings').select('calorie_correction').eq('id', 1).maybeSingle(),
     sb.from('coach_notes').select('notes').eq('id', 1).maybeSingle(),
+    sb.from('step_data').select('step_date,steps').gte('step_date', twelveWeeksAgoIso).lte('step_date', todayIso),
   ]);
 
   const lines: string[] = [];
@@ -119,10 +121,15 @@ export async function buildDataContext(sb: SB): Promise<string> {
       : null;
     const weekWeights = (weightRows || []).filter((r: any) => r.measured_at >= from && r.measured_at <= to);
     const weekWeight = weekWeights.length ? weekWeights[weekWeights.length - 1].weight_kg : null;
+    const weekSteps = (stepsAll || []).filter((r: any) => r.step_date >= from && r.step_date <= to);
+    const avgSteps = weekSteps.length
+      ? Math.round(weekSteps.reduce((s: number, r: any) => s + r.steps, 0) / weekSteps.length)
+      : null;
 
     lines.push(
       `${from}–${to}${weekLabel}: salikäyntejä ${gymDays}, aktiviteetteja ${weekActivities.length} (${totalKm.toFixed(1)} km), ` +
-      `uni keskim. ${avgSleepH != null ? avgSleepH.toFixed(1) + 'h' : '—'}, paino ${weekWeight != null ? weekWeight + ' kg' : '—'}.`,
+      `uni keskim. ${avgSleepH != null ? avgSleepH.toFixed(1) + 'h' : '—'}, paino ${weekWeight != null ? weekWeight + ' kg' : '—'}, ` +
+      `askeleet keskim. ${avgSteps != null ? avgSteps + '/pv' : '—'}.`,
     );
   }
 
