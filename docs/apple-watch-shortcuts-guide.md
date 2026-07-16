@@ -104,7 +104,7 @@ Askeleet eivät liity yksittäiseen treeniin, joten tämä tarvitsee toisen, eri
 
 ### Lähetä Supabaseen
 
-**Get Contents of URL:**
+**Hae sisältö URL:sta** (Get Contents of URL):
 - Metodi: `POST`
 - URL: `https://dodrzzgbdlucjbkmxbjn.supabase.co/rest/v1/step_data?on_conflict=step_date`
 - Headerit:
