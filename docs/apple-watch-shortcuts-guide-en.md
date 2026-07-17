@@ -142,8 +142,8 @@ Each sleep stage (Core/Deep/REM/Awake) is queried separately, since each needs i
    - One filtered "Sleep Analysis is Asleep (REM)"
    - One filtered "Sleep Analysis is Asleep (Core)"
    - One filtered "Sleep Analysis is Awake"
-2. For the first three (Deep/REM/Core): add a **Calculate Statistics** action after each, operation **Sum** on Duration → store in variables `DeepMin`, `RemMin`, `CoreMin`
-3. For the fourth (Awake): add a **Calculate Statistics** action, operation **Count** → store in variable `Awakenings`
+2. For the first three (Deep/REM/Core): add a **Calculate Statistics** action directly below its own **Find Health Samples** action (don't add all four queries first and the statistics afterward — since there are four identically-named actions, Shortcuts can otherwise bind the statistic to the wrong query), operation **Sum** on Duration → store in variables `DeepMin`, `RemMin`, `CoreMin`. When adding each Calculate Statistics action, check the Magic Variable picker to confirm it actually references the Find Health Samples result directly above it (e.g. "Find Health Samples Result 2"), not some other query by default.
+3. For the fourth (Awake): add a **Calculate Statistics** action the same way, directly below its own query, operation **Count** → store in variable `Awakenings`
 4. Add a **Set Variable** action computing total duration: `DeepMin + RemMin + CoreMin` → store in `TotalMin`
 5. Add a **Format Date** action for **Current Date**, formatted as `yyyy-MM-dd`, stored as `Today`
 
