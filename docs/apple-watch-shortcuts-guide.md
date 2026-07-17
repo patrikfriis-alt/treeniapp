@@ -143,7 +143,7 @@ Unen eri vaiheet (Core/Deep/REM/Awake) haetaan erikseen, koska kukin tarvitaan o
 2. Kolmelle ensimmäiselle (Syvä/REM/Kevyt): lisää **Calculate Statistics** -toiminto kunkin jälkeen, operaationa **Summa** (Sum) kestosta (Duration) → tallenna muuttujiin `DeepMin`, `RemMin`, `CoreMin`
 3. Neljännelle (Hereillä): lisää **Calculate Statistics** -toiminto, operaationa **Lukumäärä** (Count) → tallenna muuttujaan `Awakenings`
 4. Lisää **Aseta muuttuja** -toiminto laskemaan kokonaiskesto: `DeepMin + RemMin + CoreMin` → tallenna muuttujaan `TotalMin`
-5. Lisää **Format Date** -toiminto **Nykyiselle päivämäärälle**, muodossa `yyyy-MM-dd`, tallenna muuttujaan `Today`
+5. Lisää **Muotoile päivämäärä** -toiminto **Nykyiselle päivämäärälle**, muodossa `yyyy-MM-dd`, tallenna muuttujaan `Today`
 
 ### Lähetä Supabaseen
 
