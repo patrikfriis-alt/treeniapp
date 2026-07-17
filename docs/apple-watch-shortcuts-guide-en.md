@@ -86,6 +86,7 @@ Tap **"Run"** on the automation manually, without doing a real workout — if yo
 - **Gym calories don't update:** make sure you've marked that day's session as "done" in Treeniapp before or shortly after ending the Watch workout — the `workout_sessions` row must already exist for the `PATCH` to find it.
 - **Save fails with an error referencing `avg_heart_rate`:** make sure you used the **Round Number** action on the `AvgHR` variable in step 3 — HealthKit's decimal value can be rejected if the database column doesn't accept decimals.
 - **Steps never appear:** check that the migration file `supabase/migrations/20260715_step_data.sql` has been run, and that Shortcuts has permission to read Steps in the Health app's privacy settings (Health app → profile icon → Apps → Shortcuts → Steps must be enabled).
+- **Sleep fields stay empty (deep/REM/awakenings never populate):** check you used the correct Sleep Analysis filter in each **Find Health Samples** action, and that the Watch actually recorded stage-level data (older Watch models or watchOS versions may only record a single combined "Asleep" value with no stage breakdown — in that case the stage-specific fields can't be filled and a sleep score can't be computed).
 
 ## 7. Step Count Sync
 
@@ -122,3 +123,45 @@ Steps aren't tied to a workout, so this needs a second, separate personal automa
 ### Test it
 
 Tap **"Run"** on the automation manually — confirm a row for today appears in the `step_data` table via the Supabase dashboard (Table Editor), and that running it again updates the same row instead of creating a new one.
+
+## 8. Sleep Sync
+
+Sleep isn't a discrete event like a workout, or a simple growing number like steps — it's a series of timestamped stage segments (light/deep/REM/awake) the Watch records overnight. This automation runs once a day in the morning, by which point the previous night's data has fully synced.
+
+### Create the automation
+
+1. Open **Shortcuts** → **Automation** tab → **+** (Create Personal Automation)
+2. Choose trigger: **Time of Day** → pick a morning time (e.g. 9:00) → set **Run Immediately**
+
+### Read the night's sleep stages
+
+Each sleep stage (Core/Deep/REM/Awake) is queried separately, since each needs its own sum or count.
+
+1. Add four **Find Health Samples** actions, each with Sample Type **Sleep Analysis**, Date **Last 24 Hours** (also try **Yesterday** if "Last 24 Hours" doesn't land on the right night):
+   - One filtered "Sleep Analysis is Asleep (Deep)"
+   - One filtered "Sleep Analysis is Asleep (REM)"
+   - One filtered "Sleep Analysis is Asleep (Core)"
+   - One filtered "Sleep Analysis is Awake"
+2. For the first three (Deep/REM/Core): add a **Calculate Statistics** action after each, operation **Sum** on Duration → store in variables `DeepMin`, `RemMin`, `CoreMin`
+3. For the fourth (Awake): add a **Calculate Statistics** action, operation **Count** → store in variable `Awakenings`
+4. Add a **Set Variable** action computing total duration: `DeepMin + RemMin + CoreMin` → store in `TotalMin`
+5. Add a **Format Date** action for **Current Date**, formatted as `yyyy-MM-dd`, stored as `Today`
+
+### Push it to Supabase
+
+**Get Contents of URL:**
+- Method: `POST`
+- URL: `https://dodrzzgbdlucjbkmxbjn.supabase.co/rest/v1/sleep_data?on_conflict=sleep_date`
+- Headers:
+  - `apikey`: `<anon key from index.html>`
+  - `Authorization`: `Bearer <same anon key>`
+  - `Content-Type`: `application/json`
+  - `Prefer`: `resolution=merge-duplicates`
+- Request body (JSON):
+  ```json
+  { "sleep_date": "[Today]", "duration_min": [TotalMin], "deep_sleep_min": [DeepMin], "rem_sleep_min": [RemMin], "awakenings": [Awakenings] }
+  ```
+
+### Test it
+
+Tap **"Run"** on the automation manually — confirm a row for the previous night appears in the `sleep_data` table with all four fields filled in. Exact action names (especially the filter options) may vary slightly by iOS version from what's described here — if you can't find these exact labels, check what filter options **Find Health Samples** actually offers for the Sleep Analysis sample type and adjust accordingly.

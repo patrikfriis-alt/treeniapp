@@ -84,6 +84,7 @@ Paina Shortcutsin automaation kohdalla **"Kokeile"** (Run) manuaalisesti ilman e
 - Jos sali-kalorit eivät päivity: varmista että olet merkinnyt kyseisen päivän session "tehdyksi" Treeniapista ennen tai pian Watch-treenin jälkeen — `workout_sessions`-rivi täytyy olla olemassa jotta `PATCH` löytää sen.
 - Jos tallennus epäonnistuu virheellä joka viittaa `avg_heart_rate`-kenttään: varmista että käytit **Pyöristä numero** -toimintoa `AvgHR`-muuttujalle vaiheessa 3 — HealthKitin desimaaliluku voi hylkääntyä jos tietokannan sarake ei hyväksy desimaaleja.
 - Jos askeleet eivät koskaan ilmesty: tarkista että migraatiotiedosto `supabase/migrations/20260715_step_data.sql` on ajettu, ja että Shortcutsilla on lupa lukea askeleita Health-sovelluksen tietosuoja-asetuksista (Health-sovellus → profiilikuvake → Sovellukset → Shortcuts → Askeleet-lupa päällä).
+- Jos unen kentät eivät täyty (syvä uni / REM / heräilyt jäävät tyhjiksi): tarkista että käytit oikeaa Uni-analyysi-suodatinta kussakin **Etsi terveysnäytteet** -toiminnossa, ja että Watch on tallentanut vaihekohtaista dataa (vanhemmat Watch-mallit tai watchOS-versiot saattavat tallentaa vain yhden yhtenäisen "Nukkuu"-arvon ilman vaihejakoa — tässä tapauksessa vaihekohtaisia kenttiä ei voi täyttää eikä unipisteitä voida laskea).
 
 ## 7. Askelmäärän synkkaus
 
@@ -120,3 +121,45 @@ Askeleet eivät liity yksittäiseen treeniin, joten tämä tarvitsee toisen, eri
 ### Testaa
 
 Paina automaation kohdalla **"Kokeile"** (Run) manuaalisesti — tarkista että tälle päivälle ilmestyy rivi `step_data`-tauluun Supabasen dashboardista (Table Editor), ja että uudelleenajo päivittää saman rivin sen sijaan että loisi uuden.
+
+## 8. Unen synkkaus
+
+Uni ei ole treenin kaltainen yksittäinen tapahtuma eikä askelten kaltainen jatkuvasti kasvava luku — se on aikaleimattuja vaihejaksoja (kevyt/syvä/REM/hereillä) joita Watch tallentaa yön aikana. Tämä automaatio ajetaan kerran päivässä aamulla, jolloin edellisen yön data on jo kokonaan synkronoitunut.
+
+### Luo automaatio
+
+1. Avaa **Shortcuts** → **Automaatio**-välilehti → **+** (Luo henkilökohtainen automaatio)
+2. Valitse laukaisin: **Kellonaika** (Time of Day) → valitse aamun ajankohta (esim. 9:00) → aseta **Suorita heti**
+
+### Hae yön unijaksot
+
+Unen eri vaiheet (Core/Deep/REM/Awake) haetaan erikseen, koska kukin tarvitaan omana summanaan tai lukumääränään.
+
+1. Lisää neljä **Etsi terveysnäytteet** (Find Health Samples) -toimintoa, kukin näytetyypillä **Sleep Analysis** (Uni-analyysi), ajankohtana **Viimeiset 24 tuntia** (kokeile myös **Eilen** jos "Viimeiset 24 tuntia" ei osu oikeaan yöhön):
+   - Yksi suodattimella (Filter) "Uni-analyysi on Nukkuu (Syvä)" ("Sleep Analysis is Asleep (Deep)")
+   - Yksi suodattimella "Uni-analyysi on Nukkuu (REM)" ("Sleep Analysis is Asleep (REM)")
+   - Yksi suodattimella "Uni-analyysi on Nukkuu (Kevyt)" ("Sleep Analysis is Asleep (Core)")
+   - Yksi suodattimella "Uni-analyysi on Hereillä" ("Sleep Analysis is Awake")
+2. Kolmelle ensimmäiselle (Syvä/REM/Kevyt): lisää **Calculate Statistics** -toiminto kunkin jälkeen, operaationa **Summa** (Sum) kestosta (Duration) → tallenna muuttujiin `DeepMin`, `RemMin`, `CoreMin`
+3. Neljännelle (Hereillä): lisää **Calculate Statistics** -toiminto, operaationa **Lukumäärä** (Count) → tallenna muuttujaan `Awakenings`
+4. Lisää **Aseta muuttuja** -toiminto laskemaan kokonaiskesto: `DeepMin + RemMin + CoreMin` → tallenna muuttujaan `TotalMin`
+5. Lisää **Format Date** -toiminto **Nykyiselle päivämäärälle**, muodossa `yyyy-MM-dd`, tallenna muuttujaan `Today`
+
+### Lähetä Supabaseen
+
+**Hae sisältö URL:sta** (Get Contents of URL):
+- Metodi: `POST`
+- URL: `https://dodrzzgbdlucjbkmxbjn.supabase.co/rest/v1/sleep_data?on_conflict=sleep_date`
+- Headerit:
+  - `apikey`: `<anon-avain index.html:sta>`
+  - `Authorization`: `Bearer <sama anon-avain>`
+  - `Content-Type`: `application/json`
+  - `Prefer`: `resolution=merge-duplicates`
+- Runko (JSON):
+  ```json
+  { "sleep_date": "[Today]", "duration_min": [TotalMin], "deep_sleep_min": [DeepMin], "rem_sleep_min": [RemMin], "awakenings": [Awakenings] }
+  ```
+
+### Testaa
+
+Paina automaation kohdalla **"Kokeile"** (Run) manuaalisesti — tarkista että edelliselle yölle ilmestyy rivi `sleep_data`-tauluun kaikilla neljällä kentällä täytettynä. Tarkat toimintonimet (erityisesti suodatinvaihtoehdot) saattavat poiketa hieman tästä ohjeesta iOS-version mukaan — jos et löydä täsmälleen näitä nimiä, katso mitä suodatinvaihtoehtoja **Etsi terveysnäytteet** todella tarjoaa Uni-analyysi-näytetyypille ja säädä vastaavasti.
