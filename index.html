@@ -1762,6 +1762,20 @@ function setStatus(sd, prev) {
   return 'worse';
 }
 
+function calcSleepScore(row) {
+  if (!row) return null;
+  const { duration_min, deep_sleep_min, rem_sleep_min, awakenings } = row;
+  if (duration_min == null || deep_sleep_min == null || rem_sleep_min == null || awakenings == null) return null;
+  if (duration_min <= 0) return null;
+  const durationScore = Math.min(40, Math.round(duration_min / 480 * 40));
+  const deepPct = deep_sleep_min / duration_min * 100;
+  const deepScore = Math.max(0, Math.min(25, 25 - Math.abs(deepPct - 18) * 1.5));
+  const remPct = rem_sleep_min / duration_min * 100;
+  const remScore = Math.max(0, Math.min(20, 20 - Math.abs(remPct - 22.5) * 1.2));
+  const awakeningsScore = Math.max(0, 15 - awakenings * 5);
+  return Math.round(durationScore + deepScore + remScore + awakeningsScore);
+}
+
 function calc1RM(kg, reps) {
   if (!kg || !reps || reps < 1) return null;
   if (reps === 1) return kg;
@@ -3197,7 +3211,10 @@ async function loadSleep() {
   const heroSleepSubEl = document.getElementById('hero-sleep-sub');
   const deepEl         = document.getElementById('hero-sleep-deep');
   if (data && data[0]) {
-    if (heroSleepSubEl) heroSleepSubEl.textContent = data[0].sleep_date || '';
+    if (heroSleepSubEl) {
+      const score = calcSleepScore(data[0]);
+      heroSleepSubEl.textContent = score != null ? `Unipisteet: ${score}` : 'Unipisteet: —';
+    }
     if (deepEl)         deepEl.textContent          = data[0].deep_sleep_min ? data[0].deep_sleep_min + ' min' : '—';
   }
   if (data && data.length) {
@@ -5265,7 +5282,7 @@ async function loadKoonti() {
   }
 
   const { data: sleepRows } = await sb.from('sleep_data')
-    .select('duration_min,sleep_date')
+    .select('duration_min,sleep_date,deep_sleep_min,rem_sleep_min,awakenings')
     .order('sleep_date', { ascending: false }).limit(7);
   const kcUniCard = document.getElementById('kc-uni');
   const kcUniSub = document.getElementById('kc-uni-sub');
@@ -5275,7 +5292,8 @@ async function loadKoonti() {
   if (sleepRows && sleepRows[0] && sleepRows[0].duration_min !== null) {
     const withDur = sleepRows.filter(r => r.duration_min !== null);
     const avg = withDur.length ? withDur.reduce((s, r) => s + r.duration_min, 0) / withDur.length : 0;
-    kcUniSub.textContent = `${(sleepRows[0].duration_min / 60).toFixed(1)}h · ka ${(avg / 60).toFixed(1)}h`;
+    const score = calcSleepScore(sleepRows[0]);
+    kcUniSub.textContent = `${(sleepRows[0].duration_min / 60).toFixed(1)}h · ${score != null ? score + 'p' : 'ka ' + (avg / 60).toFixed(1) + 'h'}`;
   } else {
     kcUniSub.textContent = 'Ei kirjauksia vielä';
   }
