@@ -38,6 +38,19 @@ function calcAge(birthDateIso: string): number {
   return age;
 }
 
+function calcSleepScore(row: { duration_min: number | null; deep_sleep_min: number | null; rem_sleep_min: number | null; awakenings: number | null }): number | null {
+  const { duration_min, deep_sleep_min, rem_sleep_min, awakenings } = row;
+  if (duration_min == null || deep_sleep_min == null || rem_sleep_min == null || awakenings == null) return null;
+  if (duration_min <= 0) return null;
+  const durationScore = Math.min(40, Math.round(duration_min / 480 * 40));
+  const deepPct = deep_sleep_min / duration_min * 100;
+  const deepScore = Math.max(0, Math.min(25, 25 - Math.abs(deepPct - 18) * 1.5));
+  const remPct = rem_sleep_min / duration_min * 100;
+  const remScore = Math.max(0, Math.min(20, 20 - Math.abs(remPct - 22.5) * 1.2));
+  const awakeningsScore = Math.max(0, 15 - awakenings * 5);
+  return Math.round(durationScore + deepScore + remScore + awakeningsScore);
+}
+
 function calcBmr(profile: any, weightRow: any): number | null {
   if (!profile || !profile.sex || !profile.height_cm || !profile.birth_date || !weightRow) return null;
   const weight = weightRow.weight_kg;
@@ -76,7 +89,7 @@ export async function buildDataContext(sb: SB): Promise<string> {
     sb.from('body_metrics').select('weight_kg,fat_pct,measured_at').gte('measured_at', twelveWeeksAgoIso).order('measured_at', { ascending: true }),
     sb.from('workout_sets').select('workout_date').gte('workout_date', twelveWeeksAgoIso).lte('workout_date', todayIso),
     sb.from('activity_data').select('activity_type,activity_date,duration_min,distance_km,calories').gte('activity_date', twelveWeeksAgoIso).lte('activity_date', todayIso),
-    sb.from('sleep_data').select('sleep_date,duration_min,deep_sleep_min,rem_sleep_min').gte('sleep_date', twelveWeeksAgoIso).lte('sleep_date', todayIso),
+    sb.from('sleep_data').select('sleep_date,duration_min,deep_sleep_min,rem_sleep_min,awakenings').gte('sleep_date', twelveWeeksAgoIso).lte('sleep_date', todayIso),
     sb.from('food_log_entries').select('logged_at,kcal').gte('logged_at', twelveWeeksAgoIso).lte('logged_at', todayIso),
     sb.from('workout_sets').select('workout_date,exercise_name,weight_kg,reps').gte('workout_date', threeWeeksAgoIso).lte('workout_date', todayIso).order('workout_date', { ascending: true }),
     sb.from('activity_data').select('activity_date').gte('activity_date', ninetyDaysAgoIso).lte('activity_date', todayIso),
@@ -125,11 +138,17 @@ export async function buildDataContext(sb: SB): Promise<string> {
     const avgSteps = weekSteps.length
       ? Math.round(weekSteps.reduce((s: number, r: any) => s + r.steps, 0) / weekSteps.length)
       : null;
+    const weekSleepScores = weekSleep
+      .map((r: any) => calcSleepScore(r))
+      .filter((s: number | null) => s != null) as number[];
+    const avgSleepScore = weekSleepScores.length
+      ? Math.round(weekSleepScores.reduce((s: number, v: number) => s + v, 0) / weekSleepScores.length)
+      : null;
 
     lines.push(
       `${from}–${to}${weekLabel}: salikäyntejä ${gymDays}, aktiviteetteja ${weekActivities.length} (${totalKm.toFixed(1)} km), ` +
       `uni keskim. ${avgSleepH != null ? avgSleepH.toFixed(1) + 'h' : '—'}, paino ${weekWeight != null ? weekWeight + ' kg' : '—'}, ` +
-      `askeleet keskim. ${avgSteps != null ? avgSteps + '/pv' : '—'}.`,
+      `askeleet keskim. ${avgSteps != null ? avgSteps + '/pv' : '—'}, unipisteet keskim. ${avgSleepScore != null ? avgSleepScore + 'p' : '—'}.`,
     );
   }
 
