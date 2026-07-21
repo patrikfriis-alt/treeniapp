@@ -2092,8 +2092,8 @@ async function loadHuomioita() {
   ] = await Promise.all([
     sb.from('workout_sets').select('workout_date,exercise_name,weight_kg,reps').gte('workout_date', from42).lte('workout_date', todayIso),
     sb.from('body_metrics').select('weight_kg,measured_at').gte('measured_at', from21).lte('measured_at', todayIso).order('measured_at', { ascending: true }),
-    sb.from('sleep_data').select('duration_min').gte('sleep_date', thisWeekFrom).lte('sleep_date', thisWeekTo),
-    sb.from('sleep_data').select('duration_min').gte('sleep_date', lastWeekFrom).lte('sleep_date', lastWeekTo),
+    sb.from('sleep_data').select('duration_min,deep_sleep_min,rem_sleep_min,awakenings').gte('sleep_date', thisWeekFrom).lte('sleep_date', thisWeekTo),
+    sb.from('sleep_data').select('duration_min,deep_sleep_min,rem_sleep_min,awakenings').gte('sleep_date', lastWeekFrom).lte('sleep_date', lastWeekTo),
     sb.from('step_data').select('steps').gte('step_date', thisWeekFrom).lte('step_date', thisWeekTo),
     sb.from('step_data').select('steps').gte('step_date', lastWeekFrom).lte('step_date', lastWeekTo),
   ]);
@@ -2155,6 +2155,38 @@ async function loadHuomioita() {
     if (Math.abs(pctChange) >= 0.15) {
       const dir = pctChange < 0 ? 'laskenut' : 'noussut';
       insights.push({ text: `Askelmäärä ${dir} keskimäärin ${Math.round(Math.abs(pctChange) * 100)}% viime viikolla`, magnitude: Math.abs(pctChange) });
+    }
+  }
+
+  // Unipisteet tälle ja viime viikolle (käytetään sekä uni- että ylikuormitushuomiossa)
+  const sleepScoresThis = (sleepThis || []).map(r => calcSleepScore(r)).filter(s => s != null);
+  const sleepScoresLast = (sleepLast || []).map(r => calcSleepScore(r)).filter(s => s != null);
+  const hasSleepScoreData = sleepScoresThis.length >= 3 && sleepScoresLast.length >= 3;
+  const avgScoreThis = hasSleepScoreData ? sleepScoresThis.reduce((s, v) => s + v, 0) / sleepScoresThis.length : null;
+  const avgScoreLast = hasSleepScoreData ? sleepScoresLast.reduce((s, v) => s + v, 0) / sleepScoresLast.length : null;
+
+  // Unipisteiden lasku: tämä viikko vs. viime viikko, väh. 3 kirjausta molemmilla, kynnys 10p
+  if (hasSleepScoreData) {
+    const scoreDrop = Math.round(avgScoreLast - avgScoreThis);
+    if (scoreDrop >= 10) {
+      insights.push({ text: `Unipisteet laskenut ${scoreDrop}p viime viikolla`, magnitude: scoreDrop / 100 });
+    }
+  }
+
+  // Treenimäärän ja unipisteiden yhteisvaikutus: tonnimäärä +10% ja unipisteet -10p, molemmat viime viikkoon verrattuna
+  const tonnageForRange = (from, to) => (setsRows || [])
+    .filter(r => r.workout_date >= from && r.workout_date <= to && r.weight_kg != null && r.reps != null)
+    .reduce((s, r) => s + r.weight_kg * r.reps, 0);
+  const tonnageThis = tonnageForRange(thisWeekFrom, thisWeekTo);
+  const tonnageLast = tonnageForRange(lastWeekFrom, lastWeekTo);
+  if (hasSleepScoreData && tonnageLast > 0) {
+    const scoreDrop = Math.round(avgScoreLast - avgScoreThis);
+    const tonnagePct = (tonnageThis - tonnageLast) / tonnageLast;
+    if (tonnagePct >= 0.10 && scoreDrop >= 10) {
+      insights.push({
+        text: `Treenimäärä +${Math.round(tonnagePct * 100)}%, unipisteet -${scoreDrop}p — harkitse kevyempää viikkoa`,
+        magnitude: tonnagePct + scoreDrop / 100,
+      });
     }
   }
 
