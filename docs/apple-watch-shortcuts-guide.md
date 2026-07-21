@@ -142,7 +142,7 @@ Unen eri vaiheet (Core/Deep/REM/Awake) haetaan erikseen, koska kukin tarvitaan o
    - Yksi suodattimella "Uni-analyysi on Hereillä" ("Sleep Analysis is Awake")
 2. Kolmelle ensimmäiselle (Syvä/REM/Kevyt): lisää **Calculate Statistics** -toiminto suoraan sen omaan **Etsi terveysnäytteet** -toiminnon alle (älä lisää kaikkia neljää hakua ensin ja tilastoja vasta perään — koska toimintoja on neljä samannimistä, Shortcuts voi muuten yhdistää tilaston väärään hakuun), operaationa **Summa** (Sum) kestosta (Duration) → tallenna muuttujiin `DeepMin`, `RemMin`, `CoreMin`. Kun lisäät kunkin Calculate Statistics -toiminnon, tarkista Magic Variable -valikosta että se todella viittaa juuri sen yläpuolella olevaan Etsi terveysnäytteet -tulokseen (esim. "Etsi terveysnäytteet Tulos 2"), ei automaattisesti johonkin toiseen hakuun.
 3. Neljännelle (Hereillä): lisää **Calculate Statistics** -toiminto samalla periaatteella suoraan sen oman hakunsa alle, operaationa **Lukumäärä** (Count) → tallenna muuttujaan `Awakenings`
-4. Lisää **Aseta muuttuja** -toiminto laskemaan kokonaiskesto: `DeepMin + RemMin + CoreMin` → tallenna muuttujaan `TotalMin`
+4. **Aseta muuttuja** ei osaa itse laskea summia — lisää ensin **Laske**-toiminto laskemaan `DeepMin + RemMin + CoreMin`, ja sen jälkeen **Aseta muuttuja** -toiminto joka tallentaa Laske-toiminnon tuloksen muuttujaan `TotalMin`
 5. Lisää **Muotoile päivämäärä** -toiminto **Nykyiselle päivämäärälle**, muodossa `yyyy-MM-dd`, tallenna muuttujaan `Today`
 
 ### Lähetä Supabaseen

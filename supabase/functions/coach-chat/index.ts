@@ -76,6 +76,9 @@ async function updateCoachNotes(
     return;
   }
 
+  const { error: trackError } = await sb.from('coach_api_calls').insert({});
+  if (trackError) console.error('failed to record notes-update api call:', trackError.message);
+
   const { error: updateErr } = await sb
     .from('coach_notes')
     .update({ notes: updatedNotes.trim(), updated_at: new Date().toISOString() })
