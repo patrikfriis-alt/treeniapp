@@ -87,7 +87,7 @@ export async function buildDataContext(sb: SB): Promise<string> {
   ] = await Promise.all([
     sb.from('user_profile').select('*').eq('id', 1).maybeSingle(),
     sb.from('body_metrics').select('weight_kg,fat_pct,measured_at').gte('measured_at', twelveWeeksAgoIso).order('measured_at', { ascending: true }),
-    sb.from('workout_sets').select('workout_date').gte('workout_date', twelveWeeksAgoIso).lte('workout_date', todayIso),
+    sb.from('workout_sets').select('workout_date,weight_kg,reps').gte('workout_date', twelveWeeksAgoIso).lte('workout_date', todayIso),
     sb.from('activity_data').select('activity_type,activity_date,duration_min,distance_km,calories').gte('activity_date', twelveWeeksAgoIso).lte('activity_date', todayIso),
     sb.from('sleep_data').select('sleep_date,duration_min,deep_sleep_min,rem_sleep_min,awakenings').gte('sleep_date', twelveWeeksAgoIso).lte('sleep_date', todayIso),
     sb.from('food_log_entries').select('logged_at,kcal').gte('logged_at', twelveWeeksAgoIso).lte('logged_at', todayIso),
@@ -145,10 +145,40 @@ export async function buildDataContext(sb: SB): Promise<string> {
       ? Math.round(weekSleepScores.reduce((s: number, v: number) => s + v, 0) / weekSleepScores.length)
       : null;
 
+    const weekTonnage = (gymSetsAll || [])
+      .filter((r: any) => r.workout_date >= from && r.workout_date <= to && r.weight_kg != null && r.reps != null)
+      .reduce((s: number, r: any) => s + r.weight_kg * r.reps, 0);
+
+    const prevMonday = mondayOfWeeksAgo(w + 1);
+    const prevSunday = new Date(prevMonday);
+    prevSunday.setUTCDate(prevMonday.getUTCDate() + 6);
+    const prevFrom = isoDate(prevMonday);
+    const prevTo = isoDate(prevSunday);
+    const prevTonnage = (gymSetsAll || [])
+      .filter((r: any) => r.workout_date >= prevFrom && r.workout_date <= prevTo && r.weight_kg != null && r.reps != null)
+      .reduce((s: number, r: any) => s + r.weight_kg * r.reps, 0);
+    const prevSleepScores = (sleepAll || [])
+      .filter((r: any) => r.sleep_date >= prevFrom && r.sleep_date <= prevTo)
+      .map((r: any) => calcSleepScore(r))
+      .filter((s: number | null) => s != null) as number[];
+    const prevAvgSleepScore = prevSleepScores.length
+      ? Math.round(prevSleepScores.reduce((s: number, v: number) => s + v, 0) / prevSleepScores.length)
+      : null;
+
+    let overloadClause = '';
+    if (prevTonnage > 0 && avgSleepScore != null && prevAvgSleepScore != null) {
+      const tonnageChangePct = (weekTonnage - prevTonnage) / prevTonnage;
+      const sleepScoreChange = avgSleepScore - prevAvgSleepScore;
+      if (tonnageChangePct >= 0.10 && sleepScoreChange <= -10) {
+        overloadClause = ` Huom: treenimäärä nousi ${Math.round(tonnageChangePct * 100)}% ja unipisteet laski ${Math.abs(sleepScoreChange)}p edelliseen viikkoon verrattuna — mahdollinen ylikuormitus.`;
+      }
+    }
+
     lines.push(
       `${from}–${to}${weekLabel}: salikäyntejä ${gymDays}, aktiviteetteja ${weekActivities.length} (${totalKm.toFixed(1)} km), ` +
       `uni keskim. ${avgSleepH != null ? avgSleepH.toFixed(1) + 'h' : '—'}, paino ${weekWeight != null ? weekWeight + ' kg' : '—'}, ` +
-      `askeleet keskim. ${avgSteps != null ? avgSteps + '/pv' : '—'}, unipisteet keskim. ${avgSleepScore != null ? avgSleepScore + 'p' : '—'}.`,
+      `askeleet keskim. ${avgSteps != null ? avgSteps + '/pv' : '—'}, unipisteet keskim. ${avgSleepScore != null ? avgSleepScore + 'p' : '—'}.` +
+      overloadClause,
     );
   }
 
