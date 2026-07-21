@@ -166,7 +166,7 @@ export async function buildDataContext(sb: SB): Promise<string> {
       : null;
 
     let overloadClause = '';
-    if (prevTonnage > 0 && avgSleepScore != null && prevAvgSleepScore != null) {
+    if (prevTonnage > 0 && avgSleepScore != null && prevAvgSleepScore != null && weekSleepScores.length >= 3 && prevSleepScores.length >= 3) {
       const tonnageChangePct = (weekTonnage - prevTonnage) / prevTonnage;
       const sleepScoreChange = avgSleepScore - prevAvgSleepScore;
       if (tonnageChangePct >= 0.10 && sleepScoreChange <= -10) {
