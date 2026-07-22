@@ -30,12 +30,56 @@ async function hasActivityOn(sb: ReturnType<typeof createClient>, dateIso: strin
   return (c1 || 0) > 0 || (c2 || 0) > 0;
 }
 
+function mondayOfThisWeekHelsinkiIso(): string {
+  const todayIso = todayHelsinkiIso();
+  const today = new Date(`${todayIso}T00:00:00Z`);
+  const dow = today.getUTCDay();
+  const diff = dow === 0 ? -6 : 1 - dow;
+  today.setUTCDate(today.getUTCDate() + diff);
+  return today.toISOString().slice(0, 10);
+}
+
+async function weeklyRecapStats(
+  sb: ReturnType<typeof createClient>,
+): Promise<{ activeDays: number; tonnage: number; avgSteps: number | null }> {
+  const from = mondayOfThisWeekHelsinkiIso();
+  const to = todayHelsinkiIso();
+
+  const [
+    { data: activityRows, error: actErr },
+    { data: setsRows, error: setsErr },
+    { data: stepsRows, error: stepsErr },
+  ] = await Promise.all([
+    sb.from('activity_data').select('activity_date').gte('activity_date', from).lte('activity_date', to),
+    sb.from('workout_sets').select('workout_date,weight_kg,reps').gte('workout_date', from).lte('workout_date', to),
+    sb.from('step_data').select('steps').gte('step_date', from).lte('step_date', to),
+  ]);
+  if (actErr) console.error('activity_data query failed:', actErr.message);
+  if (setsErr) console.error('workout_sets query failed:', setsErr.message);
+  if (stepsErr) console.error('step_data query failed:', stepsErr.message);
+
+  const activeDaySet = new Set<string>();
+  (activityRows || []).forEach((r: any) => activeDaySet.add(r.activity_date));
+  (setsRows || []).forEach((r: any) => activeDaySet.add(r.workout_date));
+
+  const tonnage = (setsRows || [])
+    .filter((r: any) => r.weight_kg != null && r.reps != null)
+    .reduce((s: number, r: any) => s + r.weight_kg * r.reps, 0);
+
+  const stepsVals = (stepsRows || []).map((r: any) => r.steps).filter((v: any) => v != null) as number[];
+  const avgSteps = stepsVals.length
+    ? Math.round(stepsVals.reduce((s: number, v: number) => s + v, 0) / stepsVals.length)
+    : null;
+
+  return { activeDays: activeDaySet.size, tonnage, avgSteps };
+}
+
 Deno.serve(async (req) => {
   if (req.headers.get('x-cron-secret') !== CRON_SECRET) {
     return new Response('Unauthorized', { status: 401 });
   }
   const type = new URL(req.url).searchParams.get('type');
-  if (type !== 'streak' && type !== 'activity') {
+  if (type !== 'streak' && type !== 'activity' && type !== 'weekly-recap') {
     return new Response('Bad Request', { status: 400 });
   }
 
@@ -45,19 +89,28 @@ Deno.serve(async (req) => {
   if (settingsError) console.error('app_settings query failed:', settingsError.message);
   if (!settings || !settings.push_enabled) return new Response('push disabled', { status: 200 });
 
-  const today = todayHelsinkiIso();
-  const todayActive = await hasActivityOn(sb, today);
-  if (todayActive) return new Response('already active today', { status: 200 });
-
   let title: string, body: string;
-  if (type === 'streak') {
-    const yesterdayActive = await hasActivityOn(sb, yesterdayHelsinkiIso());
-    if (!yesterdayActive) return new Response('no streak to protect', { status: 200 });
+  if (type === 'weekly-recap') {
+    const stats = await weeklyRecapStats(sb);
+    if (stats.activeDays === 0) return new Response('no activity this week', { status: 200 });
     title = 'Valkku';
-    body = '🔥 Streakisi katkeamassa tänään — ehdit vielä!';
+    const tonnageText = `${Math.round(stats.tonnage)} kg nostettu`;
+    const stepsText = stats.avgSteps != null ? `, ka ${stats.avgSteps} askelta/pv` : '';
+    body = `Viikko takana: ${stats.activeDays} treeniä, ${tonnageText}${stepsText} 💪`;
   } else {
-    title = 'Valkku';
-    body = 'Et ole vielä liikkunut tänään 💪';
+    const today = todayHelsinkiIso();
+    const todayActive = await hasActivityOn(sb, today);
+    if (todayActive) return new Response('already active today', { status: 200 });
+
+    if (type === 'streak') {
+      const yesterdayActive = await hasActivityOn(sb, yesterdayHelsinkiIso());
+      if (!yesterdayActive) return new Response('no streak to protect', { status: 200 });
+      title = 'Valkku';
+      body = '🔥 Streakisi katkeamassa tänään — ehdit vielä!';
+    } else {
+      title = 'Valkku';
+      body = 'Et ole vielä liikkunut tänään 💪';
+    }
   }
 
   const { data: subs, error: subsError } = await sb.from('push_subscriptions').select('*');
