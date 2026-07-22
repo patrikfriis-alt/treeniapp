@@ -2091,7 +2091,7 @@ async function loadHuomioita() {
     { data: stepsLast },
   ] = await Promise.all([
     sb.from('workout_sets').select('workout_date,exercise_name,weight_kg,reps').gte('workout_date', from42).lte('workout_date', todayIso),
-    sb.from('body_metrics').select('weight_kg,measured_at').gte('measured_at', from21).lte('measured_at', todayIso).order('measured_at', { ascending: true }),
+    sb.from('body_metrics').select('weight_kg,fat_pct,muscle_pct,measured_at').gte('measured_at', from21).lte('measured_at', todayIso).order('measured_at', { ascending: true }),
     sb.from('sleep_data').select('duration_min,deep_sleep_min,rem_sleep_min,awakenings').gte('sleep_date', thisWeekFrom).lte('sleep_date', thisWeekTo),
     sb.from('sleep_data').select('duration_min,deep_sleep_min,rem_sleep_min,awakenings').gte('sleep_date', lastWeekFrom).lte('sleep_date', lastWeekTo),
     sb.from('step_data').select('steps').gte('step_date', thisWeekFrom).lte('step_date', thisWeekTo),
@@ -2129,6 +2129,32 @@ async function loadHuomioita() {
     if ((nonIncreasing || nonDecreasing) && Math.abs(totalChange) >= 1) {
       const dir = totalChange < 0 ? 'laskenut' : 'noussut';
       insights.push({ text: `Paino ${dir} ${Math.abs(totalChange)} kg viimeisen 3 viikon aikana`, magnitude: Math.abs(totalChange) / vals[0] });
+    }
+  }
+
+  // Rasva%: monotoninen trendi viim. 3 viikolla, väh. 3 mittausta, kokonaismuutos >= 1.0pp
+  const fatWithVal = (weightRows || []).filter(r => r.fat_pct != null);
+  if (fatWithVal.length >= 3) {
+    const vals = fatWithVal.map(r => r.fat_pct);
+    const nonIncreasing = vals.every((v, i) => i === 0 || v <= vals[i - 1]);
+    const nonDecreasing = vals.every((v, i) => i === 0 || v >= vals[i - 1]);
+    const totalChange = Math.round((vals[vals.length - 1] - vals[0]) * 10) / 10;
+    if ((nonIncreasing || nonDecreasing) && Math.abs(totalChange) >= 1) {
+      const dir = totalChange < 0 ? 'laskenut' : 'noussut';
+      insights.push({ text: `Rasva% ${dir} ${Math.abs(totalChange)}pp viimeisen 3 viikon aikana`, magnitude: Math.abs(totalChange) / vals[0] });
+    }
+  }
+
+  // Lihas%: monotoninen trendi viim. 3 viikolla, väh. 3 mittausta, kokonaismuutos >= 1.0pp
+  const muscleWithVal = (weightRows || []).filter(r => r.muscle_pct != null);
+  if (muscleWithVal.length >= 3) {
+    const vals = muscleWithVal.map(r => r.muscle_pct);
+    const nonIncreasing = vals.every((v, i) => i === 0 || v <= vals[i - 1]);
+    const nonDecreasing = vals.every((v, i) => i === 0 || v >= vals[i - 1]);
+    const totalChange = Math.round((vals[vals.length - 1] - vals[0]) * 10) / 10;
+    if ((nonIncreasing || nonDecreasing) && Math.abs(totalChange) >= 1) {
+      const dir = totalChange < 0 ? 'laskenut' : 'noussut';
+      insights.push({ text: `Lihas% ${dir} ${Math.abs(totalChange)}pp viimeisen 3 viikon aikana`, magnitude: Math.abs(totalChange) / vals[0] });
     }
   }
 
