@@ -86,7 +86,7 @@ export async function buildDataContext(sb: SB): Promise<string> {
     { data: stepsAll },
   ] = await Promise.all([
     sb.from('user_profile').select('*').eq('id', 1).maybeSingle(),
-    sb.from('body_metrics').select('weight_kg,fat_pct,measured_at').gte('measured_at', twelveWeeksAgoIso).order('measured_at', { ascending: true }),
+    sb.from('body_metrics').select('weight_kg,fat_pct,muscle_pct,measured_at').gte('measured_at', twelveWeeksAgoIso).order('measured_at', { ascending: true }),
     sb.from('workout_sets').select('workout_date,weight_kg,reps').gte('workout_date', twelveWeeksAgoIso).lte('workout_date', todayIso),
     sb.from('activity_data').select('activity_type,activity_date,duration_min,distance_km,calories').gte('activity_date', twelveWeeksAgoIso).lte('activity_date', todayIso),
     sb.from('sleep_data').select('sleep_date,duration_min,deep_sleep_min,rem_sleep_min,awakenings').gte('sleep_date', twelveWeeksAgoIso).lte('sleep_date', todayIso),
@@ -134,6 +134,8 @@ export async function buildDataContext(sb: SB): Promise<string> {
       : null;
     const weekWeights = (weightRows || []).filter((r: any) => r.measured_at >= from && r.measured_at <= to);
     const weekWeight = weekWeights.length ? weekWeights[weekWeights.length - 1].weight_kg : null;
+    const weekFat = weekWeights.length ? weekWeights[weekWeights.length - 1].fat_pct : null;
+    const weekMuscle = weekWeights.length ? weekWeights[weekWeights.length - 1].muscle_pct : null;
     const weekSteps = (stepsAll || []).filter((r: any) => r.step_date >= from && r.step_date <= to);
     const avgSteps = weekSteps.length
       ? Math.round(weekSteps.reduce((s: number, r: any) => s + r.steps, 0) / weekSteps.length)
@@ -177,6 +179,7 @@ export async function buildDataContext(sb: SB): Promise<string> {
     lines.push(
       `${from}–${to}${weekLabel}: salikäyntejä ${gymDays}, aktiviteetteja ${weekActivities.length} (${totalKm.toFixed(1)} km), ` +
       `uni keskim. ${avgSleepH != null ? avgSleepH.toFixed(1) + 'h' : '—'}, paino ${weekWeight != null ? weekWeight + ' kg' : '—'}, ` +
+      `rasva% ${weekFat != null ? weekFat + '%' : '—'}, lihas% ${weekMuscle != null ? weekMuscle + '%' : '—'}, ` +
       `askeleet keskim. ${avgSteps != null ? avgSteps + '/pv' : '—'}, unipisteet keskim. ${avgSleepScore != null ? avgSleepScore + 'p' : '—'}.` +
       overloadClause,
     );
