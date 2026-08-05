@@ -4045,6 +4045,9 @@ async function openFoodSearch(mealType) {
   foodModalSelected = null;
   foodPhotoComponents = [];
   foodPhotoPendingGrams = null;
+  foodPhotoLastImageBase64 = null;
+  foodPhotoMacroEstimate = null;
+  document.getElementById('food-macro-estimate-row').style.display = 'none';
   document.getElementById('food-search-input').value = '';
   document.getElementById('food-search-step-list').style.display = 'block';
   document.getElementById('food-search-step-amount').style.display = 'none';
@@ -4186,10 +4189,14 @@ async function createNewExerciseAndAdd(name) {
 function closeFoodSearch() {
   document.getElementById('food-search-modal').style.display = 'none';
   document.body.style.overflow = '';
+  foodPhotoLastImageBase64 = null;
+  foodPhotoMacroEstimate = null;
 }
 
 let foodPhotoComponents = [];
 let foodPhotoPendingGrams = null;
+let foodPhotoLastImageBase64 = null;
+let foodPhotoMacroEstimate = null;
 
 function openFoodPhotoPicker() {
   document.getElementById('food-photo-input').click();
@@ -4252,6 +4259,7 @@ async function analyzeFoodPhotoFile(file) {
     showStatus('food-photo-status', 'Kuvan käsittely epäonnistui', true);
     return;
   }
+  foodPhotoLastImageBase64 = base64;
 
   const secret = getCoachSecret();
   try {
@@ -4298,6 +4306,10 @@ function renderFoodPhotoComponents() {
     </div>`).join('');
 }
 
+function updateFoodMacroEstimateButtonVisibility() {
+  document.getElementById('food-macro-estimate-row').style.display = foodPhotoLastImageBase64 ? 'block' : 'none';
+}
+
 function selectFoodPhotoComponent(i) {
   const component = foodPhotoComponents[i];
   foodPhotoComponents.splice(i, 1);
@@ -4305,12 +4317,66 @@ function selectFoodPhotoComponent(i) {
   document.getElementById('food-search-step-photo').style.display = 'none';
   document.getElementById('food-search-step-list').style.display = 'block';
   document.getElementById('food-search-input').value = component.name;
+  updateFoodMacroEstimateButtonVisibility();
   runFoodSearch(component.name);
 }
 
 function backToFoodSearchList() {
   document.getElementById('food-search-step-photo').style.display = 'none';
   document.getElementById('food-search-step-list').style.display = 'block';
+  updateFoodMacroEstimateButtonVisibility();
+}
+
+async function estimateFoodMacrosWithAI() {
+  const secret = getCoachSecret();
+  if (!secret) {
+    promptCoachSecret(() => estimateFoodMacrosWithAI());
+    return;
+  }
+  const statusEl = document.getElementById('food-macro-estimate-status');
+  const btn = document.getElementById('food-macro-estimate-btn');
+  btn.disabled = true;
+  statusEl.textContent = 'Arvioidaan...';
+  statusEl.className = 'status';
+  try {
+    const res = await fetch(`${SB_URL}/functions/v1/food-macro-estimate`, {
+      method: 'POST',
+      headers: {
+        'apikey': SB_KEY,
+        'authorization': `Bearer ${SB_KEY}`,
+        'x-coach-secret': secret,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        image: foodPhotoLastImageBase64,
+        name: document.getElementById('food-search-input').value.trim(),
+        grams: foodPhotoPendingGrams,
+      }),
+    });
+    if (res.status === 429) {
+      btn.disabled = false;
+      showStatus('food-macro-estimate-status', 'Päivän arviointiraja täynnä, yritä huomenna', true);
+      return;
+    }
+    if (!res.ok) {
+      btn.disabled = false;
+      showStatus('food-macro-estimate-status', 'Arviointi epäonnistui, yritä uudelleen', true);
+      return;
+    }
+    const data = await res.json();
+    foodPhotoMacroEstimate = {
+      kcalPer100g: data.kcalPer100g,
+      proteinPer100g: data.proteinPer100g,
+      carbsPer100g: data.carbsPer100g,
+      fatPer100g: data.fatPer100g,
+    };
+    btn.disabled = false;
+    goToCustomFoodStep();
+  } catch (err) {
+    console.error('estimateFoodMacrosWithAI failed:', err.message);
+    btn.disabled = false;
+    showStatus('food-macro-estimate-status', 'Arviointi epäonnistui, tarkista verkkoyhteys', true);
+  }
 }
 
 function selectFoodItem(i) {
@@ -4349,9 +4415,13 @@ function goToCustomFoodStep() {
   document.getElementById('food-search-step-amount').style.display = 'none';
   document.getElementById('food-search-step-custom').style.display = 'block';
   document.getElementById('custom-food-name').value = document.getElementById('food-search-input').value.trim();
-  ['custom-food-kcal','custom-food-protein','custom-food-carbs','custom-food-fat'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
+  const est = foodPhotoMacroEstimate;
+  document.getElementById('custom-food-kcal').value = est ? est.kcalPer100g : '';
+  document.getElementById('custom-food-protein').value = est ? est.proteinPer100g : '';
+  document.getElementById('custom-food-carbs').value = est ? est.carbsPer100g : '';
+  document.getElementById('custom-food-fat').value = est ? est.fatPer100g : '';
+  document.getElementById('custom-food-ai-hint').style.display = est ? 'block' : 'none';
+  foodPhotoMacroEstimate = null;
 }
 
 async function createCustomFood({ name, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g }) {
@@ -5904,6 +5974,10 @@ if ('serviceWorker' in navigator) {
         <button class="btn" onclick="openFoodPhotoPicker()" style="flex:none;padding:0 14px;" title="Tunnista kuvasta">📷</button>
       </div>
       <input type="file" id="food-photo-input" accept="image/*" style="display:none" onchange="onFoodPhotoSelected(this)">
+      <div id="food-macro-estimate-row" style="display:none;margin-bottom:10px;">
+        <button class="btn" id="food-macro-estimate-btn" onclick="estimateFoodMacrosWithAI()" style="width:100%;">🤖 Arvioi tekoälyllä</button>
+        <div class="status" id="food-macro-estimate-status"></div>
+      </div>
       <div id="food-search-results"></div>
       <div style="text-align:center;margin-top:10px;">
         <span class="food-search-custom-link" onclick="goToCustomFoodStep()">+ Lisää oma tuote</span>
@@ -5931,6 +6005,7 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <div id="food-search-step-custom" style="display:none">
+      <div id="custom-food-ai-hint" style="display:none;color:var(--text2);font-size:13px;margin-bottom:10px;">🤖 Tekoälyn arvio — tarkista ennen tallennusta</div>
       <div class="form-row"><label>Nimi</label><input type="text" id="custom-food-name" placeholder="Oma tuote"></div>
       <div class="form-row"><label>Kcal/100g</label><input type="text" inputmode="decimal" id="custom-food-kcal"></div>
       <div class="form-row"><label>Proteiini/100g</label><input type="text" inputmode="decimal" id="custom-food-protein"></div>
