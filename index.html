@@ -799,6 +799,8 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 }
 .food-search-result-kcal { color: var(--text3); }
 .food-search-empty { color: var(--text3); font-size:13px; text-align:center; padding:20px 0; }
+.food-photo-row { padding:10px 0; border-bottom:1px solid var(--border2); }
+.food-photo-row:last-child { border-bottom:none; }
 .food-search-custom-link { color: var(--green); font-size:13px; cursor:pointer; }
 .food-amount-centered { flex-direction: column; justify-content: center; min-height: 50vh; }
 .ex-search-result-row {
@@ -4043,11 +4045,9 @@ async function runFoodSearch(q) {
 async function openFoodSearch(mealType) {
   foodModalMeal = mealType;
   foodModalSelected = null;
-  foodPhotoComponents = [];
-  foodPhotoPendingGrams = null;
+  foodPhotoRows = [];
+  foodPhotoFineliAttempted = false;
   foodPhotoLastImageBase64 = null;
-  foodPhotoMacroEstimate = null;
-  document.getElementById('food-macro-estimate-row').style.display = 'none';
   document.getElementById('food-search-input').value = '';
   document.getElementById('food-search-step-list').style.display = 'block';
   document.getElementById('food-search-step-amount').style.display = 'none';
@@ -4190,13 +4190,13 @@ function closeFoodSearch() {
   document.getElementById('food-search-modal').style.display = 'none';
   document.body.style.overflow = '';
   foodPhotoLastImageBase64 = null;
-  foodPhotoMacroEstimate = null;
+  foodPhotoRows = [];
+  foodPhotoFineliAttempted = false;
 }
 
-let foodPhotoComponents = [];
-let foodPhotoPendingGrams = null;
+let foodPhotoRows = [];
+let foodPhotoFineliAttempted = false;
 let foodPhotoLastImageBase64 = null;
-let foodPhotoMacroEstimate = null;
 
 function openFoodPhotoPicker() {
   document.getElementById('food-photo-input').click();
@@ -4247,7 +4247,7 @@ function resizeImageToBase64(file, maxDim) {
 async function analyzeFoodPhotoFile(file) {
   document.getElementById('food-search-step-list').style.display = 'none';
   document.getElementById('food-search-step-photo').style.display = 'block';
-  document.getElementById('food-photo-components').innerHTML = '';
+  document.getElementById('food-photo-rows').innerHTML = '';
   const statusEl = document.getElementById('food-photo-status');
   statusEl.textContent = 'Tunnistetaan...';
   statusEl.className = 'status';
@@ -4282,59 +4282,186 @@ async function analyzeFoodPhotoFile(file) {
       return;
     }
     const data = await res.json();
-    foodPhotoComponents = data.components || [];
-    renderFoodPhotoComponents();
+    const components = data.components || [];
+    foodPhotoRows = components.map(c => ({
+      id: `row-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name: c.name,
+      grams: Math.round(c.grams),
+      kcalPer100g: null,
+      proteinPer100g: null,
+      carbsPer100g: null,
+      fatPer100g: null,
+      source: null,
+      fineliId: null,
+    }));
+    foodPhotoFineliAttempted = false;
+    renderFoodPhotoRows();
   } catch (err) {
     console.error('analyzeFoodPhotoFile failed:', err.message);
     showStatus('food-photo-status', 'Tunnistus epäonnistui, tarkista verkkoyhteys', true);
   }
 }
 
-function renderFoodPhotoComponents() {
+function renderFoodPhotoRows() {
   const statusEl = document.getElementById('food-photo-status');
   statusEl.textContent = '';
   statusEl.className = 'status';
-  const el = document.getElementById('food-photo-components');
-  if (!foodPhotoComponents.length) {
-    el.innerHTML = `<div class="food-search-empty">Ei tunnistettuja ruokia, kokeile toista kuvaa tai hae manuaalisesti</div>`;
-    return;
+  const el = document.getElementById('food-photo-rows');
+  if (!foodPhotoRows.length) {
+    el.innerHTML = `<div class="food-search-empty">Ei tunnistettuja ruokia, kokeile toista kuvaa, hae manuaalisesti, tai lisää rivi käsin</div>`;
+  } else {
+    el.innerHTML = foodPhotoRows.map(row => {
+      const hasMacros = row.kcalPer100g != null;
+      const summary = hasMacros
+        ? `${Math.round(row.kcalPer100g * row.grams / 100)} kcal · ${Math.round(row.proteinPer100g * row.grams / 100 * 10) / 10}g proteiini · ${Math.round(row.carbsPer100g * row.grams / 100 * 10) / 10}g hiilarit · ${Math.round(row.fatPer100g * row.grams / 100 * 10) / 10}g rasva`
+        : 'Makrot puuttuvat';
+      const sourceTag = row.source === 'fineli' ? ' · Fineli' : row.source === 'ai' ? ' · 🤖 AI-arvio' : '';
+      return `
+      <div class="food-photo-row">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" value="${escapeHtml(row.name)}" onchange="updateFoodPhotoRowName('${row.id}', this.value)" style="flex:1;box-sizing:border-box;">
+          <input type="number" value="${row.grams}" onchange="updateFoodPhotoRowGrams('${row.id}', this.value)" style="width:70px;box-sizing:border-box;">
+          <span onclick="removeFoodPhotoRow('${row.id}')" style="cursor:pointer;color:var(--red);font-size:18px;">×</span>
+        </div>
+        <div onclick="openEditFoodPhotoRowMacrosDialog('${row.id}')" style="font-size:13px;color:var(--text2);margin-top:4px;cursor:pointer;">
+          ${summary}${sourceTag}
+        </div>
+      </div>`;
+    }).join('');
   }
-  el.innerHTML = foodPhotoComponents.map((c, i) => `
-    <div class="food-search-result-row" onclick="selectFoodPhotoComponent(${i})">
-      <span>${escapeHtml(c.name)}</span>
-      <span class="food-search-result-kcal">~${Math.round(c.grams)}g</span>
-    </div>`).join('');
+  const missingCount = foodPhotoRows.filter(r => r.kcalPer100g == null).length;
+  document.getElementById('food-photo-fineli-btn').style.display = foodPhotoRows.length ? 'block' : 'none';
+  document.getElementById('food-photo-ai-btn').style.display = (foodPhotoFineliAttempted && missingCount > 0) ? 'block' : 'none';
+  document.getElementById('food-photo-save-btn').disabled = foodPhotoRows.length === 0 || missingCount > 0;
 }
 
-function updateFoodMacroEstimateButtonVisibility() {
-  document.getElementById('food-macro-estimate-row').style.display = foodPhotoLastImageBase64 ? 'block' : 'none';
+function updateFoodPhotoRowName(id, value) {
+  const row = foodPhotoRows.find(r => r.id === id);
+  if (!row) return;
+  const trimmed = value.trim();
+  if (trimmed !== row.name && row.kcalPer100g != null) {
+    row.kcalPer100g = null;
+    row.proteinPer100g = null;
+    row.carbsPer100g = null;
+    row.fatPer100g = null;
+    row.source = null;
+    row.fineliId = null;
+  }
+  row.name = trimmed;
+  renderFoodPhotoRows();
 }
 
-function selectFoodPhotoComponent(i) {
-  const component = foodPhotoComponents[i];
-  foodPhotoComponents.splice(i, 1);
-  foodPhotoPendingGrams = component.grams;
-  document.getElementById('food-search-step-photo').style.display = 'none';
-  document.getElementById('food-search-step-list').style.display = 'block';
-  document.getElementById('food-search-input').value = component.name;
-  updateFoodMacroEstimateButtonVisibility();
-  runFoodSearch(component.name);
+function updateFoodPhotoRowGrams(id, value) {
+  const row = foodPhotoRows.find(r => r.id === id);
+  if (!row) return;
+  const grams = parseFloat(value);
+  row.grams = grams > 0 ? grams : row.grams;
+  renderFoodPhotoRows();
+}
+
+function removeFoodPhotoRow(id) {
+  foodPhotoRows = foodPhotoRows.filter(r => r.id !== id);
+  renderFoodPhotoRows();
+}
+
+function addFoodPhotoRow() {
+  foodPhotoRows.push({
+    id: `row-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    name: '',
+    grams: 100,
+    kcalPer100g: null,
+    proteinPer100g: null,
+    carbsPer100g: null,
+    fatPer100g: null,
+    source: null,
+    fineliId: null,
+  });
+  renderFoodPhotoRows();
+}
+
+function openEditFoodPhotoRowMacrosDialog(id) {
+  const row = foodPhotoRows.find(r => r.id === id);
+  if (!row) return;
+
+  const existing = document.getElementById('edit-photo-row-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'edit-photo-row-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
+  modal.innerHTML = `
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">${escapeHtml(row.name)}</div>
+    <div class="form-row"><label>Kcal/100g</label><input type="text" inputmode="decimal" id="edit-photo-row-kcal" value="${row.kcalPer100g ?? ''}"></div>
+    <div class="form-row"><label>Proteiini/100g</label><input type="text" inputmode="decimal" id="edit-photo-row-protein" value="${row.proteinPer100g ?? ''}"></div>
+    <div class="form-row"><label>Hiilarit/100g</label><input type="text" inputmode="decimal" id="edit-photo-row-carbs" value="${row.carbsPer100g ?? ''}"></div>
+    <div class="form-row"><label>Rasva/100g</label><input type="text" inputmode="decimal" id="edit-photo-row-fat" value="${row.fatPer100g ?? ''}"></div>
+    <button class="btn btn-primary" id="edit-photo-row-save-btn">Tallenna</button>
+    <button class="btn" id="edit-photo-row-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Peruuta</button>
+  `;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  document.getElementById('edit-photo-row-save-btn').onclick = () => {
+    const kcal = parseNum('edit-photo-row-kcal');
+    const protein = parseNum('edit-photo-row-protein');
+    const carbs = parseNum('edit-photo-row-carbs');
+    const fat = parseNum('edit-photo-row-fat');
+    if (kcal == null) return;
+    row.kcalPer100g = kcal;
+    row.proteinPer100g = protein || 0;
+    row.carbsPer100g = carbs || 0;
+    row.fatPer100g = fat || 0;
+    if (row.source == null) row.source = 'ai';
+    overlay.remove();
+    renderFoodPhotoRows();
+  };
+  document.getElementById('edit-photo-row-cancel-btn').onclick = () => overlay.remove();
 }
 
 function backToFoodSearchList() {
   document.getElementById('food-search-step-photo').style.display = 'none';
   document.getElementById('food-search-step-list').style.display = 'block';
-  updateFoodMacroEstimateButtonVisibility();
 }
 
-async function estimateFoodMacrosWithAI() {
+async function fetchFineliForAllRows() {
+  const btn = document.getElementById('food-photo-fineli-btn');
+  btn.disabled = true;
+  const rowsToSearch = foodPhotoRows.filter(r => r.kcalPer100g == null && r.name.trim());
+  await Promise.all(rowsToSearch.map(async row => {
+    try {
+      const results = await searchFineli(row.name.trim());
+      if (results && results.length > 0) {
+        const item = results[0];
+        row.kcalPer100g = item.energyKcal || 0;
+        row.proteinPer100g = item.protein || 0;
+        row.carbsPer100g = item.carbohydrate || 0;
+        row.fatPer100g = item.fat || 0;
+        row.source = 'fineli';
+        row.fineliId = item.id;
+      }
+    } catch (err) {
+      console.error('fetchFineliForAllRows failed for row', row.id, err.message);
+    }
+  }));
+  foodPhotoFineliAttempted = true;
+  btn.disabled = false;
+  renderFoodPhotoRows();
+}
+
+async function estimateMissingRowsWithAI() {
   const secret = getCoachSecret();
   if (!secret) {
-    promptCoachSecret(() => estimateFoodMacrosWithAI());
+    promptCoachSecret(() => estimateMissingRowsWithAI());
     return;
   }
-  const statusEl = document.getElementById('food-macro-estimate-status');
-  const btn = document.getElementById('food-macro-estimate-btn');
+  const rowsToEstimate = foodPhotoRows.filter(r => r.kcalPer100g == null && r.name.trim());
+  if (!rowsToEstimate.length) return;
+  const btn = document.getElementById('food-photo-ai-btn');
+  const statusEl = document.getElementById('food-photo-ai-status');
   btn.disabled = true;
   statusEl.textContent = 'Arvioidaan...';
   statusEl.className = 'status';
@@ -4349,34 +4476,75 @@ async function estimateFoodMacrosWithAI() {
       },
       body: JSON.stringify({
         image: foodPhotoLastImageBase64,
-        name: document.getElementById('food-search-input').value.trim(),
-        grams: foodPhotoPendingGrams,
+        items: rowsToEstimate.map(r => ({ name: r.name.trim(), grams: r.grams })),
       }),
     });
     if (res.status === 429) {
       btn.disabled = false;
-      showStatus('food-macro-estimate-status', 'Päivän arviointiraja täynnä, yritä huomenna', true);
+      showStatus('food-photo-ai-status', 'Päivän arviointiraja täynnä, yritä huomenna', true);
       return;
     }
     if (!res.ok) {
       btn.disabled = false;
-      showStatus('food-macro-estimate-status', 'Arviointi epäonnistui, yritä uudelleen', true);
+      showStatus('food-photo-ai-status', 'Arviointi epäonnistui, yritä uudelleen', true);
       return;
     }
     const data = await res.json();
-    foodPhotoMacroEstimate = {
-      kcalPer100g: data.kcalPer100g,
-      proteinPer100g: data.proteinPer100g,
-      carbsPer100g: data.carbsPer100g,
-      fatPer100g: data.fatPer100g,
-    };
+    const estimates = data.estimates || [];
+    rowsToEstimate.forEach((row, i) => {
+      const est = estimates[i];
+      if (!est) return;
+      row.kcalPer100g = est.kcalPer100g;
+      row.proteinPer100g = est.proteinPer100g;
+      row.carbsPer100g = est.carbsPer100g;
+      row.fatPer100g = est.fatPer100g;
+      row.source = 'ai';
+    });
     btn.disabled = false;
-    goToCustomFoodStep();
+    renderFoodPhotoRows();
   } catch (err) {
-    console.error('estimateFoodMacrosWithAI failed:', err.message);
+    console.error('estimateMissingRowsWithAI failed:', err.message);
     btn.disabled = false;
-    showStatus('food-macro-estimate-status', 'Arviointi epäonnistui, tarkista verkkoyhteys', true);
+    showStatus('food-photo-ai-status', 'Arviointi epäonnistui, tarkista verkkoyhteys', true);
   }
+}
+
+async function saveAllFoodPhotoRows() {
+  const btn = document.getElementById('food-photo-save-btn');
+  btn.disabled = true;
+  const dateIso = localIso(addDays(new Date(), foodDayOffset));
+  const rows = [...foodPhotoRows];
+  const results = await Promise.allSettled(rows.map(async row => {
+    let cacheId = null;
+    let customId = null;
+    if (row.source === 'fineli') {
+      cacheId = await ensureFoodCache(row.fineliId, row.name, row.kcalPer100g, row.proteinPer100g, row.carbsPer100g, row.fatPer100g);
+    } else {
+      customId = await createCustomFood({ name: row.name, kcalPer100g: row.kcalPer100g, proteinPer100g: row.proteinPer100g, carbsPer100g: row.carbsPer100g, fatPer100g: row.fatPer100g });
+    }
+    await addFoodLogEntry({
+      mealType: foodModalMeal,
+      dateIso,
+      foodCacheId: cacheId,
+      customFoodId: customId,
+      amountG: row.grams,
+      kcalPer100g: row.kcalPer100g,
+      proteinPer100g: row.proteinPer100g,
+    });
+    return row.id;
+  }));
+  const savedIds = new Set(results.filter(r => r.status === 'fulfilled').map(r => r.value));
+  foodPhotoRows = foodPhotoRows.filter(r => !savedIds.has(r.id));
+  const failedCount = results.filter(r => r.status === 'rejected').length;
+  if (failedCount > 0) {
+    results.forEach(r => { if (r.status === 'rejected') console.error('saveAllFoodPhotoRows row failed:', r.reason); });
+    btn.disabled = false;
+    showStatus('food-photo-save-status', `${failedCount} riviä ei tallentunut, yritä uudelleen`, true);
+    renderFoodPhotoRows();
+    return;
+  }
+  closeFoodSearch();
+  await renderRuoka();
 }
 
 function selectFoodItem(i) {
@@ -4389,8 +4557,7 @@ function goToAmountStep() {
   document.getElementById('food-search-step-custom').style.display = 'none';
   document.getElementById('food-search-step-amount').style.display = 'flex';
   document.getElementById('food-amount-name').textContent = foodModalSelected.name;
-  document.getElementById('food-amount-grams').value = foodPhotoPendingGrams != null ? Math.round(foodPhotoPendingGrams) : 100;
-  foodPhotoPendingGrams = null;
+  document.getElementById('food-amount-grams').value = 100;
   updateFoodAmountPreview();
 }
 
@@ -4415,13 +4582,9 @@ function goToCustomFoodStep() {
   document.getElementById('food-search-step-amount').style.display = 'none';
   document.getElementById('food-search-step-custom').style.display = 'block';
   document.getElementById('custom-food-name').value = document.getElementById('food-search-input').value.trim();
-  const est = foodPhotoMacroEstimate;
-  document.getElementById('custom-food-kcal').value = est ? est.kcalPer100g : '';
-  document.getElementById('custom-food-protein').value = est ? est.proteinPer100g : '';
-  document.getElementById('custom-food-carbs').value = est ? est.carbsPer100g : '';
-  document.getElementById('custom-food-fat').value = est ? est.fatPer100g : '';
-  document.getElementById('custom-food-ai-hint').style.display = est ? 'block' : 'none';
-  foodPhotoMacroEstimate = null;
+  ['custom-food-kcal','custom-food-protein','custom-food-carbs','custom-food-fat'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
 }
 
 async function createCustomFood({ name, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g }) {
@@ -4537,13 +4700,7 @@ async function confirmAddFood() {
       proteinPer100g: foodModalSelected.proteinPer100g,
     });
 
-    if (foodPhotoComponents.length > 0) {
-      document.getElementById('food-search-step-amount').style.display = 'none';
-      document.getElementById('food-search-step-photo').style.display = 'block';
-      renderFoodPhotoComponents();
-    } else {
-      closeFoodSearch();
-    }
+    closeFoodSearch();
     await renderRuoka();
   } catch (err) {
     showStatus('food-amount-status', 'Tallennus epäonnistui, yritä uudelleen', true);
@@ -5974,10 +6131,6 @@ if ('serviceWorker' in navigator) {
         <button class="btn" onclick="openFoodPhotoPicker()" style="flex:none;padding:0 14px;" title="Tunnista kuvasta">📷</button>
       </div>
       <input type="file" id="food-photo-input" accept="image/*" style="display:none" onchange="onFoodPhotoSelected(this)">
-      <div id="food-macro-estimate-row" style="display:none;margin-bottom:10px;">
-        <button class="btn" id="food-macro-estimate-btn" onclick="estimateFoodMacrosWithAI()" style="width:100%;">🤖 Arvioi tekoälyllä</button>
-        <div class="status" id="food-macro-estimate-status"></div>
-      </div>
       <div id="food-search-results"></div>
       <div style="text-align:center;margin-top:10px;">
         <span class="food-search-custom-link" onclick="goToCustomFoodStep()">+ Lisää oma tuote</span>
@@ -5986,8 +6139,16 @@ if ('serviceWorker' in navigator) {
 
     <div id="food-search-step-photo" style="display:none">
       <div id="food-photo-status" class="status"></div>
-      <div id="food-photo-components"></div>
-      <button class="btn" onclick="backToFoodSearchList()" style="margin-top:10px;background:none;color:var(--text2);width:100%;">← Takaisin hakuun</button>
+      <div id="food-photo-rows"></div>
+      <div style="text-align:center;margin:10px 0;">
+        <span class="food-search-custom-link" onclick="addFoodPhotoRow()">+ Lisää rivi</span>
+      </div>
+      <button class="btn" id="food-photo-fineli-btn" onclick="fetchFineliForAllRows()" style="display:none;width:100%;margin-bottom:8px;">Hae Finelistä</button>
+      <button class="btn" id="food-photo-ai-btn" onclick="estimateMissingRowsWithAI()" style="display:none;width:100%;margin-bottom:8px;">🤖 Arvioi tekoälyllä</button>
+      <div class="status" id="food-photo-ai-status"></div>
+      <button class="btn" onclick="backToFoodSearchList()" style="background:none;color:var(--text2);width:100%;">← Takaisin hakuun</button>
+      <button class="btn btn-primary" id="food-photo-save-btn" onclick="saveAllFoodPhotoRows()" disabled style="width:100%;margin-top:10px;font-size:16px;padding:14px;">Tallenna kaikki</button>
+      <div class="status" id="food-photo-save-status"></div>
     </div>
 
     <div id="food-search-step-amount" class="food-amount-centered" style="display:none">
@@ -6005,7 +6166,6 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <div id="food-search-step-custom" style="display:none">
-      <div id="custom-food-ai-hint" style="display:none;color:var(--text2);font-size:13px;margin-bottom:10px;">🤖 Tekoälyn arvio — tarkista ennen tallennusta</div>
       <div class="form-row"><label>Nimi</label><input type="text" id="custom-food-name" placeholder="Oma tuote"></div>
       <div class="form-row"><label>Kcal/100g</label><input type="text" inputmode="decimal" id="custom-food-kcal"></div>
       <div class="form-row"><label>Proteiini/100g</label><input type="text" inputmode="decimal" id="custom-food-protein"></div>
