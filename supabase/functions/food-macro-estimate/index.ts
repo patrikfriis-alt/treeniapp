@@ -52,7 +52,7 @@ function parseEstimate(raw: string): { kcalPer100g: number; proteinPer100g: numb
     const parsed = JSON.parse(cleaned);
     const fields = ['kcalPer100g', 'proteinPer100g', 'carbsPer100g', 'fatPer100g'] as const;
     for (const f of fields) {
-      if (!Number.isFinite(Number(parsed[f]))) return null;
+      if (parsed[f] === null || !Number.isFinite(Number(parsed[f]))) return null;
     }
     return {
       kcalPer100g: Number(parsed.kcalPer100g),
