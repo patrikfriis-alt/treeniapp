@@ -11,12 +11,12 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-coach-secret',
 };
 
-const MACRO_ESTIMATE_SYSTEM_PROMPT = `Tehtäväsi on arvioida annetun ruoan ravintosisältö per 100 grammaa kuvan ja nimen perusteella. Vastaa PELKÄSTÄÄN JSON-oliolla, ei muuta tekstiä: {"kcalPer100g": number, "proteinPer100g": number, "carbsPer100g": number, "fatPer100g": number}. Jos et pysty arvioimaan järkevästi kuvan ja nimen perusteella, palauta {"kcalPer100g": null, "proteinPer100g": null, "carbsPer100g": null, "fatPer100g": null}.`;
+const MACRO_ESTIMATE_SYSTEM_PROMPT = `Tehtäväsi on arvioida annettujen ruokien ravintosisältö per 100 grammaa kuvan ja nimien perusteella. Saat listan ruokia (nimi + arvioitu annoskoko grammoina, konteksiksi). Vastaa PELKÄSTÄÄN JSON-taulukolla, samassa järjestyksessä ja samanpituisena kuin annettu lista, ei muuta tekstiä: [{"kcalPer100g": number, "proteinPer100g": number, "carbsPer100g": number, "fatPer100g": number} | null, ...]. Käytä taulukon alkiona null sille kohdalle jota et pysty arvioimaan järkevästi kuvan ja nimen perusteella.`;
 
-async function callClaudeVision(base64Image: string, name: string, grams: number | undefined): Promise<string> {
-  const gramsText = grams != null
-    ? ` Arvioitu annoskoko: ${Math.round(grams)}g (tämä on vain kontekstiksi, älä käytä sitä per-100g-laskennassa).`
-    : '';
+async function callClaudeVision(base64Image: string, items: { name: string; grams?: number }[]): Promise<string> {
+  const itemsText = items
+    .map((item, i) => `${i + 1}. ${item.name}${item.grams != null ? ` (~${Math.round(item.grams)}g)` : ''}`)
+    .join('\n');
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -26,13 +26,13 @@ async function callClaudeVision(base64Image: string, name: string, grams: number
     },
     body: JSON.stringify({
       model: 'claude-sonnet-5',
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: MACRO_ESTIMATE_SYSTEM_PROMPT,
       messages: [{
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Image } },
-          { type: 'text', text: `Arvioi ravintosisältö per 100g tälle ruoalle: "${name}".${gramsText}` },
+          { type: 'text', text: `Arvioi ravintosisältö per 100g näille ruoille:\n${itemsText}` },
         ],
       }],
     }),
@@ -43,25 +43,33 @@ async function callClaudeVision(base64Image: string, name: string, grams: number
   }
   const data = await res.json();
   const textBlock = (data.content || []).find((b: any) => b.type === 'text');
-  return textBlock?.text || '{}';
+  return textBlock?.text || '[]';
 }
 
-function parseEstimate(raw: string): { kcalPer100g: number; proteinPer100g: number; carbsPer100g: number; fatPer100g: number } | null {
+type Estimate = { kcalPer100g: number; proteinPer100g: number; carbsPer100g: number; fatPer100g: number };
+
+function parseEstimateEntry(entry: any): Estimate | null {
+  if (entry === null || entry === undefined) return null;
+  const fields = ['kcalPer100g', 'proteinPer100g', 'carbsPer100g', 'fatPer100g'] as const;
+  for (const f of fields) {
+    if (entry[f] === null || entry[f] === undefined || !Number.isFinite(Number(entry[f]))) return null;
+  }
+  return {
+    kcalPer100g: Number(entry.kcalPer100g),
+    proteinPer100g: Number(entry.proteinPer100g),
+    carbsPer100g: Number(entry.carbsPer100g),
+    fatPer100g: Number(entry.fatPer100g),
+  };
+}
+
+function parseEstimates(raw: string, expectedLength: number): (Estimate | null)[] | null {
   try {
     const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
     const parsed = JSON.parse(cleaned);
-    const fields = ['kcalPer100g', 'proteinPer100g', 'carbsPer100g', 'fatPer100g'] as const;
-    for (const f of fields) {
-      if (parsed[f] === null || !Number.isFinite(Number(parsed[f]))) return null;
-    }
-    return {
-      kcalPer100g: Number(parsed.kcalPer100g),
-      proteinPer100g: Number(parsed.proteinPer100g),
-      carbsPer100g: Number(parsed.carbsPer100g),
-      fatPer100g: Number(parsed.fatPer100g),
-    };
+    if (!Array.isArray(parsed) || parsed.length !== expectedLength) return null;
+    return parsed.map(parseEstimateEntry);
   } catch (err) {
-    console.error('parseEstimate failed:', err instanceof Error ? err.message : String(err), '| raw:', raw);
+    console.error('parseEstimates failed:', err instanceof Error ? err.message : String(err), '| raw:', raw);
     return null;
   }
 }
@@ -77,15 +85,16 @@ Deno.serve(async (req) => {
     return new Response('Unauthorized', { status: 401, headers: CORS_HEADERS });
   }
 
-  let body: { image?: string; name?: string; grams?: number };
+  let body: { image?: string; items?: { name?: string; grams?: number }[] };
   try {
     body = await req.json();
   } catch {
     return new Response('Bad Request', { status: 400, headers: CORS_HEADERS });
   }
-  if (!body.image || !body.name) {
-    return new Response('Bad Request: image and name required', { status: 400, headers: CORS_HEADERS });
+  if (!body.image || !Array.isArray(body.items) || body.items.length === 0 || body.items.some((it) => !it.name)) {
+    return new Response('Bad Request: image and non-empty items[].name required', { status: 400, headers: CORS_HEADERS });
   }
+  const items = body.items as { name: string; grams?: number }[];
 
   const sb = createClient(SB_URL, SB_SERVICE_KEY);
 
@@ -111,18 +120,18 @@ Deno.serve(async (req) => {
 
   let raw: string;
   try {
-    raw = await callClaudeVision(body.image, body.name, body.grams);
+    raw = await callClaudeVision(body.image, items);
   } catch (err) {
     console.error('Claude vision call failed:', err instanceof Error ? err.message : String(err));
     return new Response('AI request failed', { status: 502, headers: CORS_HEADERS });
   }
 
-  const estimate = parseEstimate(raw);
-  if (!estimate) {
+  const estimates = parseEstimates(raw, items.length);
+  if (!estimates) {
     return new Response('Could not estimate macros', { status: 502, headers: CORS_HEADERS });
   }
 
-  return new Response(JSON.stringify(estimate), {
+  return new Response(JSON.stringify({ estimates }), {
     headers: { ...CORS_HEADERS, 'content-type': 'application/json' },
   });
 });
