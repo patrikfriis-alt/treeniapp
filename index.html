@@ -4415,7 +4415,8 @@ function openEditFoodPhotoRowMacrosDialog(id) {
     row.proteinPer100g = protein || 0;
     row.carbsPer100g = carbs || 0;
     row.fatPer100g = fat || 0;
-    if (row.source == null) row.source = 'ai';
+    row.source = 'ai';
+    row.fineliId = null;
     overlay.remove();
     renderFoodPhotoRows();
   };
