@@ -1986,7 +1986,12 @@ async function loadWeeklyReportCard() {
     const elapsedDays = wOff === 0 ? (todayIdx() + 1) : 7;
     const weeklyNet = Math.round(foodKcal - bmrInfo.bmr * elapsedDays - exerciseKcal);
     const weeklySign = weeklyNet >= 0 ? '+' : '';
-    rows.push(`<div class="hist-item"><div class="hist-label">Viikon kalorit</div><div class="hist-val">${weeklySign}${weeklyNet} kcal</div></div>`);
+    let weeklyValStr = `${weeklySign}${weeklyNet} kcal`;
+    if (bmrInfo.weightKg != null) {
+      const goalWeeklyDeficit = Math.round(bmrInfo.weightKg * 0.01 * 7700);
+      weeklyValStr = `${weeklySign}${weeklyNet} / -${Math.abs(goalWeeklyDeficit)} kcal`;
+    }
+    rows.push(`<div class="hist-item"><div class="hist-label">Viikon kalorit</div><div class="hist-val">${weeklyValStr}</div></div>`);
   }
 
   document.getElementById('kc-weekly-rows').innerHTML = rows.join('');
@@ -2779,16 +2784,16 @@ function calcBmr(profile, weightRow) {
 async function getBmrInfo() {
   const profile = await loadUserProfile();
   if (!profile || !profile.sex || !profile.height_cm || !profile.birth_date) {
-    return { bmr: null, missingProfile: true, missingWeight: false };
+    return { bmr: null, weightKg: null, missingProfile: true, missingWeight: false };
   }
   const { data: weightRows, error } = await sb.from('body_metrics').select('weight_kg,fat_pct')
     .order('measured_at', { ascending: false }).limit(1);
   if (error) console.error('getBmrInfo weight fetch failed:', error.message);
   const weightRow = weightRows && weightRows[0];
   if (!weightRow || weightRow.weight_kg == null) {
-    return { bmr: null, missingProfile: false, missingWeight: true };
+    return { bmr: null, weightKg: null, missingProfile: false, missingWeight: true };
   }
-  return { bmr: calcBmr(profile, weightRow), missingProfile: false, missingWeight: false };
+  return { bmr: calcBmr(profile, weightRow), weightKg: weightRow.weight_kg, missingProfile: false, missingWeight: false };
 }
 
 async function getExerciseCalories(fromIso, toIso) {
