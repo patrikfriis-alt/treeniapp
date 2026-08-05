@@ -4343,7 +4343,8 @@ function goToCustomFoodStep() {
   document.getElementById('food-search-step-list').style.display = 'none';
   document.getElementById('food-search-step-amount').style.display = 'none';
   document.getElementById('food-search-step-custom').style.display = 'block';
-  ['custom-food-name','custom-food-kcal','custom-food-protein','custom-food-carbs','custom-food-fat'].forEach(id => {
+  document.getElementById('custom-food-name').value = document.getElementById('food-search-input').value.trim();
+  ['custom-food-kcal','custom-food-protein','custom-food-carbs','custom-food-fat'].forEach(id => {
     document.getElementById(id).value = '';
   });
 }
