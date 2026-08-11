@@ -38,8 +38,8 @@
   --red-bg:    rgba(255,69,58,0.15);
 
   --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
 
   /* Aliases used in JS-rendered HTML */
   --teal:      var(--accent);
@@ -71,10 +71,10 @@ nav {
   left: 0;
   right: 0;
   z-index: 100;
-  background: rgba(18,18,18,0.95);
+  background: rgba(20,20,22,0.78);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border-top: 1px solid var(--border);
+  border-top: 0.5px solid rgba(255,255,255,0.08);
   display: flex;
   padding: 6px 8px 10px;
   gap: 4px;
@@ -205,7 +205,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   gap: 8px;
   margin: 0 12px 10px;
 }
-.hero-metric { background:var(--surface); border-radius:14px; padding:12px; }
+.hero-metric { background:var(--surface); border-radius:var(--radius-md); padding:14px; }
 .hero-metric-icon  { font-size:20px; margin-bottom:4px; }
 .hero-metric-val   { font-size:20px; font-weight:700; line-height:1; }
 .hero-metric-label { font-size:10px; color:var(--text3); margin-top:2px; }
@@ -253,8 +253,26 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 }
 .page-title { font-size: 20px; font-weight: 700; }
 
-.koonti-greeting { font-size: 22px; font-weight: 700; margin: 4px 12px 2px; }
+.koonti-greeting { font-size: 28px; font-weight: 700; margin: 4px 12px 2px; letter-spacing: -0.02em; }
 .koonti-date      { font-size: 13px; color: var(--text2); margin: 0 12px 14px; }
+.koonti-navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  padding: 14px 16px 10px;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  background: rgba(20,20,22,0.72);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border-bottom: 0.5px solid rgba(255,255,255,0.08);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
 .koonti-section-label {
   font-size: 12px;
   font-weight: 600;
@@ -275,7 +293,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .koonti-card {
   background: var(--surface);
   border-radius: var(--radius-lg);
-  padding: 16px;
+  padding: 18px;
   cursor: pointer;
   transition: transform var(--t);
   position: relative;
@@ -907,6 +925,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 
 <!-- ── KOONTI ─────────────────────────────────────────────────── -->
 <div id="page-koonti" class="page active">
+  <div class="koonti-navbar" id="koonti-navbar">Koonti</div>
   <div class="koonti-greeting">Hei! 👋</div>
   <div class="koonti-date" id="koonti-date"></div>
 
@@ -1266,7 +1285,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.35.0</div>
+    <div class="version-chip" style="margin:0">v1.36.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('ohjelma',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
@@ -1331,7 +1350,7 @@ function svgIcon(name, color, size) {
   if (!path) return '';
   const c = color || 'currentColor';
   const s = size || 20;
-  return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+  return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="${c}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
 }
 
 function renderIcons() {
@@ -5175,6 +5194,13 @@ function showPage(name, btn) {
   if (name === 'ruoka')     renderRuoka();
   if (name === 'valmentaja') renderCoachPage();
 }
+
+window.addEventListener('scroll', () => {
+  const navbar = document.getElementById('koonti-navbar');
+  const koontiPage = document.getElementById('page-koonti');
+  if (!navbar || !koontiPage || !koontiPage.classList.contains('active')) return;
+  navbar.style.opacity = window.scrollY > 70 ? '1' : '0';
+});
 
 let coachActiveConversationId = null;
 let coachRequestId = 0;
