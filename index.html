@@ -209,6 +209,8 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .hero-metric-icon  { font-size:20px; margin-bottom:4px; }
 .hero-metric-val   { font-size:20px; font-weight:700; line-height:1; }
 .hero-metric-label { font-size:10px; color:var(--text3); margin-top:2px; }
+.hero-metric-bar-track { height:4px; background:var(--surface2); border-radius:2px; margin-top:6px; overflow:hidden; }
+.hero-metric-bar-fill { height:100%; border-radius:2px; background:var(--accent); transition:width .3s ease; }
 .hero-metric--clickable { cursor:pointer; }
 .metric-modal-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:13.5px; color:var(--text2); border-bottom:1px solid var(--border); }
 .metric-modal-row:last-of-type { border-bottom:none; }
@@ -289,6 +291,15 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .koonti-card--inprogress .koonti-card-sub { color: var(--accent); }
 .koonti-card--inprogress::after { content: "●"; position: absolute; top: 16px; right: 16px; color: var(--accent); font-size: 8px; }
 .koonti-card-goal  { font-size: 11px; color: var(--accent); margin-top: 2px; }
+.koonti-progress-track { height:5px; background:var(--surface2); border-radius:3px; margin-top:8px; overflow:hidden; }
+.koonti-progress-fill { height:100%; border-radius:3px; background:var(--accent); transition:width .3s ease; }
+.koonti-card--done .koonti-progress-fill { background:var(--green); }
+.kc-weekly-row { padding: 9px 0; border-bottom: 1px solid var(--border); }
+.kc-weekly-row:last-child { border-bottom: none; }
+.kc-weekly-row-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.kc-weekly-row-label { display:flex; align-items:center; gap:8px; font-size:14px; }
+.kc-weekly-row-icon { display:inline-flex; flex-shrink:0; width:20px; height:20px; }
+.kc-weekly-row-val { font-size:14px; font-weight:500; color:var(--accent); flex-shrink:0; }
 #kc-weekly-insights { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .weekly-insight { font-size: 12px; color: var(--accent); margin-top: 6px; }
 .weekly-insight:first-child { margin-top: 0; }
@@ -928,6 +939,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
       <div class="hero-metric-icon" data-icon="calendar" data-icon-color="var(--text2)" data-icon-bg="var(--surface2)"></div>
       <div class="hero-metric-val" id="koonti-ms-week">—</div>
       <div class="hero-metric-label">viikon aktiivisuus</div>
+      <div class="hero-metric-bar-track"><div class="hero-metric-bar-fill" id="koonti-ms-week-bar" style="width:0%"></div></div>
     </div>
     <div class="hero-metric hero-metric--clickable" onclick="openMonthModal()">
       <div class="hero-metric-icon" data-icon="calendar" data-icon-color="var(--text2)" data-icon-bg="var(--surface2)"></div>
@@ -958,6 +970,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
       <div class="koonti-card-label">Aerobinen</div>
       <div class="koonti-card-sub skel-sub" id="kc-aerobia-sub">&nbsp;</div>
       <div class="koonti-card-goal" id="kc-aerobia-goal" style="display:none"></div>
+      <div class="koonti-progress-track" id="kc-aerobia-bar-track" style="display:none"><div class="koonti-progress-fill" id="kc-aerobia-bar-fill" style="width:0%"></div></div>
     </div>
   </div>
 
@@ -978,6 +991,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
       <div class="koonti-card-label">Askeleet</div>
       <div class="koonti-card-sub skel-sub" id="kc-steps-sub">&nbsp;</div>
       <div class="koonti-card-goal" id="kc-steps-goal" style="display:none"></div>
+      <div class="koonti-progress-track" id="kc-steps-bar-track" style="display:none"><div class="koonti-progress-fill" id="kc-steps-bar-fill" style="width:0%"></div></div>
     </div>
   </div>
 
@@ -1252,7 +1266,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.34.0</div>
+    <div class="version-chip" style="margin:0">v1.35.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('ohjelma',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
@@ -1957,19 +1971,28 @@ async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
     return ` (${d > 0 ? '+' : ''}${d}${unit})`;
   };
 
+  const weekRow = (icon, iconColor, label, valHtml, barHtml) => `
+    <div class="kc-weekly-row">
+      <div class="kc-weekly-row-top">
+        <div class="kc-weekly-row-label"><span class="kc-weekly-row-icon" data-icon="${icon}" data-icon-color="${iconColor}"></span>${label}</div>
+        <div class="kc-weekly-row-val">${valHtml}</div>
+      </div>
+      ${barHtml || ''}
+    </div>`;
+
   const rows = [];
-  rows.push(`<div class="hist-item"><div class="hist-label">Salikertoja</div><div class="hist-val">${thisWeek.gymDays}${fmtDelta(thisWeek.gymDays, lastWeek.gymDays, '')}</div></div>`);
-  rows.push(`<div class="hist-item"><div class="hist-label">Aktiviteettikertoja</div><div class="hist-val">${thisWeek.actCount}${fmtDelta(thisWeek.actCount, lastWeek.actCount, '')}</div></div>`);
+  rows.push(weekRow('dumbbell', 'var(--accent)', 'Salikertoja', `${thisWeek.gymDays}${fmtDelta(thisWeek.gymDays, lastWeek.gymDays, '')}`));
+  rows.push(weekRow('running', 'var(--red)', 'Aktiviteettikertoja', `${thisWeek.actCount}${fmtDelta(thisWeek.actCount, lastWeek.actCount, '')}`));
   if (thisWeek.totalKm > 0 || lastWeek.totalKm > 0) {
-    rows.push(`<div class="hist-item"><div class="hist-label">Kilometrit</div><div class="hist-val">${thisWeek.totalKm.toFixed(1)} km${fmtDelta(thisWeek.totalKm, lastWeek.totalKm, ' km')}</div></div>`);
+    rows.push(weekRow('running', 'var(--red)', 'Kilometrit', `${thisWeek.totalKm.toFixed(1)} km${fmtDelta(thisWeek.totalKm, lastWeek.totalKm, ' km')}`));
   }
   if (thisWeek.avgSleep != null || lastWeek.avgSleep != null) {
     const curStr = thisWeek.avgSleep != null ? Math.round(thisWeek.avgSleep) + 'p' : '—';
-    rows.push(`<div class="hist-item"><div class="hist-label">Unen keskiarvo</div><div class="hist-val">${curStr}${fmtDelta(thisWeek.avgSleep, lastWeek.avgSleep, 'p')}</div></div>`);
+    rows.push(weekRow('moon', 'var(--green)', 'Unen keskiarvo', `${curStr}${fmtDelta(thisWeek.avgSleep, lastWeek.avgSleep, 'p')}`));
   }
   if (thisWeek.weightDelta != null) {
     const sign = thisWeek.weightDelta >= 0 ? '+' : '';
-    rows.push(`<div class="hist-item"><div class="hist-label">Painon muutos</div><div class="hist-val">${sign}${thisWeek.weightDelta} kg</div></div>`);
+    rows.push(weekRow('scale', 'var(--green)', 'Painon muutos', `${sign}${thisWeek.weightDelta} kg`));
   }
 
   bmrInfo = await (bmrInfo || getBmrInfo());
@@ -1985,14 +2008,20 @@ async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
     const weeklyNet = Math.round(foodKcal - bmrInfo.bmr * elapsedDays - exerciseKcal);
     const weeklySign = weeklyNet >= 0 ? '+' : '';
     let weeklyValStr = `${weeklySign}${weeklyNet} kcal`;
+    let barHtml = '';
     if (bmrInfo.weightKg != null) {
       const goalWeeklyDeficit = Math.round(bmrInfo.weightKg * 0.01 * 7700);
       weeklyValStr = `${weeklySign}${weeklyNet} / -${Math.abs(goalWeeklyDeficit)} kcal`;
+      const deficitPct = weeklyNet <= 0 && goalWeeklyDeficit > 0
+        ? Math.min(100, Math.round(Math.abs(weeklyNet) / goalWeeklyDeficit * 100))
+        : 0;
+      barHtml = `<div class="koonti-progress-track"><div class="koonti-progress-fill" style="width:${deficitPct}%"></div></div>`;
     }
-    rows.push(`<div class="hist-item"><div class="hist-label">Viikon kalorit</div><div class="hist-val">${weeklyValStr}</div></div>`);
+    rows.push(weekRow('flame', 'var(--amber)', 'Viikon kalorit', weeklyValStr, barHtml));
   }
 
   document.getElementById('kc-weekly-rows').innerHTML = rows.join('');
+  renderIcons();
 
   const [bestWeekInsight, plateauInsight] = await Promise.all([
     checkBestRunningWeek(offset),
@@ -2238,6 +2267,8 @@ async function loadMotivationSummary(offset = wOff) {
   if (msWeekEl) msWeekEl.textContent = weekPct + '%';
   const kWeekEl = document.getElementById('koonti-ms-week');
   if (kWeekEl) kWeekEl.textContent = weekPct + '%';
+  const kWeekBarEl = document.getElementById('koonti-ms-week-bar');
+  if (kWeekBarEl) kWeekBarEl.style.width = weekPct + '%';
 
   const weekDayMarks = [];
   for (let i = 0; i < 6; i++) {
@@ -5425,6 +5456,8 @@ async function loadKoonti() {
 
   const activityProgress = await loadActivityGoalProgress(0);
   const kcAerobiaGoal = document.getElementById('kc-aerobia-goal');
+  const kcAerobiaBarTrack = document.getElementById('kc-aerobia-bar-track');
+  const kcAerobiaBarFill = document.getElementById('kc-aerobia-bar-fill');
   if (activityProgress && activityProgress.goals &&
       (activityProgress.goals.weekly_km != null || activityProgress.goals.weekly_sessions != null)) {
     const parts = [];
@@ -5436,8 +5469,14 @@ async function loadKoonti() {
     }
     kcAerobiaGoal.textContent = parts.join(' · ');
     kcAerobiaGoal.style.display = '';
+    const goalPct = activityProgress.goals.weekly_km != null
+      ? activityProgress.totalKm / activityProgress.goals.weekly_km * 100
+      : activityProgress.sessionCount / activityProgress.goals.weekly_sessions * 100;
+    kcAerobiaBarFill.style.width = Math.min(100, Math.round(goalPct)) + '%';
+    kcAerobiaBarTrack.style.display = '';
   } else {
     kcAerobiaGoal.style.display = 'none';
+    kcAerobiaBarTrack.style.display = 'none';
   }
 
   const { data: bodyRows } = await sb.from('body_metrics')
@@ -5493,12 +5532,17 @@ async function loadKoonti() {
   }
   if (!appSettings) appSettings = await loadAppSettings();
   const kcStepsGoal = document.getElementById('kc-steps-goal');
+  const kcStepsBarTrack = document.getElementById('kc-steps-bar-track');
+  const kcStepsBarFill = document.getElementById('kc-steps-bar-fill');
   const stepsGoal = appSettings && appSettings.daily_steps_goal != null ? appSettings.daily_steps_goal : null;
   if (stepsGoal != null && todaySteps) {
     kcStepsGoal.textContent = `${todaySteps.steps.toLocaleString('fi-FI')}/${stepsGoal.toLocaleString('fi-FI')}`;
     kcStepsGoal.style.display = '';
+    kcStepsBarFill.style.width = Math.min(100, Math.round(todaySteps.steps / stepsGoal * 100)) + '%';
+    kcStepsBarTrack.style.display = '';
   } else {
     kcStepsGoal.style.display = 'none';
+    kcStepsBarTrack.style.display = 'none';
   }
 
   const entries = await loadFoodDayEntries(todayIso);
