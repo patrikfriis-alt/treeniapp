@@ -686,6 +686,18 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   text-align: center;
   border-bottom: 1px solid var(--amber);
 }
+#offline-banner-discard-btn {
+  display: none;
+  margin-left: 10px;
+  background: none;
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  cursor: pointer;
+}
 
 /* ─── Rest timer ─────────────────────────────────────────────── */
 #rest-timer {
@@ -859,7 +871,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 </head>
 <body>
 
-<div id="offline-banner"><span id="offline-banner-text"></span></div>
+<div id="offline-banner"><span id="offline-banner-text"></span><button id="offline-banner-discard-btn" onclick="discardStuckQueueEntries()">Poista jumissa olevat</button></div>
 
 <nav>
   <button id="nav-koonti" class="active" onclick="showPage('koonti',this)">
@@ -1240,7 +1252,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.32.0</div>
+    <div class="version-chip" style="margin:0">v1.33.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('ohjelma',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
@@ -1587,8 +1599,8 @@ async function syncSet(o, d, e, s) {
       workout_date:  dtIso,
       exercise_name: ex.n,
       set_number:    s + 1,
-      weight_kg:     parseFloat(sd.kg)  || null,
-      reps:          parseInt(sd.reps)  || null,
+      weight_kg:     numOrNull(parseFloat(sd.kg)),
+      reps:          numOrNull(parseInt(sd.reps)),
       session_type:  st,
     },
     opts: { onConflict: 'workout_date,exercise_name,set_number' },
@@ -1740,8 +1752,8 @@ const getPrevSet = (exName, setIdx) => {
    Returns: 'undone' | 'worse' | 'same' | 'better'
 ═══════════════════════════════════════════════════════════════ */
 function setStatus(sd, prev) {
-  const kg   = parseFloat(sd && sd.kg)   || null;
-  const reps = parseInt(sd && sd.reps)   || null;
+  const kg   = numOrNull(parseFloat(sd && sd.kg));
+  const reps = numOrNull(parseInt(sd && sd.reps));
 
   if (kg === null && reps === null) return 'undone';
   if (!prev || (prev.weight_kg === null && prev.reps === null)) return 'same';
@@ -1802,7 +1814,7 @@ function updateSetBox(o, d, e, s) {
   if (exTarget) {
     const doneCount = (ed.sets || []).filter(row => {
       const rd = row || {};
-      return (parseFloat(rd.kg) || null) !== null || (parseInt(rd.reps) || null) !== null;
+      return numOrNull(parseFloat(rd.kg)) !== null || numOrNull(parseInt(rd.reps)) !== null;
     }).length;
     const progPct = exTarget.s > 0 ? Math.round(doneCount / exTarget.s * 100) : 0;
     const labelEl = document.getElementById(`ex-prog-label-${o}-${d}-${e}`);
@@ -1855,8 +1867,8 @@ function calcPace() {
    RENDER — WEEK
 ═══════════════════════════════════════════════════════════════ */
 let weekCardCache = {};
-async function loadWeekSummary() {
-  const mon = wStart(wOff);
+async function loadWeekSummary(offset = wOff) {
+  const mon = wStart(offset);
   const sun = new Date(mon.date);
   sun.setDate(mon.date.getDate() + 6);
   const from = mon.iso, to = localIso(sun);
@@ -1932,10 +1944,10 @@ async function getWeekStats(offset) {
   return { gymDays, actCount, totalKm, avgSleep, weightDelta };
 }
 
-async function loadWeeklyReportCard() {
+async function loadWeeklyReportCard(offset = wOff) {
   const [thisWeek, lastWeek] = await Promise.all([
-    getWeekStats(wOff),
-    getWeekStats(wOff - 1),
+    getWeekStats(offset),
+    getWeekStats(offset - 1),
   ]);
 
   const fmtDelta = (cur, prev, unit) => {
@@ -1962,14 +1974,14 @@ async function loadWeeklyReportCard() {
 
   const bmrInfo = await getBmrInfo();
   if (bmrInfo.bmr != null) {
-    const mon = wStart(wOff);
+    const mon = wStart(offset);
     const sun = new Date(mon.date);
     sun.setDate(mon.date.getDate() + 6);
     const [exerciseKcal, foodKcal] = await Promise.all([
       getExerciseCalories(mon.iso, localIso(sun)),
       getFoodCalories(mon.iso, localIso(sun)),
     ]);
-    const elapsedDays = wOff === 0 ? (todayIdx() + 1) : 7;
+    const elapsedDays = offset === 0 ? (todayIdx() + 1) : 7;
     const weeklyNet = Math.round(foodKcal - bmrInfo.bmr * elapsedDays - exerciseKcal);
     const weeklySign = weeklyNet >= 0 ? '+' : '';
     let weeklyValStr = `${weeklySign}${weeklyNet} kcal`;
@@ -1983,8 +1995,8 @@ async function loadWeeklyReportCard() {
   document.getElementById('kc-weekly-rows').innerHTML = rows.join('');
 
   const [bestWeekInsight, plateauInsight] = await Promise.all([
-    checkBestRunningWeek(),
-    checkPlateau(),
+    checkBestRunningWeek(offset),
+    checkPlateau(offset),
   ]);
   const insights = [bestWeekInsight, plateauInsight].filter(Boolean);
   const insightsEl = document.getElementById('kc-weekly-insights');
@@ -1996,9 +2008,9 @@ async function loadWeeklyReportCard() {
   }
 }
 
-async function checkBestRunningWeek() {
-  const mon0 = wStart(wOff - 11);
-  const sunLast = new Date(wStart(wOff).date);
+async function checkBestRunningWeek(offset = wOff) {
+  const mon0 = wStart(offset - 11);
+  const sunLast = new Date(wStart(offset).date);
   sunLast.setDate(sunLast.getDate() + 6);
   const { data } = await sb.from('activity_data').select('activity_date,distance_km')
     .eq('activity_type', 'Juoksu')
@@ -2006,7 +2018,7 @@ async function checkBestRunningWeek() {
 
   const weekKm = new Array(12).fill(0);
   for (let i = 0; i < 12; i++) {
-    const mon = wStart(wOff - i);
+    const mon = wStart(offset - i);
     const sun = new Date(mon.date);
     sun.setDate(mon.date.getDate() + 6);
     const from = mon.iso, to = localIso(sun);
@@ -2023,8 +2035,8 @@ async function checkBestRunningWeek() {
   return null;
 }
 
-async function checkPlateau() {
-  const mon = wStart(wOff);
+async function checkPlateau(offset = wOff) {
+  const mon = wStart(offset);
   const sun = new Date(mon.date);
   sun.setDate(mon.date.getDate() + 6);
   const { data: thisWeekSets } = await sb.from('workout_sets').select('exercise_name')
@@ -2032,14 +2044,14 @@ async function checkPlateau() {
   const exercisesThisWeek = [...new Set((thisWeekSets || []).map(r => r.exercise_name))];
   if (!exercisesThisWeek.length) return null;
 
-  const mon3 = wStart(wOff - 2);
+  const mon3 = wStart(offset - 2);
   const { data: historySets } = await sb.from('workout_sets').select('exercise_name,weight_kg,workout_date')
     .in('exercise_name', exercisesThisWeek)
     .gte('workout_date', mon3.iso).lte('workout_date', localIso(sun));
 
   for (const exName of exercisesThisWeek) {
     const weekMax = [0, 1, 2].map(i => {
-      const wm = wStart(wOff - i);
+      const wm = wStart(offset - i);
       const ws = new Date(wm.date);
       ws.setDate(wm.date.getDate() + 6);
       const from = wm.iso, to = localIso(ws);
@@ -2110,44 +2122,25 @@ async function loadHuomioita() {
     }
   });
 
-  // Paino: monotoninen trendi viim. 3 viikolla, väh. 3 mittausta, kokonaismuutos >= 1kg
-  const weightsWithVal = (weightRows || []).filter(r => r.weight_kg != null);
-  if (weightsWithVal.length >= 3) {
-    const vals = weightsWithVal.map(r => r.weight_kg);
-    const nonIncreasing = vals.every((v, i) => i === 0 || v <= vals[i - 1]);
-    const nonDecreasing = vals.every((v, i) => i === 0 || v >= vals[i - 1]);
-    const totalChange = Math.round((vals[vals.length - 1] - vals[0]) * 10) / 10;
-    if ((nonIncreasing || nonDecreasing) && Math.abs(totalChange) >= 1) {
-      const dir = totalChange < 0 ? 'laskenut' : 'noussut';
-      insights.push({ text: `Paino ${dir} ${Math.abs(totalChange)} kg viimeisen 3 viikon aikana`, magnitude: Math.abs(totalChange) / vals[0] });
-    }
-  }
-
-  // Rasva%: monotoninen trendi viim. 3 viikolla, väh. 3 mittausta, kokonaismuutos >= 1.0pp
-  const fatWithVal = (weightRows || []).filter(r => r.fat_pct != null);
-  if (fatWithVal.length >= 3) {
-    const vals = fatWithVal.map(r => r.fat_pct);
-    const nonIncreasing = vals.every((v, i) => i === 0 || v <= vals[i - 1]);
-    const nonDecreasing = vals.every((v, i) => i === 0 || v >= vals[i - 1]);
-    const totalChange = Math.round((vals[vals.length - 1] - vals[0]) * 10) / 10;
-    if ((nonIncreasing || nonDecreasing) && Math.abs(totalChange) >= 1) {
-      const dir = totalChange < 0 ? 'laskenut' : 'noussut';
-      insights.push({ text: `Rasva% ${dir} ${Math.abs(totalChange)}pp viimeisen 3 viikon aikana`, magnitude: Math.abs(totalChange) / vals[0] });
-    }
-  }
-
-  // Lihas%: monotoninen trendi viim. 3 viikolla, väh. 3 mittausta, kokonaismuutos >= 1.0pp
-  const muscleWithVal = (weightRows || []).filter(r => r.muscle_pct != null);
-  if (muscleWithVal.length >= 3) {
-    const vals = muscleWithVal.map(r => r.muscle_pct);
-    const nonIncreasing = vals.every((v, i) => i === 0 || v <= vals[i - 1]);
-    const nonDecreasing = vals.every((v, i) => i === 0 || v >= vals[i - 1]);
-    const totalChange = Math.round((vals[vals.length - 1] - vals[0]) * 10) / 10;
-    if ((nonIncreasing || nonDecreasing) && Math.abs(totalChange) >= 1) {
-      const dir = totalChange < 0 ? 'laskenut' : 'noussut';
-      insights.push({ text: `Lihas% ${dir} ${Math.abs(totalChange)}pp viimeisen 3 viikon aikana`, magnitude: Math.abs(totalChange) / vals[0] });
-    }
-  }
+  // Paino/rasva%/lihas%: alkupuoliskon ka vs. loppupuoliskon ka viim. 3 viikolla, väh. 3 mittausta, muutos >= 1
+  const halvesTrendInsight = (rows, field, label, unit) => {
+    const vals = rows.filter(r => r[field] != null).map(r => r[field]);
+    if (vals.length < 3) return null;
+    const mid = Math.ceil(vals.length / 2);
+    const firstHalf = vals.slice(0, mid), secondHalf = vals.slice(mid);
+    if (!firstHalf.length || !secondHalf.length) return null;
+    const avgFirst = firstHalf.reduce((s, v) => s + v, 0) / firstHalf.length;
+    const avgSecond = secondHalf.reduce((s, v) => s + v, 0) / secondHalf.length;
+    const totalChange = Math.round((avgSecond - avgFirst) * 10) / 10;
+    if (Math.abs(totalChange) < 1) return null;
+    const dir = totalChange < 0 ? 'laskenut' : 'noussut';
+    return { text: `${label} ${dir} ${Math.abs(totalChange)}${unit} viimeisen 3 viikon aikana`, magnitude: Math.abs(totalChange) / avgFirst };
+  };
+  [
+    halvesTrendInsight(weightRows || [], 'weight_kg', 'Paino', ' kg'),
+    halvesTrendInsight(weightRows || [], 'fat_pct', 'Rasva%', 'pp'),
+    halvesTrendInsight(weightRows || [], 'muscle_pct', 'Lihas%', 'pp'),
+  ].forEach(i => { if (i) insights.push(i); });
 
   // Askeleet: tämä viikko vs. viime viikko, väh. 3 kirjausta molemmilla, kynnys 15%
   const stepsThisVals = (stepsThis || []).map(r => r.steps);
@@ -2206,7 +2199,7 @@ async function loadHuomioita() {
 }
 
 let motivationCache = {};
-async function loadMotivationSummary() {
+async function loadMotivationSummary(offset = wOff) {
   // Kuukauden aktiviteettikertoja
   const now = new Date();
   const monthStart = localIso(new Date(now.getFullYear(), now.getMonth(), 1));
@@ -2235,7 +2228,7 @@ async function loadMotivationSummary() {
   const activeDays90 = await fetchActiveDays(streakFrom, streakTo);
   motivationCache.activeDays90 = activeDays90;
 
-  const mon2 = wStart(wOff);
+  const mon2 = wStart(offset);
   const sun2 = new Date(mon2.date);
   sun2.setDate(mon2.date.getDate() + 6);
   const weekFrom = mon2.iso, weekTo = localIso(sun2);
@@ -2551,7 +2544,6 @@ async function renderSession() {
           LD[k].sets[s].kg = '';
         }
         LD[k].sets[s].reps = prevSet.reps != null ? String(prevSet.reps) : '';
-        scheduleSyncSet(wOff, aDay, ei, s);
         anyApplied = true;
       }
       if (anyApplied) { saveLD(); ed = LD[k]; }
@@ -2565,7 +2557,7 @@ async function renderSession() {
     // Sarjojen edistyminen
     const doneCount = (ed.sets || []).filter(s => {
       const sd = s || {};
-      return (parseFloat(sd.kg) || null) !== null || (parseInt(sd.reps) || null) !== null;
+      return numOrNull(parseFloat(sd.kg)) !== null || numOrNull(parseInt(sd.reps)) !== null;
     }).length;
     const progPct = ex.s > 0 ? Math.round(doneCount / ex.s * 100) : 0;
 
@@ -2648,22 +2640,19 @@ function changeWeek(dir) { wOff += dir; renderTreeni(); }
    BODY METRICS
 ═══════════════════════════════════════════════════════════════ */
 async function loadBodyMetrics() {
-  const { data: latest, error: latestErr } = await sb.from('body_metrics').select('*')
-    .order('measured_at', { ascending: false }).limit(1);
-  if (latestErr) { console.error('loadBodyMetrics (latest) failed:', latestErr.message); }
+  const { data: hist, error: histErr } = await sb.from('body_metrics').select('*')
+    .order('measured_at', { ascending: false }).limit(20);
+  if (histErr) { console.error('loadBodyMetrics failed:', histErr.message); }
+  const latest = hist && hist[0];
 
   const deltaEl = document.getElementById('m-weight-delta');
   if (deltaEl) deltaEl.textContent = '';
-  if (latest && latest[0]) {
-    const m = latest[0];
-    document.getElementById('m-weight').textContent = m.weight_kg  ? `${m.weight_kg} kg` : '—';
-    document.getElementById('m-fat')   .textContent = m.fat_pct    ? `${m.fat_pct}%`     : '—';
-    document.getElementById('m-muscle').textContent = m.muscle_pct ? `${m.muscle_pct}%`  : '—';
+  if (latest) {
+    document.getElementById('m-weight').textContent = latest.weight_kg  ? `${latest.weight_kg} kg` : '—';
+    document.getElementById('m-fat')   .textContent = latest.fat_pct    ? `${latest.fat_pct}%`     : '—';
+    document.getElementById('m-muscle').textContent = latest.muscle_pct ? `${latest.muscle_pct}%`  : '—';
   }
 
-  const { data: hist, error: histErr } = await sb.from('body_metrics').select('*')
-    .order('measured_at', { ascending: false }).limit(20);
-  if (histErr) { console.error('loadBodyMetrics (hist) failed:', histErr.message); }
   if (hist && hist.length > 1) {
     if (charts.body) charts.body.destroy();
     charts.body = new Chart(document.getElementById('body-chart'), {
@@ -2686,8 +2675,8 @@ async function loadBodyMetrics() {
         },
       },
     });
-    if (deltaEl && hist.length >= 2 && latest && latest[0] && latest[0].weight_kg && hist[1] && hist[1].weight_kg) {
-      const d = Math.round((latest[0].weight_kg - hist[1].weight_kg) * 10) / 10;
+    if (deltaEl && hist.length >= 2 && latest && latest.weight_kg && hist[1] && hist[1].weight_kg) {
+      const d = Math.round((latest.weight_kg - hist[1].weight_kg) * 10) / 10;
       deltaEl.textContent = (d >= 0 ? '+' : '') + d + ' kg ed. mittauksesta';
     }
   }
@@ -2984,9 +2973,9 @@ async function skipOnboarding() {
   document.getElementById('onboarding-card').style.display = 'none';
 }
 
-async function loadActivityGoalProgress() {
+async function loadActivityGoalProgress(offset = wOff) {
   if (!activityGoals) activityGoals = await loadActivityGoals();
-  const mon = wStart(wOff);
+  const mon = wStart(offset);
   const sun = new Date(mon.date);
   sun.setDate(mon.date.getDate() + 6);
   const from = mon.iso, to = localIso(sun);
@@ -3014,7 +3003,7 @@ function formatPaceMinPerKm(pace) {
 }
 
 async function renderAerobiaGoalCard() {
-  const progress = await loadActivityGoalProgress();
+  const progress = await loadActivityGoalProgress(0);
   const card = document.getElementById('aerobia-goal-card');
   const content = document.getElementById('aerobia-goal-content');
   if (!progress || !progress.goals) { card.style.display = 'none'; return; }
@@ -3108,7 +3097,8 @@ function openEditActivityDialog(activityId) {
   overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
 
   const types = ['Jääkiekko', 'Juoksu', 'Kävely', 'Sali', 'Muu'];
-  const typeOptions = types.map(t => `<option ${t === a.activity_type ? 'selected' : ''}>${t}</option>`).join('');
+  const extraType = a.activity_type && !types.includes(a.activity_type) ? [a.activity_type] : [];
+  const typeOptions = [...extraType, ...types].map(t => `<option ${t === a.activity_type ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('');
 
   const modal = document.createElement('div');
   modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
@@ -3142,7 +3132,7 @@ function openEditActivityDialog(activityId) {
         duration_min:   parseNum('edit-act-duration'),
         calories:       parseNum('edit-act-calories'),
         avg_heart_rate: parseNum('edit-act-hr'),
-        distance_km:    parseFloat((document.getElementById('edit-act-km').value || '').replace(',','.')) || null,
+        distance_km:    numOrNull(parseFloat((document.getElementById('edit-act-km').value || '').replace(',','.'))),
       });
       overlay.remove();
       await loadActivities();
@@ -3231,7 +3221,7 @@ async function saveActivity() {
         duration_min:   parseNum('act-duration'),
         calories:       parseNum('act-calories'),
         avg_heart_rate: parseNum('act-hr'),
-        distance_km:    parseFloat((document.getElementById('act-km').value || '').replace(',','.')) || null,
+        distance_km:    numOrNull(parseFloat((document.getElementById('act-km').value || '').replace(',','.'))),
       },
     });
     if (error) { showStatus('act-status','Virhe',true); return; }
@@ -4237,6 +4227,12 @@ async function analyzeFoodPhotoFile(file) {
       showStatus('food-photo-status', 'Päivän kuva-analyysiraja täynnä, yritä huomenna', true);
       return;
     }
+    if (res.status === 401) {
+      localStorage.removeItem('coachSecret');
+      showStatus('food-photo-status', 'Väärä salasana', true);
+      promptCoachSecret(() => analyzeFoodPhotoFile(file));
+      return;
+    }
     if (!res.ok) {
       showStatus('food-photo-status', 'Tunnistus epäonnistui, yritä uudelleen', true);
       return;
@@ -4444,6 +4440,13 @@ async function estimateMissingRowsWithAI() {
     if (res.status === 429) {
       btn.disabled = false;
       showStatus('food-photo-ai-status', 'Päivän arviointiraja täynnä, yritä huomenna', true);
+      return;
+    }
+    if (res.status === 401) {
+      btn.disabled = false;
+      localStorage.removeItem('coachSecret');
+      showStatus('food-photo-ai-status', 'Väärä salasana', true);
+      promptCoachSecret(() => estimateMissingRowsWithAI());
       return;
     }
     if (!res.ok) {
@@ -4950,7 +4953,7 @@ async function openProfileModal() {
     saveBtn.disabled = false;
     if (error) { showStatus('profile-settings-status', 'Virhe: ' + error.message, true); return; }
     showStatus('profile-settings-status', 'Tallennettu!', false);
-    loadWeeklyReportCard();
+    loadWeeklyReportCard(0);
     if (typeof loadDeficitHeroMetric === 'function') loadDeficitHeroMetric();
     setTimeout(() => { const ov = document.getElementById('profile-settings-overlay'); if (ov) ov.remove(); }, 800);
   };
@@ -5197,6 +5200,10 @@ function parseNum(id) {
   return isNaN(n) ? null : n;
 }
 
+function numOrNull(n) {
+  return isNaN(n) ? null : n;
+}
+
 function showStatus(id, msg, isErr) {
   const el = document.getElementById(id);
   el.textContent = msg;
@@ -5355,9 +5362,12 @@ function promptCoachSecret(onSet) {
     <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Valmentajan salasana</div>
     <div class="form-row"><label>Salasana</label><input type="password" id="coach-secret-input"></div>
     <button class="btn btn-primary" id="coach-secret-save-btn">Tallenna</button>
+    <button class="btn" id="coach-secret-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Peruuta</button>
   `;
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  document.getElementById('coach-secret-cancel-btn').onclick = () => overlay.remove();
 
   document.getElementById('coach-secret-save-btn').onclick = () => {
     const val = document.getElementById('coach-secret-input').value;
@@ -5456,11 +5466,11 @@ async function loadKoonti() {
   document.getElementById('koonti-date').textContent =
     new Date().toLocaleDateString('fi-FI', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  loadWeekSummary();
-  loadMotivationSummary();
+  loadWeekSummary(0);
+  loadMotivationSummary(0);
   renderOnboardingCard();
   initNotifToggle();
-  loadWeeklyReportCard();
+  loadWeeklyReportCard(0);
   loadDeficitHeroMetric();
   loadHuomioita();
 
@@ -5504,7 +5514,7 @@ async function loadKoonti() {
     ? `${actRows[0].activity_type} · ${actRows[0].duration_min ?? '—'} min (${actRows[0].activity_date})`
     : 'Ei aktiviteetteja vielä';
 
-  const activityProgress = await loadActivityGoalProgress();
+  const activityProgress = await loadActivityGoalProgress(0);
   const kcAerobiaGoal = document.getElementById('kc-aerobia-goal');
   if (activityProgress && activityProgress.goals &&
       (activityProgress.goals.weekly_km != null || activityProgress.goals.weekly_sessions != null)) {
@@ -5919,11 +5929,14 @@ const MAX_RETRY_ATTEMPTS = 5;
 let flushInFlight = false;
 
 function looksOffline(error) {
+  // Postgrest-koodi tarkoittaa että palvelin todella käsitteli pyynnön ja hylkäsi sen
+  // (esim. constraint violation) — tämä ei ole koskaan verkko-ongelma, vaikka navigator.onLine
+  // olisikin virheellisesti false.
+  const hasPostgrestCode = error && typeof error.code === 'string' && error.code.length > 0;
+  if (hasPostgrestCode) return false;
   if (!navigator.onLine) return true;
   const msg = ((error && error.message) || '').toLowerCase();
-  const looksNetworky = msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed') || msg.includes('network request failed');
-  const hasPostgrestCode = error && typeof error.code === 'string' && error.code.length > 0;
-  return looksNetworky && !hasPostgrestCode;
+  return msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed') || msg.includes('network request failed');
 }
 
 function loadQueue() {
@@ -5942,15 +5955,25 @@ function persistQueue(q) {
 function updateOfflineBanner(queue) {
   const banner = document.getElementById('offline-banner');
   const text = document.getElementById('offline-banner-text');
+  const discardBtn = document.getElementById('offline-banner-discard-btn');
   if (!banner || !text) return;
   if (queue.length === 0) { banner.style.display = 'none'; return; }
   const stuck = queue.filter(e => e.attempts >= MAX_RETRY_ATTEMPTS).length;
   const pending = queue.length - stuck;
   let msg = '';
   if (pending > 0) msg += `${pending} tallennusta odottaa synkronointia`;
-  if (stuck > 0) msg += (msg ? ' · ' : '') + `${stuck} jumissa (yritä myöhemmin uudelleen)`;
+  if (stuck > 0) msg += (msg ? ' · ' : '') + `${stuck} jumissa`;
   text.textContent = msg;
+  if (discardBtn) discardBtn.style.display = stuck > 0 ? 'inline-block' : 'none';
   banner.style.display = 'block';
+}
+
+function discardStuckQueueEntries() {
+  const q = loadQueue();
+  const stuckCount = q.filter(e => e.attempts >= MAX_RETRY_ATTEMPTS).length;
+  if (!stuckCount) return;
+  if (!confirm(`Poistetaanko ${stuckCount} pysyvästi epäonnistunutta tallennusta? Näitä muutoksia ei tallenneta.`)) return;
+  persistQueue(q.filter(e => e.attempts < MAX_RETRY_ATTEMPTS));
 }
 
 function enqueueWrite(entry) {

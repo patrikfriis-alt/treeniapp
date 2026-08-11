@@ -52,7 +52,7 @@ function parseEstimateEntry(entry: any): Estimate | null {
   if (entry === null || entry === undefined) return null;
   const fields = ['kcalPer100g', 'proteinPer100g', 'carbsPer100g', 'fatPer100g'] as const;
   for (const f of fields) {
-    if (entry[f] === null || entry[f] === undefined || !Number.isFinite(Number(entry[f]))) return null;
+    if (typeof entry[f] !== 'number' || !Number.isFinite(entry[f]) || entry[f] < 0) return null;
   }
   return {
     kcalPer100g: Number(entry.kcalPer100g),

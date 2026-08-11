@@ -76,12 +76,11 @@ async function updateCoachNotes(
     return;
   }
 
-  const { error: trackError } = await sb.from('coach_api_calls').insert({});
-  if (trackError) console.error('failed to record notes-update api call:', trackError.message);
-
+  // Ei omaa coach_api_calls-merkintää: tämä on osa samaa loogista viestiä kuin
+  // pääkeskustelu, ei erillinen käyttäjän lähettämä viesti DAILY_MESSAGE_LIMITia varten.
   const { error: updateErr } = await sb
     .from('coach_notes')
-    .update({ notes: updatedNotes.trim(), updated_at: new Date().toISOString() })
+    .update({ notes: updatedNotes.trim().slice(0, 2000), updated_at: new Date().toISOString() })
     .eq('id', 1);
   if (updateErr) console.error('coach_notes update failed:', updateErr.message);
 }
@@ -159,7 +158,9 @@ Deno.serve(async (req) => {
   }
 
   const lastUserMessage = messages[messages.length - 1]?.content || '';
-  await updateCoachNotes(sb, lastUserMessage, reply);
+  // Ei odoteta valmiiksi: muistiinpanojen päivitys ei saa hidastaa vastausta käyttäjälle.
+  // @ts-ignore EdgeRuntime on Deno Deploy -globaali, ei osa Deno-tyyppejä.
+  EdgeRuntime.waitUntil(updateCoachNotes(sb, lastUserMessage, reply));
 
   return new Response(JSON.stringify({ reply }), {
     headers: { ...CORS_HEADERS, 'content-type': 'application/json' },
