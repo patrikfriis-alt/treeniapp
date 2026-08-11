@@ -226,6 +226,44 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .metric-modal-bar.neg { background:var(--red); }
 .metric-modal-bar-label { font-size:9px; color:var(--text3); }
 
+/* ─── Modal sheet (createModalOverlay) ──────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.modal-overlay.open { opacity: 1; }
+.modal-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 24px 24px 0 0;
+  box-sizing: border-box;
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.modal-overlay.open .modal-sheet { transform: translateY(0); }
+.modal-sheet::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 4px;
+  border-radius: 3px;
+  background: rgba(235,235,245,0.3);
+}
+
 .coach-list-item { cursor:pointer; }
 .coach-thread { display:flex; flex-direction:column; gap:10px; padding-bottom:80px; }
 .coach-bubble { max-width:85%; padding:10px 14px; border-radius:14px; font-size:14px; line-height:1.4; white-space:pre-wrap; }
@@ -1304,7 +1342,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.37.0</div>
+    <div class="version-chip" style="margin:0">v1.38.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('ohjelma',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
@@ -3173,7 +3211,7 @@ function openEditActivityDialog(activityId) {
   const typeOptions = [...extraType, ...types].map(t => `<option ${t === a.activity_type ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('');
 
   const { overlay, modal } = createModalOverlay('edit-act-overlay');
-  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);padding:24px;width:100%;';
   modal.innerHTML = `
     <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Muokkaa aktiviteettia</div>
     <div class="form-row"><label>Päivämäärä</label><input type="date" id="edit-act-date" value="${a.activity_date || ''}"></div>
@@ -3768,7 +3806,7 @@ function openDayPopup(dateIso, dayData) {
 
 function showDayModal(title, body) {
   const { overlay, modal } = createModalOverlay('day-modal-overlay');
-  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:400px;width:100%;max-height:80vh;overflow-y:auto;';
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);padding:24px;width:100%;max-height:80vh;overflow-y:auto;';
 
   const titleEl = document.createElement('div');
   titleEl.style.cssText = 'font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)';
@@ -4398,7 +4436,7 @@ function openEditFoodPhotoRowMacrosDialog(id) {
   if (!row) return;
 
   const { overlay, modal } = createModalOverlay('edit-photo-row-overlay', 1000);
-  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);padding:24px;width:100%;';
   modal.innerHTML = `
     <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">${escapeHtml(row.name)}</div>
     <div class="form-row"><label>Kcal/100g</label><input type="text" inputmode="decimal" id="edit-photo-row-kcal" value="${row.kcalPer100g ?? ''}"></div>
@@ -4746,7 +4784,7 @@ function openEditEntryDialog(entryId) {
   const name = foodItemName(entry);
 
   const { overlay, modal } = createModalOverlay('edit-entry-overlay');
-  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);padding:24px;width:100%;';
   modal.innerHTML = `
     <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">${name}</div>
     <div class="form-row"><label>Määrä (g)</label><input type="number" id="edit-entry-grams" value="${entry.amount_g}"></div>
@@ -4812,7 +4850,7 @@ async function openActivityGoalsModal() {
   const goals = (await loadActivityGoals()) || {};
 
   const { overlay, modal } = createModalOverlay('activity-goals-overlay');
-  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:400px;width:100%;max-height:85vh;overflow-y:auto;';
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);padding:24px;width:100%;max-height:85vh;overflow-y:auto;';
 
   const field = (id, label, val) =>
     `<div class="form-row"><label>${label}</label><input type="text" inputmode="decimal" id="${id}" value="${val == null ? '' : val}"></div>`;
@@ -4861,7 +4899,7 @@ async function openGoalsModal() {
   const goals = (await loadNutritionGoals()) || {};
 
   const { overlay, modal } = createModalOverlay('goals-overlay');
-  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:400px;width:100%;max-height:85vh;overflow-y:auto;';
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);padding:24px;width:100%;max-height:85vh;overflow-y:auto;';
 
   const field = (id, label, val) =>
     `<div class="form-row"><label>${label}</label><input type="text" inputmode="decimal" id="${id}" value="${val == null ? '' : val}"></div>`;
@@ -4912,7 +4950,7 @@ async function openProfileModal() {
   const profile = (await loadUserProfile()) || {};
 
   const { overlay, modal } = createModalOverlay('profile-settings-overlay');
-  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);padding:24px;width:100%;';
 
   modal.innerHTML = `
     <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Profiili</div>
@@ -4967,7 +5005,7 @@ async function openProfileModal() {
 
 function openMetricModal(title, bodyHtml) {
   const { modal } = createModalOverlay('metric-info-overlay');
-  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;max-height:80vh;overflow-y:auto;';
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);padding:24px;width:100%;max-height:80vh;overflow-y:auto;';
 
   modal.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
@@ -5084,7 +5122,7 @@ async function openCalorieSettingsModal() {
   const percentValue = Math.round((1 - correction) * 100);
 
   const { overlay, modal } = createModalOverlay('calorie-settings-overlay');
-  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);padding:24px;width:100%;';
 
   modal.innerHTML = `
     <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Kalorikerroin</div>
@@ -5121,7 +5159,7 @@ async function openStepsGoalModal() {
   const currentGoal = settings.daily_steps_goal != null ? settings.daily_steps_goal : '';
 
   const { overlay, modal } = createModalOverlay('steps-goal-overlay');
-  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);padding:24px;width:100%;';
 
   modal.innerHTML = `
     <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Askeltavoite</div>
@@ -5175,19 +5213,25 @@ function numOrNull(n) {
   return isNaN(n) ? null : n;
 }
 
-// Luo modaalin overlay+kortti-runko: poistaa mahdollisen samannimisen vanhan overlayn,
-// liittää molemmat DOM:iin ja kytkee taustaklikkauksella sulkemisen. Kutsuja asettaa itse
-// modal.style.cssText (leveys/scroll vaihtelee) ja modal.innerHTML/lapset.
+// Luo modaalin overlay+sheet-runko (liukuu alhaalta, ks. .modal-overlay/.modal-sheet):
+// poistaa mahdollisen samannimisen vanhan overlayn, liittää molemmat DOM:iin, käynnistää
+// avautumisanimaation ja kytkee taustaklikkauksella sulkemisen. Kutsuja asettaa itse
+// modal.style.cssText (tausta/padding/scroll vaihtelee) ja modal.innerHTML/lapset.
+// Muoto (kulmapyöristys, leveys, liu'un animaatio) tulee .modal-sheet-luokasta — kutsuja
+// EI saa asettaa border-radius/max-width:tä inline, se rikkoisi sheet-ulkoasun.
 function createModalOverlay(overlayId, zIndex = 200) {
   const existing = document.getElementById(overlayId);
   if (existing) existing.remove();
   const overlay = document.createElement('div');
   overlay.id = overlayId;
-  overlay.style.cssText = `position:fixed;inset:0;z-index:${zIndex};background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;`;
+  overlay.className = 'modal-overlay';
+  overlay.style.cssText = `z-index:${zIndex};`;
   const modal = document.createElement('div');
+  modal.className = 'modal-sheet';
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  requestAnimationFrame(() => { overlay.classList.add('open'); });
   return { overlay, modal };
 }
 
@@ -5344,7 +5388,7 @@ function getCoachSecret() {
 
 function promptCoachSecret(onSet) {
   const { overlay, modal } = createModalOverlay('coach-secret-overlay');
-  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);padding:24px;width:100%;';
   modal.innerHTML = `
     <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Valmentajan salasana</div>
     <div class="form-row"><label>Salasana</label><input type="password" id="coach-secret-input"></div>
