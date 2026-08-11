@@ -32,7 +32,7 @@ Lisää **Jos**-toiminto (If): `WorkoutType` **sisältää** `Strength`
 
 **Hae sisältö URL:sta** (Get Contents of URL):
 - Metodi: `PATCH`
-- URL: `https://dodrzzgbdlucjbkmxbjn.supabase.co/rest/v1/workout_sessions?workout_date=eq.[EndDate]`
+- URL: `https://yznuzwbbyasgqeqllxic.supabase.co/rest/v1/workout_sessions?workout_date=eq.[EndDate]`
 - Headerit:
   - `apikey`: `<anon-avain index.html:sta>`
   - `Authorization`: `Bearer <sama anon-avain>`
@@ -46,7 +46,7 @@ Lisää **Jos**-toiminto (If): `WorkoutType` **sisältää** `Strength`
 
 **Get Contents of URL:**
 - Metodi: `POST`
-- URL: `https://dodrzzgbdlucjbkmxbjn.supabase.co/rest/v1/activity_data?on_conflict=healthkit_uuid`
+- URL: `https://yznuzwbbyasgqeqllxic.supabase.co/rest/v1/activity_data?on_conflict=healthkit_uuid`
 - Headerit: sama `apikey`/`Authorization`/`Content-Type` + `Prefer`: `resolution=merge-duplicates`
 - Runko:
   ```json
@@ -107,7 +107,7 @@ Askeleet eivät liity yksittäiseen treeniin, joten tämä tarvitsee toisen, eri
 
 **Hae sisältö URL:sta** (Get Contents of URL):
 - Metodi: `POST`
-- URL: `https://dodrzzgbdlucjbkmxbjn.supabase.co/rest/v1/step_data?on_conflict=step_date`
+- URL: `https://yznuzwbbyasgqeqllxic.supabase.co/rest/v1/step_data?on_conflict=step_date`
 - Headerit:
   - `apikey`: `<anon-avain index.html:sta>`
   - `Authorization`: `Bearer <sama anon-avain>`
@@ -122,7 +122,11 @@ Askeleet eivät liity yksittäiseen treeniin, joten tämä tarvitsee toisen, eri
 
 Paina automaation kohdalla **"Kokeile"** (Run) manuaalisesti — tarkista että tälle päivälle ilmestyy rivi `step_data`-tauluun Supabasen dashboardista (Table Editor), ja että uudelleenajo päivittää saman rivin sen sijaan että loisi uuden.
 
-## 8. Unen synkkaus
+## 8. Unen synkkaus (VANHENTUNUT — poistettu käytöstä v1.31.0:ssa)
+
+Tämä HealthKit-pohjainen unisynkkaus on korvattu käsin syötettävällä unipistemäärällä (0-100) suoraan sovelluksen "Kirjaa uni" -lomakkeella. Jos tämä automaatio on yhä olemassa Shortcuts-sovelluksessa, se voidaan poistaa — sovellus ei enää lue `duration_min`/`deep_sleep_min`/`rem_sleep_min`/`awakenings`-sarakkeita mistään.
+
+Alla oleva ohje on jätetty historialliseksi viitteeksi.
 
 Uni ei ole treenin kaltainen yksittäinen tapahtuma eikä askelten kaltainen jatkuvasti kasvava luku — se on aikaleimattuja vaihejaksoja (kevyt/syvä/REM/hereillä) joita Watch tallentaa yön aikana. Tämä automaatio ajetaan kerran päivässä aamulla, jolloin edellisen yön data on jo kokonaan synkronoitunut.
 
