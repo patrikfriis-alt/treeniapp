@@ -4,6 +4,7 @@ import { buildDataContext } from './context.ts';
 const SB_URL = Deno.env.get('SUPABASE_URL')!;
 const SB_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const COACH_SECRET = Deno.env.get('COACH_SECRET')!;
+const CRON_SECRET = Deno.env.get('CRON_SECRET')!;
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const DAILY_MESSAGE_LIMIT = 100;
 
@@ -22,6 +23,15 @@ Säännöt:
 - Vastaa suomeksi.`;
 
 const NOTES_SYSTEM_PROMPT = `Sinun tehtäväsi on ylläpitää lyhyttä muistiinpanoa käyttäjästä havaintojen perusteella. Tässä ovat nykyiset muistiinpanot ja äskeinen keskusteluvaihto. Päivitä muistiinpanot jos jotain uutta ja pysyvästi hyödyllistä ilmeni (esim. toistuvia tapoja, mieltymyksiä, poikkeamia) — älä toista dataa jonka valmentaja jo näkee joka viestillä (esim. tarkkoja lukuja), keskity havaintoihin jotka eivät muuten näkyisi. Jos mikään ei ole muuttunut, palauta muistiinpanot muuttumattomina. Pidä muistiinpanot lyhyinä (muutama virke). Vastaa PELKÄSTÄÄN päivitetyillä muistiinpanoilla, ei muuta tekstiä.`;
+
+const WEEKLY_SUMMARY_SYSTEM_PROMPT = `Olet Valkku-sovelluksen henkilökohtainen valmentaja. Kirjoita lyhyt, ystävällinen viikkokooste käyttäjälle annetun datan perusteella — kuin lähettäisit viestin asiakkaallesi viikon päätteeksi.
+
+Säännöt:
+- Nosta esiin 2-4 huomionarvoisinta asiaa viikolta (edistyminen, huolestuttavat trendit, saavutukset) — älä listaa kaikkea dataa mekaanisesti.
+- Ole kannustava mutta rehellinen; jos jokin trendi on huolestuttava (esim. unen puute, ylikuormitus), mainitse se suoraan.
+- Pituus: 3-6 virkettä.
+- Älä käytä otsikoita tai luettelomerkkejä, kirjoita juoksevaa tekstiä kuin viesti.
+- Vastaa suomeksi.`;
 
 async function callClaude(
   systemPrompt: string,
@@ -85,10 +95,75 @@ async function updateCoachNotes(
   if (updateErr) console.error('coach_notes update failed:', updateErr.message);
 }
 
+async function handleWeeklySummary(req: Request): Promise<Response> {
+  if (req.headers.get('x-cron-secret') !== CRON_SECRET) {
+    return new Response('Unauthorized', { status: 401, headers: CORS_HEADERS });
+  }
+
+  const sb = createClient(SB_URL, SB_SERVICE_KEY);
+
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const { count: todayCount, error: countError } = await sb
+    .from('coach_api_calls')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', todayStart.toISOString());
+  if (countError) {
+    console.error('daily count query failed:', countError.message);
+    return new Response('Rate limit check failed', { status: 500, headers: CORS_HEADERS });
+  }
+  if ((todayCount || 0) >= DAILY_MESSAGE_LIMIT) {
+    return new Response('Daily message limit reached', { status: 429, headers: CORS_HEADERS });
+  }
+
+  const { error: trackError } = await sb.from('coach_api_calls').insert({});
+  if (trackError) {
+    console.error('failed to record api call:', trackError.message);
+    return new Response('Rate limit check failed', { status: 500, headers: CORS_HEADERS });
+  }
+
+  let dataContext: string;
+  try {
+    dataContext = await buildDataContext(sb);
+  } catch (err) {
+    console.error('buildDataContext failed:', err instanceof Error ? err.message : String(err));
+    return new Response('Data fetch failed', { status: 502, headers: CORS_HEADERS });
+  }
+  const summaryPrompt = `${WEEKLY_SUMMARY_SYSTEM_PROMPT}\n\n---\n\nKäyttäjän data:\n${dataContext}`;
+
+  let summary: string;
+  try {
+    summary = await callClaude(summaryPrompt, [{ role: 'user', content: 'Kirjoita tämän viikon kooste.' }]);
+  } catch (err) {
+    console.error('weekly summary Claude call failed:', err instanceof Error ? err.message : String(err));
+    return new Response('AI request failed', { status: 502, headers: CORS_HEADERS });
+  }
+
+  const conversationId = crypto.randomUUID();
+  const { error: insertError } = await sb.from('coach_messages').insert([
+    { conversation_id: conversationId, role: 'user', content: 'Viikkokooste' },
+    { conversation_id: conversationId, role: 'assistant', content: summary },
+  ]);
+  if (insertError) {
+    console.error('weekly summary insert failed:', insertError.message);
+    return new Response('Failed to save summary', { status: 500, headers: CORS_HEADERS });
+  }
+
+  return new Response(JSON.stringify({ conversationId }), {
+    headers: { ...CORS_HEADERS, 'content-type': 'application/json' },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS });
   }
+
+  const url = new URL(req.url);
+  if (url.searchParams.get('type') === 'weekly-summary') {
+    return handleWeeklySummary(req);
+  }
+
   if (req.method !== 'POST') {
     return new Response('Method Not Allowed', { status: 405, headers: CORS_HEADERS });
   }

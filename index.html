@@ -329,6 +329,18 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 }
 .huomio-row { font-size: 14px; color: var(--text); padding: 6px 0; line-height: 1.4; }
 .huomio-row + .huomio-row { border-top: 1px solid var(--border); }
+.huomio-action-btn {
+  display: block;
+  margin-top: 8px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
 .koonti-cards {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1288,6 +1300,10 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
       <div class="status" id="sleep-status"></div>
     </div>
     <div class="card">
+      <div class="card-title">Kehitys</div>
+      <div class="chart-wrap"><canvas id="sleep-chart"></canvas></div>
+    </div>
+    <div class="card">
       <div class="card-title">Historia</div>
       <div id="sleep-history"><div style="color:var(--text3);font-size:13px">Ladataan...</div></div>
     </div>
@@ -1323,7 +1339,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <div class="food-hero-label">RUOKA</div>
     <div class="food-hero-main" id="food-hero-kcal">0 kcal</div>
     <div class="food-hero-stats">
-      <div><div class="food-hero-stat-val" id="food-hero-protein">0g</div><div class="food-hero-stat-label">Proteiini</div></div>
+      <div><div class="food-hero-stat-val" id="food-hero-protein">0g</div><div class="food-hero-stat-label">Proteiini</div><div class="koonti-progress-track" id="food-hero-protein-bar-track" style="display:none;margin-top:5px;width:56px"><div class="koonti-progress-fill" id="food-hero-protein-bar-fill" style="width:0%"></div></div></div>
       <div class="food-hero-divider"></div>
       <div><div class="food-hero-stat-val" id="food-hero-carbs">0g</div><div class="food-hero-stat-label">Hiilarit</div></div>
       <div class="food-hero-divider"></div>
@@ -1342,7 +1358,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.38.0</div>
+    <div class="version-chip" style="margin:0">v1.39.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('ohjelma',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
@@ -2190,6 +2206,8 @@ async function loadHuomioita() {
   const thisWeekFrom = thisWeek.iso, thisWeekTo = todayIso;
   const lastWeekFrom = lastWeekMon.iso, lastWeekTo = localIso(lastWeekSun);
 
+  if (!appSettings) appSettings = await loadAppSettings();
+
   const [
     { data: setsRows },
     { data: weightRows },
@@ -2281,13 +2299,15 @@ async function loadHuomioita() {
     .reduce((s, r) => s + r.weight_kg * r.reps, 0);
   const tonnageThis = tonnageForRange(thisWeekFrom, thisWeekTo);
   const tonnageLast = tonnageForRange(lastWeekFrom, lastWeekTo);
-  if (hasSleepScoreData && tonnageLast > 0) {
+  const alreadyMarkedDeload = !!(appSettings && appSettings.deload_week_monday === thisWeek.iso);
+  if (hasSleepScoreData && tonnageLast > 0 && !alreadyMarkedDeload) {
     const scoreDrop = Math.round(avgScoreLast - avgScoreThis);
     const tonnagePct = (tonnageThis - tonnageLast) / tonnageLast;
     if (tonnagePct >= 0.10 && scoreDrop >= 10) {
       insights.push({
         text: `Treenimäärä +${Math.round(tonnagePct * 100)}%, unipisteet -${scoreDrop}p — harkitse kevyempää viikkoa`,
         magnitude: tonnagePct + scoreDrop / 100,
+        action: `<button class="huomio-action-btn" onclick="event.stopPropagation();markThisWeekDeload()">Merkitse kevyeksi viikoksi</button>`,
       });
     }
   }
@@ -2299,8 +2319,20 @@ async function loadHuomioita() {
     container.style.display = 'none';
     return;
   }
-  list.innerHTML = top3.map(i => `<div class="huomio-row">${escapeHtml(i.text)}</div>`).join('');
+  list.innerHTML = top3.map(i => `<div class="huomio-row">${escapeHtml(i.text)}${i.action || ''}</div>`).join('');
   container.style.display = '';
+}
+
+async function markThisWeekDeload() {
+  const monday = wStart(0).iso;
+  const { error } = await sbWrite({
+    table: 'app_settings',
+    op: 'upsert',
+    payload: { id: 1, deload_week_monday: monday, updated_at: new Date().toISOString() },
+  });
+  if (error) { console.error('markThisWeekDeload failed:', error.message); return; }
+  appSettings = null;
+  loadHuomioita();
 }
 
 let motivationCache = {};
@@ -2632,7 +2664,8 @@ async function renderSession() {
     const noSetsYet = !ed.sets || !ed.sets.length || ed.sets.every(s => !s || (!s.kg && !s.reps));
     if (prev && started && !done && noSetsYet) {
       const repsList = prev.map(s => s.reps).filter(r => r != null);
-      const cleanly = repsList.length > 0 && repsList.every(r => r >= repsList[0]);
+      const isDeloadWeek = !!(appSettings && appSettings.deload_week_monday === wStart(wOff).iso);
+      const cleanly = !isDeloadWeek && repsList.length > 0 && repsList.every(r => r >= repsList[0]);
       const k = eKey(wOff, aDay, st, ei);
       if (!LD[k]) LD[k] = { sets: [] };
       let anyApplied = false;
@@ -3357,6 +3390,31 @@ async function loadSleep() {
         <div class="hist-val">${s.sleep_score != null ? s.sleep_score + 'p' : '—'}</div>
       </div>`).join('');
   }
+
+  const { data: chartData, error: chartError } = await sb.from('sleep_data').select('sleep_date,sleep_score')
+    .not('sleep_score', 'is', null)
+    .order('sleep_date', { ascending: false }).limit(30);
+  if (chartError) { console.error('loadSleep (chart) failed:', chartError.message); return; }
+  if (chartData && chartData.length > 1) {
+    if (charts.sleep) charts.sleep.destroy();
+    charts.sleep = new Chart(document.getElementById('sleep-chart'), {
+      type: 'line',
+      data: {
+        labels: [...chartData].reverse().map(d => d.sleep_date.slice(5)),
+        datasets: [
+          { label:'Unipisteet', data:[...chartData].reverse().map(d=>d.sleep_score), borderColor:'#0a84ff', borderWidth:2, pointRadius:3, pointBackgroundColor:'#0a84ff', tension:.3, fill:false },
+        ],
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{
+          y:{ min:0, max:100, ticks:{ color:'#555', font:{size:10} }, grid:{ color:'#222' } },
+          x:{ ticks:{ color:'#555', font:{size:10} }, grid:{ display:false } },
+        },
+      },
+    });
+  }
 }
 
 async function saveSleep() {
@@ -3953,6 +4011,16 @@ function renderFoodHero(entries, weekKcal) {
   document.getElementById('food-hero-protein').textContent = Math.round(totalProtein) + 'g';
   document.getElementById('food-hero-carbs').textContent   = Math.round(totalCarbs) + 'g';
   document.getElementById('food-hero-fat').textContent     = Math.round(totalFat) + 'g';
+
+  const proteinGoal = foodGoals && foodGoals.daily_protein_g;
+  const proteinBarTrack = document.getElementById('food-hero-protein-bar-track');
+  const proteinBarFill = document.getElementById('food-hero-protein-bar-fill');
+  if (proteinGoal) {
+    proteinBarFill.style.width = Math.min(100, Math.round(totalProtein / proteinGoal * 100)) + '%';
+    proteinBarTrack.style.display = '';
+  } else {
+    proteinBarTrack.style.display = 'none';
+  }
 
   const weekRow = document.getElementById('food-week-row');
   const weeklyTarget = foodGoals && foodGoals.weekly_kcal;
@@ -5086,9 +5154,10 @@ function openMonthModal() {
 async function openStepsModal() {
   const weekStartIso = wStart(0).iso;
   const todayIso = localIso(new Date());
+  const chartFromIso = localIso(addDays(new Date(), -29));
   const { data, error } = await sb.from('step_data')
     .select('step_date,steps')
-    .gte('step_date', weekStartIso)
+    .gte('step_date', chartFromIso)
     .order('step_date', { ascending: false });
   if (error) {
     console.error('openStepsModal failed:', error.message);
@@ -5096,23 +5165,48 @@ async function openStepsModal() {
     return;
   }
   const rows = data || [];
+  const weekRows = rows.filter(r => r.step_date >= weekStartIso);
   const today = rows.find(r => r.step_date === todayIso);
-  const avg = rows.length ? rows.reduce((s, r) => s + r.steps, 0) / rows.length : 0;
+  const avg = weekRows.length ? weekRows.reduce((s, r) => s + r.steps, 0) / weekRows.length : 0;
 
   if (!appSettings) appSettings = await loadAppSettings();
   const goal = appSettings && appSettings.daily_steps_goal != null ? appSettings.daily_steps_goal : null;
 
   let body = `
     <div class="metric-modal-row"><span>Tänään</span><span class="val">${today ? today.steps.toLocaleString('fi-FI') : '—'}</span></div>
-    <div class="metric-modal-row"><span>Viikon keskiarvo</span><span class="val">${rows.length ? Math.round(avg).toLocaleString('fi-FI') : '—'}</span></div>
+    <div class="metric-modal-row"><span>Viikon keskiarvo</span><span class="val">${weekRows.length ? Math.round(avg).toLocaleString('fi-FI') : '—'}</span></div>
   `;
   if (goal != null) {
     body += `<div class="metric-modal-row"><span>Tavoite</span><span class="val">${goal.toLocaleString('fi-FI')}</span></div>`;
   }
-  if (!rows.length) {
+  if (!weekRows.length) {
     body += `<div class="status" style="margin-top:8px;">Ei kirjauksia vielä tällä viikolla</div>`;
   }
+  if (rows.length > 1) {
+    body += `<div class="chart-wrap" style="margin-top:14px"><canvas id="steps-chart"></canvas></div>`;
+  }
   openMetricModal('Askeleet', body);
+
+  if (rows.length > 1) {
+    if (charts.steps) charts.steps.destroy();
+    charts.steps = new Chart(document.getElementById('steps-chart'), {
+      type: 'line',
+      data: {
+        labels: [...rows].reverse().map(r => r.step_date.slice(5)),
+        datasets: [
+          { label:'Askeleet', data:[...rows].reverse().map(r=>r.steps), borderColor:'#30d158', borderWidth:2, pointRadius:2, pointBackgroundColor:'#30d158', tension:.3, fill:false },
+        ],
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{
+          y:{ beginAtZero:true, ticks:{ color:'#555', font:{size:10} }, grid:{ color:'#222' } },
+          x:{ ticks:{ color:'#555', font:{size:10}, maxTicksLimit:8 }, grid:{ display:false } },
+        },
+      },
+    });
+  }
 }
 
 async function openCalorieSettingsModal() {
@@ -5211,6 +5305,17 @@ function parseNum(id) {
 
 function numOrNull(n) {
   return isNaN(n) ? null : n;
+}
+
+// Sovelluskuvakkeen merkki (iOS 16.4+, vain kun PWA lisätty Koti-valikkoon).
+// Näyttää merkin jos päivälle ei ole vielä kirjattu saliharjoitusta eikä aktiviteettia.
+function updateAppBadge(anyDoneToday) {
+  if (!('setAppBadge' in navigator)) return;
+  if (anyDoneToday) {
+    navigator.clearAppBadge().catch(() => {});
+  } else {
+    navigator.setAppBadge(1).catch(() => {});
+  }
 }
 
 // Luo modaalin overlay+sheet-runko (liukuu alhaalta, ks. .modal-overlay/.modal-sheet):
@@ -5512,7 +5617,8 @@ async function loadKoonti() {
   const kcSaliSub  = document.getElementById('kc-sali-sub');
   kcSaliSub.classList.remove('skel-sub');
   kcSaliCard.classList.remove('koonti-card--done', 'koonti-card--inprogress');
-  if (wsRows && wsRows[0] && wsRows[0].is_done) {
+  const saliDoneToday = !!(wsRows && wsRows[0] && wsRows[0].is_done);
+  if (saliDoneToday) {
     const cal = wsRows[0].calories ? ` · ${wsRows[0].calories} kcal` : '';
     kcSaliSub.textContent = `Tehty ✓${cal}`;
     kcSaliCard.classList.add('koonti-card--done');
@@ -5542,6 +5648,8 @@ async function loadKoonti() {
   kcAerobiaSub.textContent = (actRows && actRows[0])
     ? `${actRows[0].activity_type} · ${actRows[0].duration_min ?? '—'} min (${actRows[0].activity_date})`
     : 'Ei aktiviteetteja vielä';
+
+  updateAppBadge(saliDoneToday || aerobiaDoneToday);
 
   const activityProgress = await loadActivityGoalProgress(0);
   const kcAerobiaGoal = document.getElementById('kc-aerobia-goal');
