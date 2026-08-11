@@ -1240,7 +1240,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.31.0</div>
+    <div class="version-chip" style="margin:0">v1.32.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('ohjelma',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
@@ -2699,15 +2699,17 @@ async function saveBodyMetrics() {
   const btn = document.querySelector('#page-keho .btn-primary');
   btn.disabled = true;
   try {
+    const payload = { measured_at: date };
+    const weight = parseNum('body-weight');
+    const fat = parseNum('body-fat');
+    const muscle = parseNum('body-muscle');
+    if (weight != null) payload.weight_kg = weight;
+    if (fat != null) payload.fat_pct = fat;
+    if (muscle != null) payload.muscle_pct = muscle;
     const { error } = await sbWrite({
       table: 'body_metrics',
       op: 'upsert',
-      payload: {
-        measured_at: date,
-        weight_kg:   parseNum('body-weight'),
-        fat_pct:     parseNum('body-fat'),
-        muscle_pct:  parseNum('body-muscle'),
-      },
+      payload,
       opts: { onConflict:'measured_at' },
     });
     if (error) { showStatus('body-status','Virhe: '+error.message,true); return; }
@@ -2771,7 +2773,7 @@ async function getBmrInfo() {
 
 async function getExerciseCalories(fromIso, toIso) {
   if (!appSettings) appSettings = await loadAppSettings();
-  const correction = (appSettings && appSettings.calorie_correction) ?? 1;
+  const correction = (appSettings && appSettings.calorie_correction) ?? 0.72;
   const [{ data: actData }, { data: sessData }] = await Promise.all([
     sb.from('activity_data').select('calories').gte('activity_date', fromIso).lte('activity_date', toIso),
     sb.from('workout_sessions').select('calories').gte('workout_date', fromIso).lte('workout_date', toIso),
@@ -2790,7 +2792,7 @@ async function getFoodCalories(fromIso, toIso) {
 
 async function getDailyExerciseCalories(fromIso, toIso) {
   if (!appSettings) appSettings = await loadAppSettings();
-  const correction = (appSettings && appSettings.calorie_correction) ?? 1;
+  const correction = (appSettings && appSettings.calorie_correction) ?? 0.72;
   const [{ data: actData }, { data: sessData }] = await Promise.all([
     sb.from('activity_data').select('calories,activity_date').gte('activity_date', fromIso).lte('activity_date', toIso),
     sb.from('workout_sessions').select('calories,workout_date').gte('workout_date', fromIso).lte('workout_date', toIso),
@@ -3036,7 +3038,7 @@ async function renderAerobiaGoalCard() {
 
 async function loadActivities() {
   if (!appSettings) appSettings = await loadAppSettings();
-  const correction = (appSettings && appSettings.calorie_correction) ?? 1;
+  const correction = (appSettings && appSettings.calorie_correction) ?? 0.72;
 
   const { data, error } = await sb.from('activity_data').select('*')
     .order('activity_date',{ ascending:false })
@@ -3075,7 +3077,7 @@ async function loadActivities() {
       : '';
     return `
     <div class="hist-item" style="cursor:pointer" onclick="openEditActivityDialog('${a.id}')">
-      <div><div class="hist-label">${sourceBadge}${a.activity_type}</div><div class="hist-date">${a.activity_date}</div></div>
+      <div><div class="hist-label">${sourceBadge}${escapeHtml(a.activity_type)}</div><div class="hist-date">${a.activity_date}</div></div>
       <div style="text-align:right">
         <div class="hist-val">${a.duration_min ? a.duration_min+' min' : '—'}</div>
         <div style="font-size:11px;color:var(--text3)">${calStr}${a.avg_heart_rate?' · '+a.avg_heart_rate+' bpm':''}${a.distance_km?' · '+a.distance_km+' km'+paceStr:''}</div>
@@ -3311,7 +3313,8 @@ function setHistRange(months, btn) {
 function populateExerciseDropdown() {
   const sel  = document.getElementById('ex-select');
   const lSel = document.getElementById('lokit-ex-select');
-  if (sel.options.length > 1) return;
+  const prevSel = sel.value, prevLSel = lSel.value;
+  [sel, lSel].forEach(el => { while (el.options.length > 1) el.remove(1); });
   const seen = new Set();
   Object.values(SESS).forEach(s => {
     (s.ex || []).forEach(e => {
@@ -3325,6 +3328,8 @@ function populateExerciseDropdown() {
       }
     });
   });
+  if ([...sel.options].some(o => o.value === prevSel)) sel.value = prevSel;
+  if ([...lSel.options].some(o => o.value === prevLSel)) lSel.value = prevLSel;
 }
 
 async function loadExerciseChart(exName) {
@@ -4355,6 +4360,7 @@ function openEditFoodPhotoRowMacrosDialog(id) {
     <div class="form-row"><label>Rasva/100g</label><input type="text" inputmode="decimal" id="edit-photo-row-fat" value="${row.fatPer100g ?? ''}"></div>
     <button class="btn btn-primary" id="edit-photo-row-save-btn">Tallenna</button>
     <button class="btn" id="edit-photo-row-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Peruuta</button>
+    <div class="status" id="edit-photo-row-status"></div>
   `;
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
@@ -4365,7 +4371,7 @@ function openEditFoodPhotoRowMacrosDialog(id) {
     const protein = parseNum('edit-photo-row-protein');
     const carbs = parseNum('edit-photo-row-carbs');
     const fat = parseNum('edit-photo-row-fat');
-    if (kcal == null) return;
+    if (kcal == null) { showStatus('edit-photo-row-status', 'Syötä kcal', true); return; }
     row.kcalPer100g = kcal;
     row.proteinPer100g = protein || 0;
     row.carbsPer100g = carbs || 0;
@@ -5078,7 +5084,8 @@ async function openStepsModal() {
 async function openCalorieSettingsModal() {
   closeSidebar();
   const settings = (await loadAppSettings()) || { calorie_correction: 0.72 };
-  const percentValue = Math.round((1 - settings.calorie_correction) * 100);
+  const correction = settings.calorie_correction ?? 0.72;
+  const percentValue = Math.round((1 - correction) * 100);
 
   const existing = document.getElementById('calorie-settings-overlay');
   if (existing) existing.remove();
@@ -5679,7 +5686,7 @@ function htmlAttrEscape(str) {
   return String(str).replace(/"/g, '&quot;');
 }
 function escapeHtml(str) {
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function renderOhjelma() {
