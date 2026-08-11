@@ -30,6 +30,16 @@ async function hasActivityOn(sb: ReturnType<typeof createClient>, dateIso: strin
   return (c1 || 0) > 0 || (c2 || 0) > 0;
 }
 
+async function hasSleepScoreOn(sb: ReturnType<typeof createClient>, dateIso: string): Promise<boolean> {
+  const { count, error } = await sb
+    .from('sleep_data')
+    .select('id', { count: 'exact', head: true })
+    .eq('sleep_date', dateIso)
+    .not('sleep_score', 'is', null);
+  if (error) console.error('sleep_data count query failed:', error.message);
+  return (count || 0) > 0;
+}
+
 function mondayOfThisWeekHelsinkiIso(): string {
   const todayIso = todayHelsinkiIso();
   const today = new Date(`${todayIso}T00:00:00Z`);
@@ -79,7 +89,7 @@ Deno.serve(async (req) => {
     return new Response('Unauthorized', { status: 401 });
   }
   const type = new URL(req.url).searchParams.get('type');
-  if (type !== 'streak' && type !== 'activity' && type !== 'weekly-recap') {
+  if (type !== 'streak' && type !== 'activity' && type !== 'weekly-recap' && type !== 'sleep-reminder') {
     return new Response('Bad Request', { status: 400 });
   }
 
@@ -97,6 +107,11 @@ Deno.serve(async (req) => {
     const tonnageText = `${Math.round(stats.tonnage)} kg nostettu`;
     const stepsText = stats.avgSteps != null ? `, ka ${stats.avgSteps} askelta/pv` : '';
     body = `Viikko takana: ${stats.activeDays} treeniä, ${tonnageText}${stepsText} 💪`;
+  } else if (type === 'sleep-reminder') {
+    const todayLogged = await hasSleepScoreOn(sb, todayHelsinkiIso());
+    if (todayLogged) return new Response('sleep already logged today', { status: 200 });
+    title = 'Valkku';
+    body = '😴 Muista kirjata unipisteet tältä yöltä';
   } else {
     const today = todayHelsinkiIso();
     const todayActive = await hasActivityOn(sb, today);

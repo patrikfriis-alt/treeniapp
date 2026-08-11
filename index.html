@@ -1252,7 +1252,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.33.0</div>
+    <div class="version-chip" style="margin:0">v1.34.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('ohjelma',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
@@ -1944,7 +1944,7 @@ async function getWeekStats(offset) {
   return { gymDays, actCount, totalKm, avgSleep, weightDelta };
 }
 
-async function loadWeeklyReportCard(offset = wOff) {
+async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
   const [thisWeek, lastWeek] = await Promise.all([
     getWeekStats(offset),
     getWeekStats(offset - 1),
@@ -1972,7 +1972,7 @@ async function loadWeeklyReportCard(offset = wOff) {
     rows.push(`<div class="hist-item"><div class="hist-label">Painon muutos</div><div class="hist-val">${sign}${thisWeek.weightDelta} kg</div></div>`);
   }
 
-  const bmrInfo = await getBmrInfo();
+  bmrInfo = await (bmrInfo || getBmrInfo());
   if (bmrInfo.bmr != null) {
     const mon = wStart(offset);
     const sun = new Date(mon.date);
@@ -2807,10 +2807,18 @@ async function getDailyFoodCalories(fromIso, toIso) {
   return byDate;
 }
 
+let appSettingsPromise = null;
 async function loadAppSettings() {
-  const { data, error } = await sb.from('app_settings').select('*').eq('id', 1).maybeSingle();
-  if (error) { console.error('loadAppSettings failed:', error.message); return null; }
-  return data;
+  if (appSettings) return appSettings;
+  if (appSettingsPromise) return appSettingsPromise;
+  appSettingsPromise = sb.from('app_settings').select('*').eq('id', 1).maybeSingle()
+    .then(({ data, error }) => {
+      appSettingsPromise = null;
+      if (error) { console.error('loadAppSettings failed:', error.message); return null; }
+      appSettings = data;
+      return data;
+    });
+  return appSettingsPromise;
 }
 
 async function saveCalorieCorrection(multiplier) {
@@ -2829,6 +2837,7 @@ async function saveOnboardingCompleted() {
     payload: { id: 1, onboarding_completed: true, updated_at: new Date().toISOString() },
   });
   if (error) { console.error('saveOnboardingCompleted failed:', error.message); throw error; }
+  appSettings = null;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -2863,7 +2872,7 @@ async function toggleNotifications() {
       op: 'upsert',
       payload: { id: 1, push_enabled: false, updated_at: new Date().toISOString() },
     });
-    if (!error) { renderNotifToggleState(false); return; }
+    if (!error) { appSettings = null; renderNotifToggleState(false); return; }
     alert('Tallennus epäonnistui, yritä uudelleen.');
     return;
   }
@@ -2926,6 +2935,7 @@ async function toggleNotifications() {
     payload: { id: 1, push_enabled: true, updated_at: new Date().toISOString() },
   });
   if (settingsError) { console.error('push_enabled save failed:', settingsError.message); setStatus('Pois'); alert('Tallennus epäonnistui: ' + settingsError.message); return; }
+  appSettings = null;
   renderNotifToggleState(true);
 }
 
@@ -3089,18 +3099,11 @@ function openEditActivityDialog(activityId) {
   const a = lastActivities.find(x => x.id === activityId);
   if (!a) return;
 
-  const existing = document.getElementById('edit-act-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'edit-act-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
-
   const types = ['Jääkiekko', 'Juoksu', 'Kävely', 'Sali', 'Muu'];
   const extraType = a.activity_type && !types.includes(a.activity_type) ? [a.activity_type] : [];
   const typeOptions = [...extraType, ...types].map(t => `<option ${t === a.activity_type ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('');
 
-  const modal = document.createElement('div');
+  const { overlay, modal } = createModalOverlay('edit-act-overlay');
   modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
   modal.innerHTML = `
     <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Muokkaa aktiviteettia</div>
@@ -3115,10 +3118,6 @@ function openEditActivityDialog(activityId) {
     <button class="btn" id="edit-act-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Peruuta</button>
     <div class="status" id="edit-act-status"></div>
   `;
-
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
   document.getElementById('edit-act-save-btn').onclick = async () => {
     const date = document.getElementById('edit-act-date').value;
@@ -3356,9 +3355,8 @@ async function loadExerciseChart(exName) {
     if (r.weight_kg == null) return;
     if (byDate[r.workout_date] == null || r.weight_kg > byDate[r.workout_date])
       byDate[r.workout_date] = r.weight_kg;
-    const reps = parseInt(r.reps) || 1;
-    const epley = r.weight_kg * (1 + reps / 30);
-    if (epley > best1RM) best1RM = epley;
+    const epley = calc1RM(r.weight_kg, parseInt(r.reps));
+    if (epley != null && epley > best1RM) best1RM = epley;
     if (!volByDate[r.workout_date]) volByDate[r.workout_date] = 0;
     volByDate[r.workout_date] += r.weight_kg * (parseInt(r.reps) || 0);
   });
@@ -3469,8 +3467,8 @@ async function loadModalChart(months) {
     data.forEach(r => {
       if (r.weight_kg == null) return;
       sessionDates.add(r.workout_date);
-      const reps = parseInt(r.reps) || 1;
-      const epley = r.weight_kg * (1 + reps / 30);
+      const epley = calc1RM(r.weight_kg, parseInt(r.reps));
+      if (epley == null) return;
       if (epley > best1RM) best1RM = epley;
       if (!byDate[r.workout_date] || epley > byDate[r.workout_date]) {
         byDate[r.workout_date] = epley;
@@ -3523,7 +3521,7 @@ async function loadModalChart(months) {
     sortedForPR.forEach(date => {
       const setsOnDate = data.filter(r => r.workout_date === date && r.weight_kg);
       const bestEpley = setsOnDate.reduce((max, r) => {
-        const e = r.weight_kg * (1 + (parseInt(r.reps)||1)/30);
+        const e = calc1RM(r.weight_kg, parseInt(r.reps)) || 0;
         return e > max ? e : max;
       }, 0);
       if (bestEpley > runningMax) { runningMax = bestEpley; prDates.add(date); }
@@ -3533,8 +3531,9 @@ async function loadModalChart(months) {
       const setsOnDate = data.filter(r => r.workout_date === date && r.weight_kg);
       if (!setsOnDate.length) return '';
       const best = setsOnDate.reduce((b, r) => {
-        const e = r.weight_kg * (1 + (parseInt(r.reps)||1)/30);
-        return e > (b.weight_kg * (1 + (parseInt(b.reps)||1)/30)) ? r : b;
+        const e = calc1RM(r.weight_kg, parseInt(r.reps)) || 0;
+        const be = calc1RM(b.weight_kg, parseInt(b.reps)) || 0;
+        return e > be ? r : b;
       });
       const prBadge = prDates.has(date) ? '<span class="ex-modal-pr-badge">↑ PR</span>' : '';
       return `<div class="ex-modal-session-row">
@@ -3699,14 +3698,7 @@ function openDayPopup(dateIso, dayData) {
 }
 
 function showDayModal(title, body) {
-  const existing = document.getElementById('day-modal-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'day-modal-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
-
-  const modal = document.createElement('div');
+  const { overlay, modal } = createModalOverlay('day-modal-overlay');
   modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:400px;width:100%;max-height:80vh;overflow-y:auto;';
 
   const titleEl = document.createElement('div');
@@ -3725,9 +3717,6 @@ function showDayModal(title, body) {
   modal.appendChild(titleEl);
   modal.appendChild(bodyEl);
   modal.appendChild(closeBtn);
-  overlay.appendChild(modal);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-  document.body.appendChild(overlay);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -4339,14 +4328,7 @@ function openEditFoodPhotoRowMacrosDialog(id) {
   const row = foodPhotoRows.find(r => r.id === id);
   if (!row) return;
 
-  const existing = document.getElementById('edit-photo-row-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'edit-photo-row-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
-
-  const modal = document.createElement('div');
+  const { overlay, modal } = createModalOverlay('edit-photo-row-overlay', 1000);
   modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
   modal.innerHTML = `
     <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">${escapeHtml(row.name)}</div>
@@ -4358,9 +4340,6 @@ function openEditFoodPhotoRowMacrosDialog(id) {
     <button class="btn" id="edit-photo-row-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Peruuta</button>
     <div class="status" id="edit-photo-row-status"></div>
   `;
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
   document.getElementById('edit-photo-row-save-btn').onclick = () => {
     const kcal = parseNum('edit-photo-row-kcal');
@@ -4697,14 +4676,7 @@ function openEditEntryDialog(entryId) {
   const src = entrySource(entry);
   const name = foodItemName(entry);
 
-  const existing = document.getElementById('edit-entry-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'edit-entry-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
-
-  const modal = document.createElement('div');
+  const { overlay, modal } = createModalOverlay('edit-entry-overlay');
   modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
   modal.innerHTML = `
     <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">${name}</div>
@@ -4714,10 +4686,6 @@ function openEditEntryDialog(entryId) {
     <button class="btn" id="edit-entry-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Peruuta</button>
     <div class="status" id="edit-entry-status"></div>
   `;
-
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
   document.getElementById('edit-entry-save-btn').onclick = async () => {
     const grams = parseFloat(document.getElementById('edit-entry-grams').value);
@@ -4774,14 +4742,7 @@ async function openActivityGoalsModal() {
   closeSidebar();
   const goals = (await loadActivityGoals()) || {};
 
-  const existing = document.getElementById('activity-goals-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'activity-goals-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
-
-  const modal = document.createElement('div');
+  const { overlay, modal } = createModalOverlay('activity-goals-overlay');
   modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:400px;width:100%;max-height:85vh;overflow-y:auto;';
 
   const field = (id, label, val) =>
@@ -4796,10 +4757,6 @@ async function openActivityGoalsModal() {
     <button class="btn" id="activity-goals-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Sulje</button>
     <div class="status" id="activity-goals-status"></div>
   `;
-
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
   document.getElementById('activity-goals-save-btn').onclick = async () => {
     const saveBtn = document.getElementById('activity-goals-save-btn');
@@ -4834,14 +4791,7 @@ async function openGoalsModal() {
   closeSidebar();
   const goals = (await loadNutritionGoals()) || {};
 
-  const existing = document.getElementById('goals-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'goals-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
-
-  const modal = document.createElement('div');
+  const { overlay, modal } = createModalOverlay('goals-overlay');
   modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:400px;width:100%;max-height:85vh;overflow-y:auto;';
 
   const field = (id, label, val) =>
@@ -4863,10 +4813,6 @@ async function openGoalsModal() {
     <button class="btn" id="goals-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Sulje</button>
     <div class="status" id="goals-status"></div>
   `;
-
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
   document.getElementById('goals-save-btn').onclick = async () => {
     const saveBtn = document.getElementById('goals-save-btn');
@@ -4896,14 +4842,7 @@ async function openProfileModal() {
   closeSidebar();
   const profile = (await loadUserProfile()) || {};
 
-  const existing = document.getElementById('profile-settings-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'profile-settings-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
-
-  const modal = document.createElement('div');
+  const { overlay, modal } = createModalOverlay('profile-settings-overlay');
   modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
 
   modal.innerHTML = `
@@ -4922,10 +4861,6 @@ async function openProfileModal() {
     <button class="btn" id="profile-settings-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Sulje</button>
     <div class="status" id="profile-settings-status"></div>
   `;
-
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
   document.getElementById('profile-settings-save-btn').onclick = async () => {
     const saveBtn = document.getElementById('profile-settings-save-btn');
@@ -4962,14 +4897,7 @@ async function openProfileModal() {
 }
 
 function openMetricModal(title, bodyHtml) {
-  const existing = document.getElementById('metric-info-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'metric-info-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
-
-  const modal = document.createElement('div');
+  const { modal } = createModalOverlay('metric-info-overlay');
   modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;max-height:80vh;overflow-y:auto;';
 
   modal.innerHTML = `
@@ -4979,10 +4907,6 @@ function openMetricModal(title, bodyHtml) {
     </div>
     ${bodyHtml}
   `;
-
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 }
 
 function openStreakModal() {
@@ -5090,14 +5014,7 @@ async function openCalorieSettingsModal() {
   const correction = settings.calorie_correction ?? 0.72;
   const percentValue = Math.round((1 - correction) * 100);
 
-  const existing = document.getElementById('calorie-settings-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'calorie-settings-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
-
-  const modal = document.createElement('div');
+  const { overlay, modal } = createModalOverlay('calorie-settings-overlay');
   modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
 
   modal.innerHTML = `
@@ -5108,10 +5025,6 @@ async function openCalorieSettingsModal() {
     <button class="btn" id="calorie-settings-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Sulje</button>
     <div class="status" id="calorie-settings-status"></div>
   `;
-
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
   document.getElementById('calorie-settings-save-btn').onclick = async () => {
     const saveBtn = document.getElementById('calorie-settings-save-btn');
@@ -5138,14 +5051,7 @@ async function openStepsGoalModal() {
   const settings = (await loadAppSettings()) || {};
   const currentGoal = settings.daily_steps_goal != null ? settings.daily_steps_goal : '';
 
-  const existing = document.getElementById('steps-goal-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'steps-goal-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
-
-  const modal = document.createElement('div');
+  const { overlay, modal } = createModalOverlay('steps-goal-overlay');
   modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
 
   modal.innerHTML = `
@@ -5156,10 +5062,6 @@ async function openStepsGoalModal() {
     <button class="btn" id="steps-goal-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Sulje</button>
     <div class="status" id="steps-goal-status"></div>
   `;
-
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
   document.getElementById('steps-goal-save-btn').onclick = async () => {
     const saveBtn = document.getElementById('steps-goal-save-btn');
@@ -5202,6 +5104,22 @@ function parseNum(id) {
 
 function numOrNull(n) {
   return isNaN(n) ? null : n;
+}
+
+// Luo modaalin overlay+kortti-runko: poistaa mahdollisen samannimisen vanhan overlayn,
+// liittää molemmat DOM:iin ja kytkee taustaklikkauksella sulkemisen. Kutsuja asettaa itse
+// modal.style.cssText (leveys/scroll vaihtelee) ja modal.innerHTML/lapset.
+function createModalOverlay(overlayId, zIndex = 200) {
+  const existing = document.getElementById(overlayId);
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = overlayId;
+  overlay.style.cssText = `position:fixed;inset:0;z-index:${zIndex};background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;`;
+  const modal = document.createElement('div');
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  return { overlay, modal };
 }
 
 function showStatus(id, msg, isErr) {
@@ -5349,14 +5267,7 @@ function getCoachSecret() {
 }
 
 function promptCoachSecret(onSet) {
-  const existing = document.getElementById('coach-secret-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'coach-secret-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
-
-  const modal = document.createElement('div');
+  const { overlay, modal } = createModalOverlay('coach-secret-overlay');
   modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:24px;max-width:360px;width:100%;';
   modal.innerHTML = `
     <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Valmentajan salasana</div>
@@ -5364,9 +5275,6 @@ function promptCoachSecret(onSet) {
     <button class="btn btn-primary" id="coach-secret-save-btn">Tallenna</button>
     <button class="btn" id="coach-secret-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Peruuta</button>
   `;
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
   document.getElementById('coach-secret-cancel-btn').onclick = () => overlay.remove();
 
   document.getElementById('coach-secret-save-btn').onclick = () => {
@@ -5470,8 +5378,9 @@ async function loadKoonti() {
   loadMotivationSummary(0);
   renderOnboardingCard();
   initNotifToggle();
-  loadWeeklyReportCard(0);
-  loadDeficitHeroMetric();
+  const bmrInfoPromise = getBmrInfo();
+  loadWeeklyReportCard(0, bmrInfoPromise);
+  loadDeficitHeroMetric(bmrInfoPromise);
   loadHuomioita();
 
   const todayIso = localIso(new Date());
@@ -5601,11 +5510,11 @@ async function loadKoonti() {
   kcRuokaSub.textContent = entries.length ? `${Math.round(totalKcal)} kcal tänään` : 'Ei kirjauksia tänään';
 }
 
-async function loadDeficitHeroMetric() {
+async function loadDeficitHeroMetric(bmrInfo = null) {
   const wrap  = document.getElementById('koonti-deficit-wrap');
   const valEl = document.getElementById('koonti-deficit-val');
   const lblEl = document.getElementById('koonti-deficit-label');
-  const bmrInfo = await getBmrInfo();
+  bmrInfo = await (bmrInfo || getBmrInfo());
   if (bmrInfo.missingProfile || bmrInfo.missingWeight) {
     valEl.textContent = 'Aseta →';
     lblEl.textContent = 'profiili';
