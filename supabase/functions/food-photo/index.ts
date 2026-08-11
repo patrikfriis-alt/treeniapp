@@ -49,7 +49,7 @@ function parseComponents(raw: string): { name: string; grams: number }[] {
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) return [];
     return parsed
-      .filter((item: any) => item && typeof item.name === 'string' && Number.isFinite(Number(item.grams)))
+      .filter((item: any) => item && typeof item.name === 'string' && item.grams !== null && item.grams !== undefined && Number.isFinite(Number(item.grams)))
       .map((item: any) => ({ name: item.name, grams: Number(item.grams) }));
   } catch (err) {
     console.error('parseComponents failed:', err instanceof Error ? err.message : String(err), '| raw:', raw);
