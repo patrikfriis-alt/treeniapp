@@ -1358,7 +1358,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.39.0</div>
+    <div class="version-chip" style="margin:0">v1.40.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <button onclick="showPage('ohjelma',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
@@ -4101,9 +4101,27 @@ async function loadRecentFoods() {
 }
 
 async function searchFineli(query) {
-  const res = await fetch(`https://fineli.fi/fineli/api/v1/foods?q=${encodeURIComponent(query)}`);
-  if (!res.ok) throw new Error('Fineli-haku epäonnistui');
-  return res.json();
+  const q = query.trim();
+  const cols = 'id, name_fi, kcal_per_100g, protein_per_100g, fat_per_100g, carbs_per_100g';
+  const [prefixRes, containsRes] = await Promise.all([
+    sb.from('fineli_foods').select(cols).ilike('name_fi', `${q}%`).order('name_fi').limit(20),
+    sb.from('fineli_foods').select(cols).ilike('name_fi', `%${q}%`).order('name_fi').limit(20),
+  ]);
+  if (prefixRes.error || containsRes.error) throw new Error('Fineli-haku epäonnistui');
+  const seen = new Set();
+  const merged = [...prefixRes.data, ...containsRes.data].filter(f => {
+    if (seen.has(f.id)) return false;
+    seen.add(f.id);
+    return true;
+  }).slice(0, 20);
+  return merged.map(f => ({
+    id: f.id,
+    name: { fi: f.name_fi },
+    energyKcal: f.kcal_per_100g,
+    protein: f.protein_per_100g,
+    fat: f.fat_per_100g,
+    carbohydrate: f.carbs_per_100g,
+  }));
 }
 
 function renderFoodResultsList(items, label, emptyLabel) {
