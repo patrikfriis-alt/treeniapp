@@ -3627,7 +3627,7 @@ async function loadModalChart(months) {
   const { data, error } = await query;
   try {
     if (error || !data || !data.length) {
-      statusEl.textContent = 'Ei dataa vielä.';
+      statusEl.innerHTML = emptyState('dumbbell', 'Ei dataa vielä.');
       return;
     }
 
