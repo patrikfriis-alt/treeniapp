@@ -5434,7 +5434,7 @@ async function renderCoachPage() {
         <div><div class="hist-label">${escapeHtml(c.title)}</div></div>
         <div style="font-size:12px;color:var(--text3)">${c.lastAt.slice(0,10)}</div>
       </div>`).join('')
-    : '<div class="status">Ei vielä keskusteluja</div>';
+    : emptyState('chat', 'Ei vielä keskusteluja');
 
   el.innerHTML = `
     <button class="btn btn-primary" onclick="startNewCoachConversation()" style="margin-bottom:16px;">+ Uusi keskustelu</button>
@@ -5454,7 +5454,7 @@ async function openCoachNotesModal() {
   const body = notes
     ? `<div style="white-space:pre-wrap;font-size:14px;color:var(--text2);line-height:1.5;">${escapeHtml(notes)}</div>
        <button class="btn" onclick="clearCoachNotes()" style="margin-top:16px;background:var(--surface2);color:var(--red);width:100%;">Tyhjennä muistiinpanot</button>`
-    : `<div class="status">Ei vielä muistiinpanoja — keskustele valmentajan kanssa niin se alkaa oppia.</div>`;
+    : emptyState('clipboard', 'Ei vielä muistiinpanoja — keskustele valmentajan kanssa niin se alkaa oppia.');
   openMetricModal('Mitä valmentaja tietää sinusta', body);
 }
 
