@@ -84,6 +84,7 @@ Paina Shortcutsin automaation kohdalla **"Kokeile"** (Run) manuaalisesti ilman e
 - Jos sali-kalorit eivät päivity: varmista että olet merkinnyt kyseisen päivän session "tehdyksi" Treeniapista ennen tai pian Watch-treenin jälkeen — `workout_sessions`-rivi täytyy olla olemassa jotta `PATCH` löytää sen.
 - Jos tallennus epäonnistuu virheellä joka viittaa `avg_heart_rate`-kenttään: varmista että käytit **Pyöristä numero** -toimintoa `AvgHR`-muuttujalle vaiheessa 3 — HealthKitin desimaaliluku voi hylkääntyä jos tietokannan sarake ei hyväksy desimaaleja.
 - Jos askeleet eivät koskaan ilmesty: tarkista että migraatiotiedosto `supabase/migrations/20260715_step_data.sql` on ajettu, ja että Shortcutsilla on lupa lukea askeleita Health-sovelluksen tietosuoja-asetuksista (Health-sovellus → profiilikuvake → Sovellukset → Shortcuts → Askeleet-lupa päällä).
+- Jos askelluku näyttää n. kaksinkertaiselta todelliseen verrattuna (esim. Watch näyttää 9000 mutta appi näyttää 17000): **Etsi terveysnäytteet** -toiminnosta puuttuu Lähde-suodatin, jolloin summa laskee mukaan sekä Watchin että iPhonen omat askelnäytteet — lisää suodatin **Lähde on *Watchisi nimi*** kohdassa 7.
 - Jos unen kentät eivät täyty (syvä uni / REM / heräilyt jäävät tyhjiksi): tarkista että käytit oikeaa Uni-analyysi-suodatinta kussakin **Etsi terveysnäytteet** -toiminnossa, ja että Watch on tallentanut vaihekohtaista dataa (vanhemmat Watch-mallit tai watchOS-versiot saattavat tallentaa vain yhden yhtenäisen "Nukkuu"-arvon ilman vaihejakoa — tässä tapauksessa vaihekohtaisia kenttiä ei voi täyttää eikä unipisteitä voida laskea).
 
 ## 7. Askelmäärän synkkaus
@@ -100,8 +101,9 @@ Askeleet eivät liity yksittäiseen treeniin, joten tämä tarvitsee toisen, eri
 
 1. Lisää toiminto **Etsi terveysnäytteet** (Find Health Samples)
 2. Aseta: Näytetyyppi **Steps** (Askeleet), Ajankohta **Tänään**, yhdistelmä **Summa** (Sum)
-3. Lisää **Aseta muuttuja** -toiminto tuloksen tallentamiseksi muuttujaan `StepCount`
-4. Lisää **Muotoile päivämäärä** -toiminto **Nykyiselle päivämäärälle**, muodossa `yyyy-MM-dd`, tallenna muuttujaan `Today`
+3. **Lisää suodatin** (Add Filter): **Lähde** (Source Name) **on** *Watchisi nimi* (esim. "Patrikin Apple Watch") — **tärkeää**: ilman tätä suodatinta summa laskee mukaan sekä Watchin että iPhonen omat askelnäytteet (molemmat laitteet kirjaavat askeleet erikseen HealthKitiin), jolloin luku tuplaantuu jos kannat puhelinta mukana Watchin lisäksi
+4. Lisää **Aseta muuttuja** -toiminto tuloksen tallentamiseksi muuttujaan `StepCount`
+5. Lisää **Muotoile päivämäärä** -toiminto **Nykyiselle päivämäärälle**, muodossa `yyyy-MM-dd`, tallenna muuttujaan `Today`
 
 ### Lähetä Supabaseen
 

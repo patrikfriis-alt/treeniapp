@@ -86,6 +86,7 @@ Tap **"Run"** on the automation manually, without doing a real workout — if yo
 - **Gym calories don't update:** make sure you've marked that day's session as "done" in Treeniapp before or shortly after ending the Watch workout — the `workout_sessions` row must already exist for the `PATCH` to find it.
 - **Save fails with an error referencing `avg_heart_rate`:** make sure you used the **Round Number** action on the `AvgHR` variable in step 3 — HealthKit's decimal value can be rejected if the database column doesn't accept decimals.
 - **Steps never appear:** check that the migration file `supabase/migrations/20260715_step_data.sql` has been run, and that Shortcuts has permission to read Steps in the Health app's privacy settings (Health app → profile icon → Apps → Shortcuts → Steps must be enabled).
+- **Step count looks roughly doubled vs. reality** (e.g. Watch shows 9,000 but the app shows 17,000): the **Find Health Samples** action is missing a Source filter, so the sum includes step samples from both the Watch and the iPhone — add a filter **Source Name is *your Watch's name*** in step 7.
 - **Sleep fields stay empty (deep/REM/awakenings never populate):** check you used the correct Sleep Analysis filter in each **Find Health Samples** action, and that the Watch actually recorded stage-level data (older Watch models or watchOS versions may only record a single combined "Asleep" value with no stage breakdown — in that case the stage-specific fields can't be filled and a sleep score can't be computed).
 
 ## 7. Step Count Sync
@@ -102,8 +103,9 @@ Steps aren't tied to a workout, so this needs a second, separate personal automa
 
 1. Add the **Find Health Samples** action
 2. Set: Sample Type **Steps**, Date **Today**, aggregate as **Sum**
-3. Add a **Set Variable** action to store the result as `StepCount`
-4. Add a **Format Date** action for **Current Date**, formatted as `yyyy-MM-dd`, stored as `Today`
+3. **Add Filter**: **Source Name** **is** *your Watch's name* (e.g. "Patrik's Apple Watch") — **important**: without this filter the sum includes step samples from both the Watch and the iPhone (each device logs steps to HealthKit separately), doubling the count if you carry your phone in addition to wearing the Watch
+4. Add a **Set Variable** action to store the result as `StepCount`
+5. Add a **Format Date** action for **Current Date**, formatted as `yyyy-MM-dd`, stored as `Today`
 
 ### Push it to Supabase
 
