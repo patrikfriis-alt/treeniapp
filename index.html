@@ -719,6 +719,8 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .status { font-size: 12px; text-align: center; padding: 6px; min-height: 24px; }
 .status.ok  { color: var(--green); }
 .status.err { color: var(--red); }
+.empty-state { display:flex; flex-direction:column; align-items:center; gap:8px; padding:20px 12px; }
+.empty-state-text { font-size:13px; color:var(--text3); text-align:center; }
 
 /* ─── Seuranta sub-tabs ──────────────────────────────────────── */
 .stab-bar { display: flex; gap: 6px; margin-bottom: 14px; }
@@ -1424,6 +1426,10 @@ function svgIcon(name, color, size) {
   const c = color || 'currentColor';
   const s = size || 20;
   return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="${c}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+}
+
+function emptyState(icon, text) {
+  return `<div class="empty-state">${svgIcon(icon, 'var(--text3)', 32)}<div class="empty-state-text">${text}</div></div>`;
 }
 
 function renderIcons() {
