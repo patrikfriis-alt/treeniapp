@@ -3517,7 +3517,7 @@ async function loadExerciseChart(exName) {
 
   const { data, error } = await query;
 
-  if (error || !data || !data.length) { statusEl.textContent = 'Ei dataa vielä.'; return; }
+  if (error || !data || !data.length) { statusEl.innerHTML = emptyState('dumbbell', 'Ei dataa vielä.'); return; }
 
   const byDate = {}, volByDate = {};
   let best1RM = 0;
@@ -3534,7 +3534,7 @@ async function loadExerciseChart(exName) {
 
   const labels = Object.keys(byDate);
   const values = Object.values(byDate);
-  if (!labels.length) { statusEl.textContent = 'Ei painodataa vielä.'; return; }
+  if (!labels.length) { statusEl.innerHTML = emptyState('dumbbell', 'Ei painodataa vielä.'); return; }
 
   const volDates = Object.keys(volByDate).sort();
   const lastVol  = volDates.length     ? volByDate[volDates[volDates.length - 1]] : 0;
