@@ -3740,7 +3740,7 @@ async function loadRunChart() {
 
   const statusEl = document.getElementById('run-chart-status');
   if (error || !data || !data.length) {
-    if (statusEl) statusEl.textContent = 'Ei juoksudataa vielä';
+    if (statusEl) statusEl.innerHTML = emptyState('running', 'Ei juoksudataa vielä');
     return;
   }
   if (statusEl) statusEl.textContent = '';
