@@ -2108,28 +2108,50 @@ async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
   }
 
   bmrInfo = await (bmrInfo || getBmrInfo());
-  if (bmrInfo.bmr != null) {
+  if (bmrInfo.bmr != null && bmrInfo.weightKg != null) {
     const mon = wStart(offset);
     const sun = new Date(mon.date);
     sun.setDate(mon.date.getDate() + 6);
-    const [exerciseKcal, foodKcal] = await Promise.all([
-      getExerciseCalories(mon.iso, localIso(sun)),
-      getFoodCalories(mon.iso, localIso(sun)),
+    const sunIso = localIso(sun);
+    const [exByDate, foodByDate] = await Promise.all([
+      getDailyExerciseCalories(mon.iso, sunIso),
+      getDailyFoodCalories(mon.iso, sunIso),
     ]);
-    const elapsedDays = offset === 0 ? (todayIdx() + 1) : 7;
-    const weeklyNet = Math.round(foodKcal - bmrInfo.bmr * elapsedDays - exerciseKcal);
-    const weeklySign = weeklyNet >= 0 ? '+' : '';
-    let weeklyValStr = `${weeklySign}${weeklyNet} kcal`;
-    let barHtml = '';
-    if (bmrInfo.weightKg != null) {
-      const goalWeeklyDeficit = Math.round(bmrInfo.weightKg * 0.01 * 7700);
-      weeklyValStr = `${weeklySign}${weeklyNet} / -${Math.abs(goalWeeklyDeficit)} kcal`;
-      const deficitPct = weeklyNet <= 0 && goalWeeklyDeficit > 0
-        ? Math.min(100, Math.round(Math.abs(weeklyNet) / goalWeeklyDeficit * 100))
-        : 0;
-      barHtml = `<div class="koonti-progress-track"><div class="koonti-progress-fill" style="width:${deficitPct}%"></div></div>`;
+    const exerciseKcal = Object.values(exByDate).reduce((s, v) => s + v, 0);
+    const foodKcal = Object.values(foodByDate).reduce((s, v) => s + v, 0);
+
+    const goalWeeklyDeficit = Math.round(bmrInfo.weightKg * 0.01 * 7700);
+    const weeklyBudget = Math.round(bmrInfo.bmr * 7 + exerciseKcal - goalWeeklyDeficit);
+    const remaining = Math.round(weeklyBudget - foodKcal);
+    const fairShareDaily = bmrInfo.bmr - goalWeeklyDeficit / 7;
+    const todayIso = localIso(new Date());
+
+    const weeklyValStr = `${Math.round(foodKcal)} / ${weeklyBudget} kcal`;
+
+    const pct = weeklyBudget > 0 ? Math.min(100, Math.round(foodKcal / weeklyBudget * 100)) : 100;
+    const overClass = foodKcal > weeklyBudget ? ' over' : '';
+    const barHtml = `<div class="koonti-progress-track"><div class="koonti-progress-fill${overClass}" style="width:${pct}%"></div></div>`;
+
+    const subText = remaining >= 0
+      ? `Voit vielä syödä ${remaining} kcal tällä viikolla`
+      : `Ylitit budjetin ${Math.abs(remaining)} kcal:lla`;
+    const subHtml = `<div class="kc-week-budget-sub">${subText}</div>`;
+
+    const dayCells = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(mon.date);
+      d.setDate(mon.date.getDate() + i);
+      const iso = localIso(d);
+      let cls = '';
+      if (iso <= todayIso) {
+        const eaten = foodByDate[iso] || 0;
+        cls = eaten <= fairShareDaily ? ' under' : ' over';
+      }
+      dayCells.push(`<div class="kc-week-day${cls}">${DAYS[i][0]}</div>`);
     }
-    rows.push(weekRow('flame', 'var(--amber)', 'Viikon kalorit', weeklyValStr, barHtml));
+    const daystripHtml = `<div class="kc-week-daystrip">${dayCells.join('')}</div>`;
+
+    rows.push(weekRow('flame', 'var(--amber)', 'Viikon kalorit', weeklyValStr, barHtml + subHtml + daystripHtml));
   }
 
   document.getElementById('kc-weekly-rows').innerHTML = rows.join('');
