@@ -5323,6 +5323,53 @@ async function saveStepsGoal(goal) {
   if (error) { console.error('saveStepsGoal failed:', error.message); throw error; }
 }
 
+async function openRestTimerModal() {
+  closeSidebar();
+  const settings = (await loadAppSettings()) || {};
+  const currentDuration = settings.rest_timer_seconds != null ? settings.rest_timer_seconds : '';
+
+  const { overlay, modal } = createModalOverlay('rest-timer-settings-overlay');
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);padding:24px;width:100%;';
+
+  modal.innerHTML = `
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Lepoajastin</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5;">Kuinka pitkä lepoajastin käynnistyy automaattisesti kun täytät sarjan. Jätä tyhjäksi jos haluat oletuksen (90s).</div>
+    <div class="form-row"><label>Kesto (s)</label><input type="text" inputmode="numeric" id="rest-timer-duration-input" value="${currentDuration}"></div>
+    <button class="btn btn-primary" id="rest-timer-duration-save-btn">Tallenna</button>
+    <button class="btn" id="rest-timer-duration-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Sulje</button>
+    <div class="status" id="rest-timer-duration-status"></div>
+  `;
+
+  document.getElementById('rest-timer-duration-save-btn').onclick = async () => {
+    const saveBtn = document.getElementById('rest-timer-duration-save-btn');
+    const raw = document.getElementById('rest-timer-duration-input').value.trim();
+    const duration = raw === '' ? null : parseInt(raw, 10);
+    if (raw !== '' && (duration === null || isNaN(duration) || duration <= 0)) {
+      showStatus('rest-timer-duration-status', 'Syötä positiivinen kokonaisluku tai jätä tyhjäksi', true);
+      return;
+    }
+    saveBtn.disabled = true;
+    try {
+      await saveRestTimerDuration(duration);
+      appSettings = null;
+      overlay.remove();
+    } catch (err) {
+      showStatus('rest-timer-duration-status', 'Tallennus epäonnistui', true);
+      saveBtn.disabled = false;
+    }
+  };
+  document.getElementById('rest-timer-duration-cancel-btn').onclick = () => overlay.remove();
+}
+
+async function saveRestTimerDuration(seconds) {
+  const { error } = await sbWrite({
+    table: 'app_settings',
+    op: 'upsert',
+    payload: { id: 1, rest_timer_seconds: seconds, updated_at: new Date().toISOString() },
+  });
+  if (error) { console.error('saveRestTimerDuration failed:', error.message); throw error; }
+}
+
 /* ═══════════════════════════════════════════════════════════════
    UTILITIES
 ═══════════════════════════════════════════════════════════════ */
