@@ -1606,7 +1606,7 @@ function playRestDone() {
 
 function startRestTimer() {
   stopRestTimer();
-  let remaining = REST_DURATION;
+  let remaining = (appSettings && appSettings.rest_timer_seconds) || REST_DURATION;
   const el     = document.getElementById('rest-timer');
   const countEl = document.getElementById('rest-timer-count');
   if (!el || !countEl) return;
@@ -1635,7 +1635,7 @@ function stopRestTimer() {
     el.classList.add('hidden');
     el.classList.remove('done');
     const countEl = document.getElementById('rest-timer-count');
-    if (countEl) countEl.textContent = REST_DURATION;
+    if (countEl) countEl.textContent = (appSettings && appSettings.rest_timer_seconds) || REST_DURATION;
     const lbl = document.getElementById('rest-timer-label');
     if (lbl) lbl.textContent = 'Lepo';
   }
