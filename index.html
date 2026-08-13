@@ -2942,6 +2942,44 @@ async function getBmrInfo() {
   return { bmr: calcBmr(profile, weightRow), weightKg: weightRow.weight_kg, missingProfile: false, missingWeight: false };
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   PAINONPUDOTUSENNUSTE — kaksiosastomalli
+═══════════════════════════════════════════════════════════════ */
+const KCAL_PER_KG_FAT_RESTING = 4.5;
+const KCAL_PER_KG_MUSCLE_RESTING = 13.0;
+const KCAL_PER_KG_FAT_LOSS = 7700;
+const DEFAULT_OTHER_TISSUE_COEFF = 30;
+const DEFAULT_ACTIVITY_MULT = 1.5;
+
+function getBodyComposition(weightKg, fatPct, musclePct) {
+  const fatKg = weightKg * fatPct / 100;
+  const muscleKg = weightKg * musclePct / 100;
+  const otherKg = weightKg - fatKg - muscleKg;
+  return { fatKg, muscleKg, otherKg };
+}
+
+function calculateMaintenance(fatKg, muscleKg, otherKg, otherTissueCoeff, activityMult) {
+  const bmr = fatKg * KCAL_PER_KG_FAT_RESTING + muscleKg * KCAL_PER_KG_MUSCLE_RESTING + otherKg * otherTissueCoeff;
+  return bmr * activityMult;
+}
+
+function simulateToTarget({ fatKg, muscleKg, otherKg, targetWeightKg, weeklyIntakeKcal, otherTissueCoeff, activityMult, muscleChangeKgPerWeek = 0, maxWeeks = 150 }) {
+  const rows = [];
+  let week = 0;
+  let fat = fatKg, muscle = muscleKg;
+  while ((fat + muscle + otherKg) > targetWeightKg && week < maxWeeks) {
+    week++;
+    const maintenanceDaily = calculateMaintenance(fat, muscle, otherKg, otherTissueCoeff, activityMult);
+    const maintenanceWeekly = maintenanceDaily * 7;
+    const deficit = maintenanceWeekly - weeklyIntakeKcal;
+    muscle += muscleChangeKgPerWeek;
+    const fatLoss = deficit / KCAL_PER_KG_FAT_LOSS;
+    fat -= fatLoss;
+    rows.push({ week, totalWeight: +(fat + muscle + otherKg).toFixed(1), fatKg: +fat.toFixed(1), muscleKg: +muscle.toFixed(1), weeklyDeficit: Math.round(deficit) });
+  }
+  return { weeksToTarget: week, rows };
+}
+
 async function getExerciseCalories(fromIso, toIso) {
   if (!appSettings) appSettings = await loadAppSettings();
   const correction = (appSettings && appSettings.calorie_correction) ?? 0.72;
