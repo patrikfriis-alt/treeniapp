@@ -2145,11 +2145,14 @@ async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
       d.setDate(mon.date.getDate() + i);
       const iso = localIso(d);
       let cls = '';
+      let onclickAttr = '';
       if (iso <= todayIso) {
         const eaten = foodByDate[iso] || 0;
+        const exKcal = exByDate[iso] || 0;
         cls = eaten <= fairShareDaily ? ' under' : ' over';
+        onclickAttr = ` onclick="openDayBudgetModal('${iso}', ${Math.round(eaten)}, ${Math.round(fairShareDaily)}, ${Math.round(exKcal)})"`;
       }
-      dayCells.push(`<div class="kc-week-day${cls}">${DAYS[i][0]}</div>`);
+      dayCells.push(`<div class="kc-week-day${cls}"${onclickAttr}>${DAYS[i][0]}</div>`);
     }
     const daystripHtml = `<div class="kc-week-daystrip">${dayCells.join('')}</div>`;
 
