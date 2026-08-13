@@ -2823,8 +2823,10 @@ function changeWeek(dir) { wOff += dir; renderTreeni(); }
    BODY METRICS
 ═══════════════════════════════════════════════════════════════ */
 async function loadBodyMetrics() {
-  const { data: hist, error: histErr } = await sb.from('body_metrics').select('*')
-    .order('measured_at', { ascending: false }).limit(20);
+  const [{ data: hist, error: histErr }, profile] = await Promise.all([
+    sb.from('body_metrics').select('*').order('measured_at', { ascending: false }).limit(20),
+    loadUserProfile(),
+  ]);
   if (histErr) { console.error('loadBodyMetrics failed:', histErr.message); }
   const latest = hist && hist[0];
 
@@ -2839,19 +2841,19 @@ async function loadBodyMetrics() {
   const forecastEl = document.getElementById('m-forecast');
   let forecast = null;
   if (forecastEl) {
-    const profile = await loadUserProfile();
     if (!profile || profile.target_weight_kg == null) {
       forecastEl.innerHTML = `Aseta tavoitepaino <a href="#" onclick="openProfileModal();return false;" style="color:var(--accent)">profiilissa</a> nähdäksesi ennusteen`;
     } else if (!latest || latest.fat_pct == null || latest.muscle_pct == null) {
       forecastEl.textContent = 'Kirjaa paino, rasva% ja lihas% nähdäksesi ennusteen';
     } else {
       const comp = getBodyComposition(latest.weight_kg, latest.fat_pct, latest.muscle_pct);
-      const { data: calRows } = await sb.from('model_calibration').select('*')
-        .order('calibrated_at', { ascending: false }).limit(1);
+      const [{ data: calRows }, weeklyIntakeKcal] = await Promise.all([
+        sb.from('model_calibration').select('*').order('calibrated_at', { ascending: false }).limit(1),
+        getRecentAvgWeeklyIntake(),
+      ]);
       const cal = calRows && calRows[0];
       const otherTissueCoeff = cal ? cal.other_tissue_kcal_per_kg : DEFAULT_OTHER_TISSUE_COEFF;
       const activityMult = cal ? cal.activity_multiplier : DEFAULT_ACTIVITY_MULT;
-      const weeklyIntakeKcal = await getRecentAvgWeeklyIntake();
 
       forecast = simulateToTarget({
         fatKg: comp.fatKg, muscleKg: comp.muscleKg, otherKg: comp.otherKg,
@@ -2882,7 +2884,7 @@ async function loadBodyMetrics() {
     const histMuscle = [...hist].reverse().map(d => d.muscle_pct);
 
     let labels = histLabels, weightData = histWeights, fatData = histFat, muscleData = histMuscle, forecastData = null;
-    if (forecast && forecast.rows.length) {
+    if (forecast && forecast.rows.length && forecast.weeksToTarget < 150) {
       const lastDate = new Date(latest.measured_at);
       const forecastLabels = forecast.rows.map(r => {
         const d = new Date(lastDate);
