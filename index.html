@@ -5304,6 +5304,23 @@ function openMetricModal(title, bodyHtml) {
   `;
 }
 
+function openDayBudgetModal(iso, eaten, fairShare, exKcal) {
+  const dateObj = new Date(iso);
+  const title = dateObj.toLocaleDateString('fi-FI', { weekday: 'long', day: 'numeric', month: 'numeric' });
+  const diff = eaten - fairShare;
+  const sign = diff >= 0 ? '+' : '';
+  const exRow = exKcal > 0
+    ? `<div class="metric-modal-row"><span>Liikunta</span><span class="val">+${exKcal} kcal</span></div>`
+    : '';
+  const body = `
+    <div class="metric-modal-row"><span>Syöty</span><span class="val">${eaten} kcal</span></div>
+    <div class="metric-modal-row"><span>Oma osuus</span><span class="val">${fairShare} kcal</span></div>
+    ${exRow}
+    <div class="metric-modal-total"><span>Erotus</span><span>${sign}${diff} kcal</span></div>
+  `;
+  openMetricModal(title, body);
+}
+
 function openStreakModal() {
   const c = motivationCache;
   const dots = (c.last14 || []).map(on => `<div class="metric-modal-dot${on ? ' on' : ''}"></div>`).join('');
