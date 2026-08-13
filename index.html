@@ -5351,7 +5351,7 @@ async function openRestTimerModal() {
     saveBtn.disabled = true;
     try {
       await saveRestTimerDuration(duration);
-      appSettings = null;
+      if (appSettings) appSettings.rest_timer_seconds = duration;
       overlay.remove();
     } catch (err) {
       showStatus('rest-timer-duration-status', 'Tallennus epäonnistui', true);
