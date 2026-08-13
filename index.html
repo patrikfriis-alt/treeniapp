@@ -2885,6 +2885,7 @@ async function saveBodyMetrics() {
     });
     if (error) { showStatus('body-status','Virhe: '+error.message,true); return; }
     showStatus('body-status','Tallennettu!',false);
+    calibrateModelIfDue();
     loadBodyMetrics();
   } finally {
     btn.disabled = false;
@@ -2978,6 +2979,54 @@ function simulateToTarget({ fatKg, muscleKg, otherKg, targetWeightKg, weeklyInta
     rows.push({ week, totalWeight: +(fat + muscle + otherKg).toFixed(1), fatKg: +fat.toFixed(1), muscleKg: +muscle.toFixed(1), weeklyDeficit: Math.round(deficit) });
   }
   return { weeksToTarget: week, rows };
+}
+
+async function getRecentAvgWeeklyIntake() {
+  const to = localIso(new Date());
+  const from = localIso(addDays(new Date(), -20));
+  const totalKcal = await getFoodCalories(from, to);
+  return totalKcal / 3;
+}
+
+async function calibrateModelIfDue() {
+  const { data: measurements } = await sb.from('body_metrics').select('*')
+    .order('measured_at', { ascending: true });
+  if (!measurements || measurements.length < 3) return;
+
+  const { data: lastCal } = await sb.from('model_calibration').select('calibrated_at')
+    .order('calibrated_at', { ascending: false }).limit(1).maybeSingle();
+  if (lastCal) {
+    const daysSince = (Date.now() - new Date(lastCal.calibrated_at)) / 86400000;
+    if (daysSince < 14) return;
+  }
+
+  const m1 = measurements[measurements.length - 2];
+  const m2 = measurements[measurements.length - 1];
+  if (m1.fat_pct == null || m1.muscle_pct == null || m2.fat_pct == null || m2.muscle_pct == null) return;
+
+  const comp1 = getBodyComposition(m1.weight_kg, m1.fat_pct, m1.muscle_pct);
+  const comp2 = getBodyComposition(m2.weight_kg, m2.fat_pct, m2.muscle_pct);
+  const actualFatLossKg = comp1.fatKg - comp2.fatKg;
+  const actualFatLossKcal = actualFatLossKg * KCAL_PER_KG_FAT_LOSS;
+
+  const weeksBetween = (new Date(m2.measured_at) - new Date(m1.measured_at)) / 86400000 / 7;
+  if (weeksBetween <= 0) return;
+  const totalIntakeKcal = await getFoodCalories(m1.measured_at, m2.measured_at);
+
+  const actualDailyExpenditure = (totalIntakeKcal + actualFatLossKcal) / (weeksBetween * 7);
+  const avgFat = (comp1.fatKg + comp2.fatKg) / 2;
+  const avgMuscle = (comp1.muscleKg + comp2.muscleKg) / 2;
+  const avgOther = (comp1.otherKg + comp2.otherKg) / 2;
+  const bmrImplied = actualDailyExpenditure / DEFAULT_ACTIVITY_MULT;
+  const otherContribution = bmrImplied - (avgFat * KCAL_PER_KG_FAT_RESTING) - (avgMuscle * KCAL_PER_KG_MUSCLE_RESTING);
+  const newCoeff = otherContribution / avgOther;
+  if (!isFinite(newCoeff) || newCoeff <= 0) return;
+
+  await sbWrite({
+    table: 'model_calibration',
+    op: 'insert',
+    payload: { other_tissue_kcal_per_kg: newCoeff, activity_multiplier: DEFAULT_ACTIVITY_MULT, sample_weeks: weeksBetween },
+  });
 }
 
 async function getExerciseCalories(fromIso, toIso) {
