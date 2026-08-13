@@ -5179,6 +5179,7 @@ async function openProfileModal() {
     </div>
     <div class="form-row"><label>Pituus (cm)</label><input type="text" inputmode="numeric" id="profile-height" value="${profile.height_cm ?? ''}"></div>
     <div class="form-row"><label>Syntymäaika</label><input type="date" id="profile-birthdate" value="${profile.birth_date ?? ''}"></div>
+    <div class="form-row"><label>Tavoitepaino (kg)</label><input type="text" inputmode="decimal" id="profile-target-weight" value="${profile.target_weight_kg ?? ''}"></div>
     <button class="btn btn-primary" id="profile-settings-save-btn">Tallenna</button>
     <button class="btn" id="profile-settings-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Sulje</button>
     <div class="status" id="profile-settings-status"></div>
@@ -5189,6 +5190,7 @@ async function openProfileModal() {
     const sex = document.getElementById('profile-sex').value;
     const height = parseNum('profile-height');
     const birthDate = document.getElementById('profile-birthdate').value;
+    const targetWeight = parseNum('profile-target-weight');
     if (!sex) {
       showStatus('profile-settings-status', 'Valitse sukupuoli', true);
       return;
@@ -5205,7 +5207,7 @@ async function openProfileModal() {
     const { error } = await sbWrite({
       table: 'user_profile',
       op: 'upsert',
-      payload: { id: 1, sex, height_cm: height, birth_date: birthDate, updated_at: new Date().toISOString() },
+      payload: { id: 1, sex, height_cm: height, birth_date: birthDate, target_weight_kg: targetWeight, updated_at: new Date().toISOString() },
     });
     saveBtn.disabled = false;
     if (error) { showStatus('profile-settings-status', 'Virhe: ' + error.message, true); return; }
