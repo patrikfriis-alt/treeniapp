@@ -1382,6 +1382,9 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <button onclick="openStepsGoalModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="steps" style="display:inline-flex"></span> Askeltavoite
   </button>
+  <button onclick="openRestTimerModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
+    <span data-icon="timer" style="display:inline-flex"></span> Lepoajastin
+  </button>
   <button onclick="openProfileModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="scale" style="display:inline-flex"></span> Profiili
   </button>
@@ -1418,6 +1421,7 @@ const ICONS = {
   bell:      '<path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/>',
   chat:      '<path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>',
   steps:     '<ellipse cx="8" cy="7" rx="2.5" ry="3.5"/><ellipse cx="16" cy="16" rx="2.5" ry="3.5"/><circle cx="8" cy="3" r="1"/><circle cx="16" cy="12" r="1"/>',
+  timer:     '<path d="M6 2h12v4l-5 6 5 6v4H6v-4l5-6-5-6z"/>',
 };
 
 function svgIcon(name, color, size) {
