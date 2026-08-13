@@ -3002,7 +3002,7 @@ async function calibrateModelIfDue() {
 
   const m1 = measurements[measurements.length - 2];
   const m2 = measurements[measurements.length - 1];
-  if (m1.fat_pct == null || m1.muscle_pct == null || m2.fat_pct == null || m2.muscle_pct == null) return;
+  if (m1.weight_kg == null || m1.fat_pct == null || m1.muscle_pct == null || m2.weight_kg == null || m2.fat_pct == null || m2.muscle_pct == null) return;
 
   const comp1 = getBodyComposition(m1.weight_kg, m1.fat_pct, m1.muscle_pct);
   const comp2 = getBodyComposition(m2.weight_kg, m2.fat_pct, m2.muscle_pct);
