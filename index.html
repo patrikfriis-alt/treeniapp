@@ -2908,7 +2908,7 @@ async function loadBodyMetrics() {
       { label:'Lihas%', data: muscleData, borderColor:'#EF9F27', borderWidth:2, pointRadius:3, pointBackgroundColor:'#EF9F27', tension:.3, fill:false, yAxisID:'y2' },
     ];
     if (forecastData) {
-      datasets.push({ label:'Ennuste', data: forecastData, borderColor:'#1D9E75', borderDash:[5,5], borderWidth:2, pointRadius:0, tension:.3, fill:false, yAxisID:'y1' });
+      datasets.push({ label:'Ennuste', data: forecastData, borderColor:'rgba(29,158,117,0.5)', borderDash:[5,5], borderWidth:2, pointRadius:0, tension:.3, fill:false, yAxisID:'y1' });
     }
 
     charts.body = new Chart(document.getElementById('body-chart'), {
