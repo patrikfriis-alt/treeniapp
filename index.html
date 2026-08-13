@@ -2085,9 +2085,9 @@ async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
     return ` (${d > 0 ? '+' : ''}${d}${unit})`;
   };
 
-  const weekRow = (icon, iconColor, label, valHtml, barHtml) => `
+  const weekRow = (icon, iconColor, label, valHtml, barHtml, rowOnclick) => `
     <div class="kc-weekly-row">
-      <div class="kc-weekly-row-top">
+      <div class="kc-weekly-row-top"${rowOnclick ? ` onclick="${rowOnclick}" style="cursor:pointer;"` : ''}>
         <div class="kc-weekly-row-label"><span class="kc-weekly-row-icon" data-icon="${icon}" data-icon-color="${iconColor}"></span>${label}</div>
         <div class="kc-weekly-row-val">${valHtml}</div>
       </div>
@@ -2156,7 +2156,8 @@ async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
     }
     const daystripHtml = `<div class="kc-week-daystrip">${dayCells.join('')}</div>`;
 
-    rows.push(weekRow('flame', 'var(--amber)', 'Viikon kalorit', weeklyValStr, barHtml + subHtml + daystripHtml));
+    rows.push(weekRow('flame', 'var(--amber)', 'Viikon kalorit', weeklyValStr, barHtml + subHtml + daystripHtml,
+      `openWeeklyCaloriesModal(${Math.round(foodKcal)}, ${Math.round(bmrInfo.bmr * 7)}, ${Math.round(exerciseKcal)})`));
   }
 
   document.getElementById('kc-weekly-rows').innerHTML = rows.join('');
@@ -6102,6 +6103,19 @@ async function openDeficitBreakdownModal(bmrInfo) {
     <div class="metric-modal-bars">${barsHtml}</div>
   `;
   openMetricModal('Päivän kalorit', body);
+}
+
+function openWeeklyCaloriesModal(foodKcal, bmrWeekly, exerciseKcal) {
+  const net = foodKcal - bmrWeekly - exerciseKcal;
+  const sign = net >= 0 ? '+' : '';
+  const label = net < 0 ? 'nettovaje' : (net > 0 ? 'nettoylijäämä' : 'tasan');
+  const body = `
+    <div class="metric-modal-row"><span>BMR (viikko)</span><span class="val">${bmrWeekly} kcal</span></div>
+    <div class="metric-modal-row"><span>+ Liikunta</span><span class="val">+${exerciseKcal} kcal</span></div>
+    <div class="metric-modal-row"><span>− Syöty ruoka</span><span class="val">−${foodKcal} kcal</span></div>
+    <div class="metric-modal-total"><span>Viikko (${label})</span><span>${sign}${net} kcal</span></div>
+  `;
+  openMetricModal('Viikon kalorit', body);
 }
 
 
