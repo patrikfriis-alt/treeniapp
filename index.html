@@ -4185,6 +4185,10 @@ function formatFastingDuration(ms) {
   return `${h}h ${m}min`;
 }
 
+// Käyttää created_at:ia (kirjaushetki) syömisajan approksimaationa, ei logged_at:ia
+// (käyttäjän valitsema päivä) — jälkikäteen täytetyt merkinnät (esim. eilisen aterian
+// kirjaus tänään) vinouttavat aukkolaskentaa, koska created_at ei silloin vastaa
+// todellista syömisaikaa. Tunnettu, hyväksytty rajoitus — ei uutta ajastussaraketta.
 async function computeWeeklyFastingByDay(mondayIso, sundayIso) {
   const lookbackFrom = localIso(addDays(new Date(mondayIso), -14));
   const { data, error } = await sb.from('food_log_entries')
