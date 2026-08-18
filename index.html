@@ -2162,6 +2162,15 @@ async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
 
     rows.push(weekRow('flame', 'var(--amber)', 'Viikon kalorit', weeklyValStr, barHtml + subHtml + daystripHtml,
       `openWeeklyCaloriesModal(${Math.round(foodKcal)}, ${Math.round(bmrInfo.bmr * 7)}, ${Math.round(exerciseKcal)})`));
+
+    const fastingByDay = await computeWeeklyFastingByDay(mon.iso, sunIso);
+    const weeklyFastingMs = Object.values(fastingByDay).reduce((s, v) => s + v, 0);
+    const dayMinutes = [];
+    for (let i = 0; i < 7; i++) {
+      dayMinutes.push(Math.round((fastingByDay[localIso(addDays(mon.date, i))] || 0) / 60000));
+    }
+    rows.push(weekRow('timer', 'var(--accent)', 'Paastoaika', formatFastingDuration(weeklyFastingMs), '',
+      `openFastingBreakdownModal('${mon.iso}', ${dayMinutes.join(', ')})`));
   }
 
   document.getElementById('kc-weekly-rows').innerHTML = rows.join('');
@@ -6184,6 +6193,17 @@ function openWeeklyCaloriesModal(foodKcal, bmrWeekly, exerciseKcal) {
     <div class="metric-modal-total"><span>Viikko (${label})</span><span>${sign}${net} kcal</span></div>
   `;
   openMetricModal('Viikon kalorit', body);
+}
+
+function openFastingBreakdownModal(mondayIso, m0, m1, m2, m3, m4, m5, m6) {
+  const minutes = [m0, m1, m2, m3, m4, m5, m6];
+  const rowsHtml = minutes.map((min, i) => {
+    const d = addDays(new Date(mondayIso), i);
+    const label = `${DAYS[i]} ${d.getDate()}.${d.getMonth() + 1}.`;
+    const h = Math.floor(min / 60), m = min % 60;
+    return `<div class="metric-modal-row"><span>${label}</span><span class="val">${h}h ${m}min</span></div>`;
+  }).join('');
+  openMetricModal('Paastoaika', rowsHtml);
 }
 
 
