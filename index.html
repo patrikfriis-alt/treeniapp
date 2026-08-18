@@ -1826,6 +1826,7 @@ async function loadPrevSession(o, d) {
    WEEK ACTIVITY CACHE
 ═══════════════════════════════════════════════════════════════ */
 let weekActivityCache = {};
+let treeniRequestId = 0;
 
 async function loadWeekActivityData(o) {
   weekActivityCache = {};
@@ -2524,7 +2525,9 @@ function showCelebrationToast(icon, title, sub, type) {
 }
 
 async function renderTreeni() {
+  const requestId = ++treeniRequestId;
   await loadWeekActivityData(wOff);
+  if (requestId !== treeniRequestId) return;
 
   const ws = wStart(wOff), wk = isoWeek(ws.date);
   document.getElementById('week-label').textContent = `Viikko ${wk} / ${isoWeekYear(ws.date)}`;
@@ -2648,7 +2651,7 @@ async function renderTreeni() {
 
   loadWeekSummary();
   loadMotivationSummary();
-  await renderSession();
+  await renderSession(requestId);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -2676,7 +2679,7 @@ async function setActiveSession(o, d, st) {
   renderTreeni();
 }
 
-async function renderSession() {
+async function renderSession(requestId) {
   const st = getActiveSession(wOff, aDay), sess = SESS[st];
   const el = document.getElementById('session-content');
 
@@ -2703,6 +2706,7 @@ async function renderSession() {
 
   // Fetch previous session data
   await loadPrevSession(wOff, aDay);
+  if (requestId !== treeniRequestId) return;
 
   const done    = isDone(wOff, aDay, st);
   const started = isStarted(wOff, aDay, st);
