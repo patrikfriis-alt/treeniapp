@@ -2154,7 +2154,7 @@ async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
       if (iso <= todayIso) {
         const eaten = foodByDate[iso] || 0;
         const exKcal = exByDate[iso] || 0;
-        cls = eaten <= fairShareDaily ? ' under' : ' over';
+        cls = (eaten - exKcal) <= fairShareDaily ? ' under' : ' over';
         onclickAttr = ` onclick="openDayBudgetModal('${iso}', ${Math.round(eaten)}, ${Math.round(fairShareDaily)}, ${Math.round(exKcal)})"`;
       }
       dayCells.push(`<div class="kc-week-day${cls}"${onclickAttr}>${DAYS[i][0]}</div>`);
@@ -2988,7 +2988,7 @@ let lastActivities = [];
 ═══════════════════════════════════════════════════════════════ */
 function calcAge(birthDateIso) {
   const today = new Date();
-  const birth = new Date(birthDateIso);
+  const birth = new Date(birthDateIso + 'T00:00:00');
   let age = today.getFullYear() - birth.getFullYear();
   const monthDiff = today.getMonth() - birth.getMonth();
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
@@ -5164,6 +5164,10 @@ function openEditEntryDialog(entryId) {
       showStatus('edit-entry-status', 'Syötä kelvollinen määrä', true);
       return;
     }
+    if (!src) {
+      showStatus('edit-entry-status', 'Ruokatietoja ei löytynyt', true);
+      return;
+    }
     const saveBtn = document.getElementById('edit-entry-save-btn');
     saveBtn.disabled = true;
     try {
@@ -5383,7 +5387,7 @@ function openMetricModal(title, bodyHtml) {
 }
 
 function openDayBudgetModal(iso, eaten, fairShare, exKcal) {
-  const dateObj = new Date(iso);
+  const dateObj = new Date(iso + 'T00:00:00');
   const title = dateObj.toLocaleDateString('fi-FI', { weekday: 'long', day: 'numeric', month: 'numeric' });
   const diff = eaten - fairShare - exKcal;
   const sign = diff >= 0 ? '+' : '';
