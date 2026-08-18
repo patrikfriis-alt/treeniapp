@@ -2194,9 +2194,10 @@ async function checkBestRunningWeek(offset = wOff) {
   const mon0 = wStart(offset - 11);
   const sunLast = new Date(wStart(offset).date);
   sunLast.setDate(sunLast.getDate() + 6);
-  const { data } = await sb.from('activity_data').select('activity_date,distance_km')
+  const { data, error } = await sb.from('activity_data').select('activity_date,distance_km')
     .eq('activity_type', 'Juoksu')
     .gte('activity_date', mon0.iso).lte('activity_date', localIso(sunLast));
+  if (error) { console.error('checkBestRunningWeek failed:', error.message); return null; }
 
   const weekKm = new Array(12).fill(0);
   for (let i = 0; i < 12; i++) {
@@ -2221,15 +2222,17 @@ async function checkPlateau(offset = wOff) {
   const mon = wStart(offset);
   const sun = new Date(mon.date);
   sun.setDate(mon.date.getDate() + 6);
-  const { data: thisWeekSets } = await sb.from('workout_sets').select('exercise_name')
+  const { data: thisWeekSets, error: thisWeekErr } = await sb.from('workout_sets').select('exercise_name')
     .gte('workout_date', mon.iso).lte('workout_date', localIso(sun));
+  if (thisWeekErr) { console.error('checkPlateau failed:', thisWeekErr.message); return null; }
   const exercisesThisWeek = [...new Set((thisWeekSets || []).map(r => r.exercise_name))];
   if (!exercisesThisWeek.length) return null;
 
   const mon3 = wStart(offset - 2);
-  const { data: historySets } = await sb.from('workout_sets').select('exercise_name,weight_kg,workout_date')
+  const { data: historySets, error: historyErr } = await sb.from('workout_sets').select('exercise_name,weight_kg,workout_date')
     .in('exercise_name', exercisesThisWeek)
     .gte('workout_date', mon3.iso).lte('workout_date', localIso(sun));
+  if (historyErr) { console.error('checkPlateau failed:', historyErr.message); return null; }
 
   for (const exName of exercisesThisWeek) {
     const weekMax = [0, 1, 2].map(i => {
@@ -2403,8 +2406,9 @@ async function loadMotivationSummary(offset = wOff) {
   const monthStart = localIso(new Date(now.getFullYear(), now.getMonth(), 1));
   const monthEnd   = localIso(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 
-  const { data: actMonth } = await sb.from('activity_data').select('activity_type')
+  const { data: actMonth, error: actMonthErr } = await sb.from('activity_data').select('activity_type')
     .gte('activity_date', monthStart).lte('activity_date', monthEnd);
+  if (actMonthErr) { console.error('loadMotivationSummary failed:', actMonthErr.message); return; }
   const monthCount = actMonth ? actMonth.length : 0;
   const msMonthEl = document.getElementById('ms-month');
   if (msMonthEl) msMonthEl.textContent = monthCount + ' krt';
@@ -3074,12 +3078,14 @@ async function getRecentAvgWeeklyIntake() {
 }
 
 async function calibrateModelIfDue() {
-  const { data: measurements } = await sb.from('body_metrics').select('*')
+  const { data: measurements, error: measErr } = await sb.from('body_metrics').select('*')
     .order('measured_at', { ascending: true });
+  if (measErr) { console.error('calibrateModelIfDue failed:', measErr.message); return; }
   if (!measurements || measurements.length < 3) return;
 
-  const { data: lastCal } = await sb.from('model_calibration').select('calibrated_at')
+  const { data: lastCal, error: lastCalErr } = await sb.from('model_calibration').select('calibrated_at')
     .order('calibrated_at', { ascending: false }).limit(1).maybeSingle();
+  if (lastCalErr) { console.error('calibrateModelIfDue failed:', lastCalErr.message); return; }
   if (lastCal) {
     const daysSince = (Date.now() - new Date(lastCal.calibrated_at)) / 86400000;
     if (daysSince < 14) return;
@@ -4485,7 +4491,8 @@ async function loadExerciseLibrary() {
   if (exerciseLibraryCache) return exerciseLibraryCache;
   if (exerciseLibraryLoadingPromise) return exerciseLibraryLoadingPromise;
   exerciseLibraryLoadingPromise = (async () => {
-    const { data } = await sb.from('exercises').select('*').order('name');
+    const { data, error } = await sb.from('exercises').select('*').order('name');
+    if (error) console.error('loadExerciseLibrary failed:', error.message);
     exerciseLibraryCache = data || [];
     exerciseLibraryLoadingPromise = null;
     return exerciseLibraryCache;
@@ -5976,9 +5983,10 @@ async function loadKoonti() {
 
   const todayIso = localIso(new Date());
 
-  const { data: wsRows } = await sb.from('workout_sessions')
+  const { data: wsRows, error: wsErr } = await sb.from('workout_sessions')
     .select('is_done,session_type,calories')
     .eq('workout_date', todayIso).limit(1);
+  if (wsErr) console.error('loadKoonti (workout_sessions) failed:', wsErr.message);
   const kcSaliCard = document.getElementById('kc-sali');
   const kcSaliSub  = document.getElementById('kc-sali-sub');
   kcSaliSub.classList.remove('skel-sub');
@@ -6001,11 +6009,12 @@ async function loadKoonti() {
     }
   }
 
-  const { data: actRows } = await sb.from('activity_data')
+  const { data: actRows, error: actErr } = await sb.from('activity_data')
     .select('activity_type,activity_date,duration_min,created_at')
     .order('activity_date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(1);
+  if (actErr) console.error('loadKoonti (activity_data) failed:', actErr.message);
   const kcAerobiaCard = document.getElementById('kc-aerobia');
   const kcAerobiaSub = document.getElementById('kc-aerobia-sub');
   kcAerobiaSub.classList.remove('skel-sub');
@@ -6042,9 +6051,10 @@ async function loadKoonti() {
     kcAerobiaBarTrack.style.display = 'none';
   }
 
-  const { data: bodyRows } = await sb.from('body_metrics')
+  const { data: bodyRows, error: bodyErr } = await sb.from('body_metrics')
     .select('weight_kg,measured_at')
     .order('measured_at', { ascending: false }).limit(2);
+  if (bodyErr) console.error('loadKoonti (body_metrics) failed:', bodyErr.message);
   const kcKehoCard = document.getElementById('kc-keho');
   const kcKehoSub = document.getElementById('kc-keho-sub');
   kcKehoSub.classList.remove('skel-sub');
@@ -6061,9 +6071,10 @@ async function loadKoonti() {
     kcKehoSub.textContent = 'Ei mittauksia vielä';
   }
 
-  const { data: sleepRows } = await sb.from('sleep_data')
+  const { data: sleepRows, error: sleepErr } = await sb.from('sleep_data')
     .select('sleep_date,sleep_score')
     .order('sleep_date', { ascending: false }).limit(7);
+  if (sleepErr) console.error('loadKoonti (sleep_data) failed:', sleepErr.message);
   const kcUniCard = document.getElementById('kc-uni');
   const kcUniSub = document.getElementById('kc-uni-sub');
   kcUniSub.classList.remove('skel-sub');
@@ -6076,10 +6087,11 @@ async function loadKoonti() {
   }
 
   const weekStartIso = wStart(0).iso;
-  const { data: stepsWeekRows } = await sb.from('step_data')
+  const { data: stepsWeekRows, error: stepsErr } = await sb.from('step_data')
     .select('step_date,steps')
     .gte('step_date', weekStartIso)
     .order('step_date', { ascending: false });
+  if (stepsErr) console.error('loadKoonti (step_data) failed:', stepsErr.message);
   const kcStepsCard = document.getElementById('kc-steps');
   const kcStepsSub = document.getElementById('kc-steps-sub');
   kcStepsSub.classList.remove('skel-sub');
