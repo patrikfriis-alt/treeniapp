@@ -4185,6 +4185,32 @@ function formatFastingDuration(ms) {
   return `${h}h ${m}min`;
 }
 
+async function computeWeeklyFastingByDay(mondayIso, sundayIso) {
+  const lookbackFrom = localIso(addDays(new Date(mondayIso), -14));
+  const { data, error } = await sb.from('food_log_entries')
+    .select('created_at')
+    .gte('logged_at', lookbackFrom)
+    .lte('logged_at', sundayIso)
+    .gte('kcal', 10)
+    .order('created_at', { ascending: true });
+  if (error) { console.error('computeWeeklyFastingByDay failed:', error.message); return {}; }
+  const entries = data || [];
+
+  const byDay = {};
+  for (let i = 0; i < 7; i++) {
+    byDay[localIso(addDays(new Date(mondayIso), i))] = 0;
+  }
+  for (let i = 1; i < entries.length; i++) {
+    const prev = new Date(entries[i - 1].created_at);
+    const curr = new Date(entries[i].created_at);
+    const endDayIso = localIso(curr);
+    if (byDay[endDayIso] !== undefined) {
+      byDay[endDayIso] += (curr - prev);
+    }
+  }
+  return byDay;
+}
+
 function changeFoodDay(dir) { foodDayOffset += dir; renderRuoka(); }
 
 function formatFoodDayLabel(offset) {
