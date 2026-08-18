@@ -1786,7 +1786,7 @@ function prefillExercise(o, d, ei, btnEl) {
 ═══════════════════════════════════════════════════════════════ */
 let prevCache = {};
 
-async function loadPrevSession(o, d) {
+async function loadPrevSession(o, d, requestId) {
   prevCache = {};
   const st = getActiveSession(o, d), sess = SESS[st];
   if (!sess || !sess.ex || !sess.ex.length) return;
@@ -1808,6 +1808,7 @@ async function loadPrevSession(o, d) {
     .order('set_number',   { ascending: true  })
     .limit(300);
 
+  if (requestId !== treeniRequestId) return;
   if (error) { console.error('loadPrevSession failed:', error.message); return; }
   if (!data) return;
 
@@ -1828,7 +1829,7 @@ async function loadPrevSession(o, d) {
 let weekActivityCache = {};
 let treeniRequestId = 0;
 
-async function loadWeekActivityData(o) {
+async function loadWeekActivityData(o, requestId) {
   weekActivityCache = {};
   const mon = wStart(o);
   const sun = new Date(mon.date);
@@ -1852,6 +1853,11 @@ async function loadWeekActivityData(o) {
       .gte('workout_date', fromDate)
       .lte('workout_date', toDate),
   ]);
+  if (requestId !== treeniRequestId) return;
+
+  if (workoutRes.error) console.error('loadWeekActivityData (workout_sets) failed:', workoutRes.error.message);
+  if (actRes.error) console.error('loadWeekActivityData (activity_data) failed:', actRes.error.message);
+  if (overrideRes.error) console.error('loadWeekActivityData (day_session_overrides) failed:', overrideRes.error.message);
 
   (workoutRes.data || []).forEach(row => {
     if (!weekActivityCache[row.workout_date])
@@ -2526,7 +2532,7 @@ function showCelebrationToast(icon, title, sub, type) {
 
 async function renderTreeni() {
   const requestId = ++treeniRequestId;
-  await loadWeekActivityData(wOff);
+  await loadWeekActivityData(wOff, requestId);
   if (requestId !== treeniRequestId) return;
 
   const ws = wStart(wOff), wk = isoWeek(ws.date);
@@ -2705,7 +2711,7 @@ async function renderSession(requestId) {
   }
 
   // Fetch previous session data
-  await loadPrevSession(wOff, aDay);
+  await loadPrevSession(wOff, aDay, requestId);
   if (requestId !== treeniRequestId) return;
 
   const done    = isDone(wOff, aDay, st);
