@@ -993,7 +993,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="nav-icon" data-icon="utensils"></span>
     <span>Ruoka</span>
   </button>
-  <button id="hamburger-btn" onclick="toggleSidebar()">
+  <button onclick="toggleSidebar()">
     <span class="nav-icon">≡</span>
     <span>Valikko</span>
   </button>
@@ -1014,7 +1014,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <div class="card" id="onboarding-card" style="display:none">
     <div class="card-title">Aloita tästä</div>
     <div id="onboarding-rows"></div>
-    <button class="btn" id="onboarding-skip-btn" onclick="skipOnboarding()" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Ohita</button>
+    <button class="btn" onclick="skipOnboarding()" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Ohita</button>
   </div>
 
   <div class="hero-metrics">
@@ -1106,7 +1106,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     </div>
   </div>
 
-  <div class="card" id="kc-weekly-report" style="margin:0 12px 10px">
+  <div class="card" style="margin:0 12px 10px">
     <div class="card-title">Tällä viikolla</div>
     <div id="kc-weekly-rows"><div class="koonti-card-sub skel-sub" style="width:100%">&nbsp;</div></div>
     <div id="kc-weekly-insights" style="display:none"></div>
@@ -1251,7 +1251,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
           <option value="pace">Vauhti (min/km)</option>
         </select>
       </div>
-      <div class="chart-wrap" id="run-chart-wrap" style="margin-top:12px">
+      <div class="chart-wrap" style="margin-top:12px">
         <canvas id="run-chart"></canvas>
       </div>
       <div id="run-chart-status" style="color:var(--text3);font-size:13px;text-align:center;padding:6px"></div>
@@ -1526,7 +1526,6 @@ const saveLD = () => localStorage.setItem('treeni_v3', JSON.stringify(LD));
 const todayIdx = () => { const d = new Date().getDay(); return d === 0 ? 6 : d - 1; };
 let wOff = 0;
 let aDay = todayIdx();
-let seurantaPage = 'keho';
 let histRangeMonths = 1;
 
 function wStart(o) {
@@ -5798,7 +5797,7 @@ async function renderCoachPage() {
   el.innerHTML = `
     <button class="btn btn-primary" onclick="startNewCoachConversation()" style="margin-bottom:16px;">+ Uusi keskustelu</button>
     <button class="btn" onclick="openCoachNotesModal()" style="margin-bottom:16px;background:var(--surface2);color:var(--text2);">Mitä valmentaja tietää sinusta →</button>
-    <div id="coach-conversation-list">${listHtml}</div>
+    <div>${listHtml}</div>
   `;
 }
 
