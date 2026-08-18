@@ -4194,9 +4194,27 @@ function formatFoodDayLabel(offset) {
   return d.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric', year: 'numeric' });
 }
 
+let _fastingInterval = null;
+let _lastRealFoodAt = null;
+
+async function loadFastingTimer() {
+  _lastRealFoodAt = await getLastRealFoodEntryAt();
+  renderFastingTimer();
+  if (_fastingInterval) clearInterval(_fastingInterval);
+  _fastingInterval = setInterval(renderFastingTimer, 60000);
+}
+
+function renderFastingTimer() {
+  const el = document.getElementById('food-fasting-val');
+  if (!el) return;
+  if (!_lastRealFoodAt) { el.textContent = '—'; return; }
+  el.textContent = formatFastingDuration(Date.now() - _lastRealFoodAt.getTime());
+}
+
 async function renderRuoka() {
   document.getElementById('food-day-label').textContent = formatFoodDayLabel(foodDayOffset);
   await loadFoodDay();
+  loadFastingTimer();
 }
 
 async function loadFoodDay() {
