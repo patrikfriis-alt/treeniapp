@@ -4208,7 +4208,7 @@ function renderFastingTimer() {
   const el = document.getElementById('food-fasting-val');
   if (!el) return;
   if (!_lastRealFoodAt) { el.textContent = '—'; return; }
-  el.textContent = formatFastingDuration(Date.now() - _lastRealFoodAt.getTime());
+  el.textContent = formatFastingDuration(Math.max(0, Date.now() - _lastRealFoodAt.getTime()));
 }
 
 async function renderRuoka() {
