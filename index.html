@@ -1405,6 +1405,9 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <button onclick="openStepsGoalModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="steps" style="display:inline-flex"></span> Askeltavoite
   </button>
+  <button onclick="openWaterGoalModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
+    <span data-icon="droplet" style="display:inline-flex"></span> Vesitavoite
+  </button>
   <button onclick="openRestTimerModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="timer" style="display:inline-flex"></span> Lepoajastin
   </button>
@@ -5851,6 +5854,54 @@ async function saveStepsGoal(goal) {
     payload: { id: 1, daily_steps_goal: goal, updated_at: new Date().toISOString() },
   });
   if (error) { console.error('saveStepsGoal failed:', error.message); throw error; }
+}
+
+async function openWaterGoalModal() {
+  closeSidebar();
+  const settings = (await loadAppSettings()) || {};
+  const currentGoal = settings.daily_water_goal_ml != null ? settings.daily_water_goal_ml : '';
+
+  const { overlay, modal } = createModalOverlay('water-goal-overlay');
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);padding:24px;width:100%;';
+
+  modal.innerHTML = `
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">Vesitavoite</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5;">Päivittäinen vesitavoite millilitroina. Jätä tyhjäksi jos et halua seurata tavoitetta.</div>
+    <div class="form-row"><label>Tavoite (ml/pv)</label><input type="text" inputmode="numeric" id="water-goal-input" value="${currentGoal}"></div>
+    <button class="btn btn-primary" id="water-goal-save-btn">Tallenna</button>
+    <button class="btn" id="water-goal-cancel-btn" style="margin-top:8px;background:none;color:var(--text2);width:100%;">Sulje</button>
+    <div class="status" id="water-goal-status"></div>
+  `;
+
+  document.getElementById('water-goal-save-btn').onclick = async () => {
+    const saveBtn = document.getElementById('water-goal-save-btn');
+    const raw = document.getElementById('water-goal-input').value.trim();
+    const goal = raw === '' ? null : parseInt(raw, 10);
+    if (raw !== '' && (goal === null || isNaN(goal) || goal <= 0)) {
+      showStatus('water-goal-status', 'Syötä positiivinen kokonaisluku tai jätä tyhjäksi', true);
+      return;
+    }
+    saveBtn.disabled = true;
+    try {
+      await saveWaterGoal(goal);
+      appSettings = null;
+      overlay.remove();
+      if (document.getElementById('page-koonti').classList.contains('active')) loadKoonti();
+    } catch (err) {
+      showStatus('water-goal-status', 'Tallennus epäonnistui', true);
+      saveBtn.disabled = false;
+    }
+  };
+  document.getElementById('water-goal-cancel-btn').onclick = () => overlay.remove();
+}
+
+async function saveWaterGoal(goal) {
+  const { error } = await sbWrite({
+    table: 'app_settings',
+    op: 'upsert',
+    payload: { id: 1, daily_water_goal_ml: goal, updated_at: new Date().toISOString() },
+  });
+  if (error) { console.error('saveWaterGoal failed:', error.message); throw error; }
 }
 
 async function openRestTimerModal() {
