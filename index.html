@@ -4193,6 +4193,38 @@ async function loadFoodWeekKcal(mondayIso, sundayIso) {
   return (data || []).reduce((sum, r) => sum + (r.kcal || 0), 0);
 }
 
+async function getMealTypesWithEntries(dateIso) {
+  const { data, error } = await sb.from('food_log_entries')
+    .select('meal_type')
+    .eq('logged_at', dateIso);
+  if (error) { console.error('getMealTypesWithEntries failed:', error.message); return new Set(); }
+  return new Set((data || []).map(r => r.meal_type));
+}
+
+async function repeatMealFromPreviousDay(mealType) {
+  const prevIso  = localIso(addDays(new Date(), foodDayOffset - 1));
+  const todayIso = localIso(addDays(new Date(), foodDayOffset));
+  const { data, error } = await sb.from('food_log_entries')
+    .select('food_cache_id, custom_food_id, amount_g, kcal, protein_g')
+    .eq('logged_at', prevIso)
+    .eq('meal_type', mealType);
+  if (error) { console.error('repeatMealFromPreviousDay failed:', error.message); return; }
+  if (!data || !data.length) return;
+
+  const rows = data.map(r => ({
+    meal_type: mealType,
+    logged_at: todayIso,
+    food_cache_id: r.food_cache_id,
+    custom_food_id: r.custom_food_id,
+    amount_g: r.amount_g,
+    kcal: r.kcal,
+    protein_g: r.protein_g,
+  }));
+  const { error: insErr } = await sbWrite({ table: 'food_log_entries', op: 'insert', payload: rows });
+  if (insErr) { console.error('repeatMealFromPreviousDay insert failed:', insErr.message); return; }
+  renderRuoka();
+}
+
 async function getLastRealFoodEntryAt() {
   const { data, error } = await sb.from('food_log_entries')
     .select('created_at')
@@ -4275,20 +4307,22 @@ async function loadFoodDay() {
   const requestId = ++foodDayRequestId;
   const selectedDate = addDays(new Date(), foodDayOffset);
   const dateIso = localIso(selectedDate);
+  const prevIso = localIso(addDays(selectedDate, -1));
   const monday = mondayOf(selectedDate);
   const sunday = addDays(monday, 6);
 
   if (!foodGoals) foodGoals = await loadNutritionGoals();
 
-  const [entries, weekKcal] = await Promise.all([
+  const [entries, weekKcal, prevMealTypes] = await Promise.all([
     loadFoodDayEntries(dateIso),
     loadFoodWeekKcal(localIso(monday), localIso(sunday)),
+    getMealTypesWithEntries(prevIso),
   ]);
   if (requestId !== foodDayRequestId) return;
   foodDayEntries = entries;
 
   renderFoodHero(entries, weekKcal);
-  renderMealCards(entries);
+  renderMealCards(entries, prevMealTypes);
 }
 
 function renderFoodHero(entries, weekKcal) {
@@ -4325,7 +4359,7 @@ function renderFoodHero(entries, weekKcal) {
   }
 }
 
-function renderMealCards(entries) {
+function renderMealCards(entries, prevMealTypes) {
   const el = document.getElementById('food-meals');
   el.innerHTML = MEAL_DEFS.map(meal => {
     const mealEntries = entries.filter(e => e.meal_type === meal.key);
@@ -4335,6 +4369,9 @@ function renderMealCards(entries) {
         <span>${foodItemName(e)}, ${e.amount_g}g</span>
         <span class="meal-entry-kcal">${Math.round(e.kcal)} kcal</span>
       </div>`).join('');
+    const repeatBtn = prevMealTypes.has(meal.key)
+      ? `<button class="meal-add-btn" style="color:var(--accent)" onclick="repeatMealFromPreviousDay('${meal.key}')">↻ Toista eilinen</button>`
+      : '';
     return `
       <div class="meal-card">
         <div class="meal-card-header">
@@ -4343,6 +4380,7 @@ function renderMealCards(entries) {
         </div>
         ${rows}
         <button class="meal-add-btn" onclick="openFoodSearch('${meal.key}')">+ Lisää ruoka</button>
+        ${repeatBtn}
       </div>`;
   }).join('');
 }
