@@ -4396,6 +4396,35 @@ let foodSearchItems = [];
 let foodSearchDebounce = null;
 let foodSearchRequestId = 0;
 
+let foodSearchFavorites = [];
+
+async function loadMealTemplates() {
+  const { data, error } = await sb.from('meal_templates')
+    .select(`
+      id, name,
+      meal_template_items(id, food_cache_id, custom_food_id, amount_g,
+        food_cache(name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g),
+        custom_foods(name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g)
+      )
+    `)
+    .order('created_at', { ascending: false });
+  if (error) { console.error('loadMealTemplates failed:', error.message); return []; }
+  return data || [];
+}
+
+function renderFavoritesSection(templates) {
+  const el = document.getElementById('food-search-favorites');
+  if (!el) return;
+  templates = templates.filter(t => t.meal_template_items && t.meal_template_items.length > 0);
+  if (!templates.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="food-search-section-label">Suosikit</div>` +
+    templates.map(t => `
+      <div class="food-search-result-row" style="align-items:center;">
+        <span onclick="addFavoriteMealToLog('${t.id}')" style="flex:1;cursor:pointer;">${escapeHtml(t.name)}</span>
+        <span onclick="deleteFavoriteMeal('${t.id}')" style="color:var(--red);padding-left:10px;cursor:pointer;">✕</span>
+      </div>`).join('');
+}
+
 async function loadRecentFoods() {
   const from = new Date();
   from.setDate(from.getDate() - 30);
@@ -4527,9 +4556,45 @@ async function openFoodSearch(mealType) {
   document.body.style.overflow = 'hidden';
 
   document.getElementById('food-search-results').innerHTML = `<div class="food-search-empty">Ladataan...</div>`;
-  foodRecentItems = await loadRecentFoods();
+  document.getElementById('food-search-favorites').innerHTML = '';
+  const [recentItems, templates] = await Promise.all([loadRecentFoods(), loadMealTemplates()]);
+  foodRecentItems = recentItems;
   foodSearchItems = foodRecentItems;
+  foodSearchFavorites = templates;
+  renderFavoritesSection(templates);
   renderFoodResultsList(foodSearchItems, 'Viimeksi käytetyt', 'Ei vielä aiempia ruokia');
+}
+
+async function addFavoriteMealToLog(templateId) {
+  const template = foodSearchFavorites.find(t => t.id === templateId);
+  if (!template) return;
+  for (const item of template.meal_template_items) {
+    const src = item.food_cache || item.custom_foods;
+    if (!src) { console.error('addFavoriteMealToLog: missing food reference for item', item.id); continue; }
+    try {
+      await addFoodLogEntry({
+        mealType: foodModalMeal,
+        dateIso: localIso(addDays(new Date(), foodDayOffset)),
+        foodCacheId: item.food_cache_id,
+        customFoodId: item.custom_food_id,
+        amountG: item.amount_g,
+        kcalPer100g: src.kcal_per_100g,
+        proteinPer100g: src.protein_per_100g,
+      });
+    } catch (err) {
+      console.error('addFavoriteMealToLog item failed:', err.message);
+    }
+  }
+  closeFoodSearch();
+  renderRuoka();
+}
+
+async function deleteFavoriteMeal(templateId) {
+  if (!confirm('Poistetaanko suosikki pysyvästi?')) return;
+  const { error } = await sb.from('meal_templates').delete().eq('id', templateId);
+  if (error) { console.error('deleteFavoriteMeal failed:', error.message); return; }
+  foodSearchFavorites = foodSearchFavorites.filter(t => t.id !== templateId);
+  renderFavoritesSection(foodSearchFavorites);
 }
 
 let exercisePickerSessionId = null;
@@ -6754,6 +6819,7 @@ if ('serviceWorker' in navigator) {
         <button class="btn" onclick="openFoodPhotoPicker()" style="flex:none;padding:0 14px;" title="Tunnista kuvasta">📷</button>
       </div>
       <input type="file" id="food-photo-input" accept="image/*" style="display:none" onchange="onFoodPhotoSelected(this)">
+      <div id="food-search-favorites"></div>
       <div id="food-search-results"></div>
       <div style="text-align:center;margin-top:10px;">
         <span class="food-search-custom-link" onclick="goToCustomFoodStep()">+ Lisää oma tuote</span>
