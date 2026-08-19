@@ -2478,6 +2478,75 @@ async function renderSleepTonnageChart() {
   });
 }
 
+async function renderForecastAccuracyChart() {
+  const wrap = document.getElementById('nakemykset-forecast-chart-wrap');
+  if (!wrap) return;
+  const [{ data: measurements }, { data: calibrations }] = await Promise.all([
+    sb.from('body_metrics').select('weight_kg,fat_pct,muscle_pct,measured_at').order('measured_at', { ascending: true }),
+    sb.from('model_calibration').select('other_tissue_kcal_per_kg,calibrated_at').order('calibrated_at', { ascending: true }),
+  ]);
+  const rows = (measurements || []).filter(m => m.weight_kg != null && m.fat_pct != null && m.muscle_pct != null);
+
+  const pairs = [];
+  for (let i = 1; i < rows.length; i++) {
+    const days = (new Date(rows[i].measured_at + 'T00:00:00') - new Date(rows[i - 1].measured_at + 'T00:00:00')) / 86400000;
+    if (days > 0) pairs.push({ m1: rows[i - 1], m2: rows[i], days });
+  }
+
+  if (pairs.length < 2) {
+    wrap.innerHTML = emptyState('scale', 'Ei tarpeeksi mittauksia ennustevertailuun — tarvitaan väh. 3 Keho-mittausta');
+    return;
+  }
+
+  const intakes = await Promise.all(pairs.map(p => getFoodCalories(p.m1.measured_at, p.m2.measured_at)));
+
+  const coeffAt = (dateIso) => {
+    const boundary = new Date(dateIso + 'T00:00:00');
+    let coeff = DEFAULT_OTHER_TISSUE_COEFF;
+    (calibrations || []).forEach(c => { if (new Date(c.calibrated_at) <= boundary) coeff = c.other_tissue_kcal_per_kg; });
+    return coeff;
+  };
+
+  const predicted = [], actual = [];
+  pairs.forEach((p, i) => {
+    const { m1, m2, days } = p;
+    const comp1 = getBodyComposition(m1.weight_kg, m1.fat_pct, m1.muscle_pct);
+    const comp2 = getBodyComposition(m2.weight_kg, m2.fat_pct, m2.muscle_pct);
+    const actualFatLossKg = comp1.fatKg - comp2.fatKg;
+
+    const coeff = coeffAt(m1.measured_at);
+    const avgFat = (comp1.fatKg + comp2.fatKg) / 2;
+    const avgMuscle = (comp1.muscleKg + comp2.muscleKg) / 2;
+    const avgOther = (comp1.otherKg + comp2.otherKg) / 2;
+    const predictedDailyExpenditure = calculateMaintenance(avgFat, avgMuscle, avgOther, coeff, DEFAULT_ACTIVITY_MULT);
+    const predictedFatLossKg = (predictedDailyExpenditure * days - intakes[i]) / KCAL_PER_KG_FAT_LOSS;
+
+    predicted.push({ x: m2.measured_at, y: Math.round(predictedFatLossKg * 10) / 10 });
+    actual.push({ x: m2.measured_at, y: Math.round(actualFatLossKg * 10) / 10 });
+  });
+
+  wrap.innerHTML = `<div class="chart-wrap" style="margin-top:12px"><canvas id="forecast-accuracy-chart"></canvas></div>`;
+  if (charts.forecastAccuracy) charts.forecastAccuracy.destroy();
+  charts.forecastAccuracy = new Chart(document.getElementById('forecast-accuracy-chart'), {
+    type: 'line',
+    data: {
+      labels: predicted.map(p => p.x),
+      datasets: [
+        { label: 'Ennustettu rasvanpudotus (kg)', data: predicted.map(p => p.y), borderColor: '#0a84ff', borderWidth: 2, pointRadius: 2, pointBackgroundColor: '#0a84ff', tension: .3, fill: false },
+        { label: 'Toteutunut rasvanpudotus (kg)', data: actual.map(p => p.y), borderColor: '#30d158', borderWidth: 2, pointRadius: 2, pointBackgroundColor: '#30d158', tension: .3, fill: false },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { color: '#999', font: { size: 10 } } } },
+      scales: {
+        y: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#222' } },
+        x: { ticks: { color: '#555', font: { size: 10 }, maxTicksLimit: 8 }, grid: { display: false } },
+      },
+    },
+  });
+}
+
 async function renderHuomiotHistorySection() {
   const el = document.getElementById('nakemykset-history-list');
   if (!el) return;
