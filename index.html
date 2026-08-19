@@ -1094,6 +1094,13 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
       <div class="koonti-card-goal" id="kc-steps-goal" style="display:none"></div>
       <div class="koonti-progress-track" id="kc-steps-bar-track" style="display:none"><div class="koonti-progress-fill" id="kc-steps-bar-fill" style="width:0%"></div></div>
     </div>
+    <div class="koonti-card" id="kc-water" onclick="openWaterModal()">
+      <span class="koonti-card-icon" data-icon="droplet" data-icon-color="var(--green)" data-icon-bg="var(--green-bg)"></span>
+      <div class="koonti-card-label">Vesi</div>
+      <div class="koonti-card-sub skel-sub" id="kc-water-sub">&nbsp;</div>
+      <div class="koonti-card-goal" id="kc-water-goal" style="display:none"></div>
+      <div class="koonti-progress-track" id="kc-water-bar-track" style="display:none"><div class="koonti-progress-fill" id="kc-water-bar-fill" style="width:0%"></div></div>
+    </div>
   </div>
 
   <div class="koonti-cards koonti-cards--wide">
@@ -1438,6 +1445,7 @@ const ICONS = {
   chat:      '<path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>',
   steps:     '<ellipse cx="8" cy="7" rx="2.5" ry="3.5"/><ellipse cx="16" cy="16" rx="2.5" ry="3.5"/><circle cx="8" cy="3" r="1"/><circle cx="16" cy="12" r="1"/>',
   timer:     '<path d="M6 2h12v4l-5 6 5 6v4H6v-4l5-6-5-6z"/>',
+  droplet:   '<path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/>',
 };
 
 function svgIcon(name, color, size) {
@@ -6272,6 +6280,30 @@ async function loadKoonti() {
   } else {
     kcStepsGoal.style.display = 'none';
     kcStepsBarTrack.style.display = 'none';
+  }
+
+  const { data: waterRows, error: waterErr } = await sb.from('water_log')
+    .select('amount_ml')
+    .eq('logged_at', todayIso);
+  if (waterErr) console.error('loadKoonti (water_log) failed:', waterErr.message);
+  const kcWaterCard = document.getElementById('kc-water');
+  const kcWaterSub = document.getElementById('kc-water-sub');
+  kcWaterSub.classList.remove('skel-sub');
+  const waterTotal = (waterRows || []).reduce((s, r) => s + (r.amount_ml || 0), 0);
+  kcWaterCard.classList.toggle('koonti-card--done', waterTotal > 0);
+  kcWaterSub.textContent = waterTotal > 0 ? `${waterTotal} ml` : 'Ei kirjauksia vielä';
+  const kcWaterGoal = document.getElementById('kc-water-goal');
+  const kcWaterBarTrack = document.getElementById('kc-water-bar-track');
+  const kcWaterBarFill = document.getElementById('kc-water-bar-fill');
+  const waterGoal = appSettings && appSettings.daily_water_goal_ml != null ? appSettings.daily_water_goal_ml : null;
+  if (waterGoal != null) {
+    kcWaterGoal.textContent = `${waterTotal}/${waterGoal} ml`;
+    kcWaterGoal.style.display = '';
+    kcWaterBarFill.style.width = Math.min(100, Math.round(waterTotal / waterGoal * 100)) + '%';
+    kcWaterBarTrack.style.display = '';
+  } else {
+    kcWaterGoal.style.display = 'none';
+    kcWaterBarTrack.style.display = 'none';
   }
 
   const entries = await loadFoodDayEntries(todayIso);
