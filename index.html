@@ -2292,10 +2292,11 @@ async function checkPlateau(offset = wOff) {
   return null;
 }
 
-function detect1RMInsights(setsRows, from21, from42) {
+function detect1RMInsights(setsRows, from21, from42, toIso) {
   const byExercise = {};
   (setsRows || []).forEach(r => {
     if (!r.weight_kg || !r.reps) return;
+    if (toIso != null && r.workout_date > toIso) return;
     if (!byExercise[r.exercise_name]) byExercise[r.exercise_name] = [];
     byExercise[r.exercise_name].push(r);
   });
@@ -2400,7 +2401,7 @@ async function computeHuomiotHistory(numWeeks = 12) {
     const from42 = localIso(addDays(weekMon.date, -42));
 
     const weekInsights = [
-      ...detect1RMInsights(setsRows, from21, from42),
+      ...detect1RMInsights(setsRows, from21, from42, weekTo),
       ...detectBodyTrendInsights((weightRows || []).filter(r => r.measured_at <= weekTo && r.measured_at >= from21)),
     ];
 
@@ -2503,7 +2504,7 @@ async function loadHuomioita() {
   const alreadyMarkedDeload = !!(appSettings && appSettings.deload_week_monday === thisWeek.iso);
 
   const insights = [
-    ...detect1RMInsights(setsRows, from21, from42),
+    ...detect1RMInsights(setsRows, from21, from42, todayIso),
     ...detectBodyTrendInsights(weightRows),
   ];
   const stepsInsight = detectStepsInsight(stepsThisVals, stepsLastVals);
