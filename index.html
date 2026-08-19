@@ -5514,7 +5514,7 @@ function openSaveFavoriteModal(mealType) {
   if (!entries.length) return;
   const suggestion = foodItemName(entries[0]);
   const body = `
-    <input type="text" id="save-favorite-name-input" value="${escapeHtml(suggestion)}" style="width:100%;box-sizing:border-box;margin-bottom:12px;">
+    <input type="text" id="save-favorite-name-input" value="${suggestion}" style="width:100%;box-sizing:border-box;margin-bottom:12px;">
     <button class="btn btn-primary" style="width:100%;" onclick="confirmSaveFavorite('${mealType}')">Tallenna</button>
     <div class="status" id="save-favorite-status"></div>
   `;
