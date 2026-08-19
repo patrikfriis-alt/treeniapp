@@ -4372,6 +4372,9 @@ function renderMealCards(entries, prevMealTypes) {
     const repeatBtn = prevMealTypes.has(meal.key)
       ? `<button class="meal-add-btn" style="color:var(--accent)" onclick="repeatMealFromPreviousDay('${meal.key}')">↻ Toista eilinen</button>`
       : '';
+    const saveFavBtn = mealEntries.length
+      ? `<button class="meal-add-btn" style="color:var(--amber)" onclick="openSaveFavoriteModal('${meal.key}')">★ Tallenna suosikiksi</button>`
+      : '';
     return `
       <div class="meal-card">
         <div class="meal-card-header">
@@ -4381,6 +4384,7 @@ function renderMealCards(entries, prevMealTypes) {
         ${rows}
         <button class="meal-add-btn" onclick="openFoodSearch('${meal.key}')">+ Lisää ruoka</button>
         ${repeatBtn}
+        ${saveFavBtn}
       </div>`;
   }).join('');
 }
@@ -5438,6 +5442,44 @@ function openMetricModal(title, bodyHtml) {
     </div>
     ${bodyHtml}
   `;
+}
+
+function openSaveFavoriteModal(mealType) {
+  const entries = foodDayEntries.filter(e => e.meal_type === mealType);
+  if (!entries.length) return;
+  const suggestion = foodItemName(entries[0]);
+  const body = `
+    <input type="text" id="save-favorite-name-input" value="${escapeHtml(suggestion)}" style="width:100%;box-sizing:border-box;margin-bottom:12px;">
+    <button class="btn btn-primary" style="width:100%;" onclick="confirmSaveFavorite('${mealType}')">Tallenna</button>
+    <div class="status" id="save-favorite-status"></div>
+  `;
+  openMetricModal('Tallenna suosikiksi', body);
+}
+
+async function confirmSaveFavorite(mealType) {
+  const name = document.getElementById('save-favorite-name-input').value.trim();
+  if (!name) { showStatus('save-favorite-status', 'Anna nimi', true); return; }
+  await saveMealAsFavorite(mealType, name);
+  const overlay = document.getElementById('metric-info-overlay');
+  if (overlay) overlay.remove();
+}
+
+async function saveMealAsFavorite(mealType, name) {
+  const entries = foodDayEntries.filter(e => e.meal_type === mealType);
+  if (!entries.length || !name.trim()) return;
+
+  const { data: template, error: tErr } = await sb.from('meal_templates')
+    .insert({ name: name.trim() }).select('id').single();
+  if (tErr) { console.error('saveMealAsFavorite (template) failed:', tErr.message); return; }
+
+  const items = entries.map(e => ({
+    template_id: template.id,
+    food_cache_id: e.food_cache_id,
+    custom_food_id: e.custom_food_id,
+    amount_g: e.amount_g,
+  }));
+  const { error: iErr } = await sb.from('meal_template_items').insert(items);
+  if (iErr) { console.error('saveMealAsFavorite (items) failed:', iErr.message); return; }
 }
 
 function openDayBudgetModal(iso, eaten, fairShare, exKcal) {
