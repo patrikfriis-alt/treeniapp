@@ -1347,6 +1347,25 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <div id="valmentaja-content"></div>
 </div>
 
+<div id="page-nakemykset" class="page">
+  <div class="page-header">
+    <button class="back-btn" onclick="showPage('koonti', document.getElementById('nav-koonti'))">‹</button>
+    <span class="page-title">Näkemykset</span>
+  </div>
+  <div id="nakemykset-content">
+    <div class="card">
+      <div class="card-title">Uni → treenisuoritus</div>
+      <div id="nakemykset-sleep-chart-wrap"></div>
+    </div>
+    <div class="card" style="margin-top:10px">
+      <div class="card-title">Ennusteen tarkkuus</div>
+      <div id="nakemykset-forecast-chart-wrap"></div>
+    </div>
+    <div class="card-title" style="margin:16px 0 8px">Huomiot-historia</div>
+    <div id="nakemykset-history-list"></div>
+  </div>
+</div>
+
 <!-- ── RUOKA ───────────────────────────────────────────────────── -->
 <div id="page-ruoka" class="page">
   <div class="week-nav">
@@ -1389,8 +1408,11 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <button onclick="showPage('ohjelma',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="clipboard" style="display:inline-flex"></span> Ohjelma
   </button>
-  <button onclick="showPage('valmentaja',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
+  <button onclick="showPage('valmentaja',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="chat" style="display:inline-flex"></span> Valmentaja
+  </button>
+  <button onclick="showPage('nakemykset',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
+    <span data-icon="trending" style="display:inline-flex"></span> Näkemykset
   </button>
   <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:20px;margin-bottom:12px;">Asetukset</div>
   <button onclick="openGoalsModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
@@ -1449,6 +1471,7 @@ const ICONS = {
   steps:     '<ellipse cx="8" cy="7" rx="2.5" ry="3.5"/><ellipse cx="16" cy="16" rx="2.5" ry="3.5"/><circle cx="8" cy="3" r="1"/><circle cx="16" cy="12" r="1"/>',
   timer:     '<path d="M6 2h12v4l-5 6 5 6v4H6v-4l5-6-5-6z"/>',
   droplet:   '<path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/>',
+  trending:  '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
 };
 
 function svgIcon(name, color, size) {
@@ -2344,6 +2367,91 @@ function detectDeloadInsight(tonnageThis, tonnageLast, sleepScoresThis, sleepSco
     magnitude: tonnagePct + scoreDrop / 100,
     action: includeAction ? `<button class="huomio-action-btn" onclick="event.stopPropagation();markThisWeekDeload()">Merkitse kevyeksi viikoksi</button>` : '',
   };
+}
+
+async function computeHuomiotHistory(numWeeks = 12) {
+  const bufferWeeks = 6; // puskuri vanhimman tarkasteltavan viikon from42-ikkunalle
+  const earliestMonday = wStart(-(numWeeks + bufferWeeks));
+  const todayIso = localIso(new Date());
+
+  const [
+    { data: setsRows },
+    { data: weightRows },
+    { data: sleepRows },
+    { data: stepsRows },
+  ] = await Promise.all([
+    sb.from('workout_sets').select('workout_date,exercise_name,weight_kg,reps').gte('workout_date', earliestMonday.iso).lte('workout_date', todayIso),
+    sb.from('body_metrics').select('weight_kg,fat_pct,muscle_pct,measured_at').gte('measured_at', earliestMonday.iso).lte('measured_at', todayIso).order('measured_at', { ascending: true }),
+    sb.from('sleep_data').select('sleep_date,sleep_score').gte('sleep_date', earliestMonday.iso).lte('sleep_date', todayIso),
+    sb.from('step_data').select('step_date,steps').gte('step_date', earliestMonday.iso).lte('step_date', todayIso),
+  ]);
+
+  const tonnageForRange = (from, to) => (setsRows || [])
+    .filter(r => r.workout_date >= from && r.workout_date <= to && r.weight_kg != null && r.reps != null)
+    .reduce((s, r) => s + r.weight_kg * r.reps, 0);
+
+  const history = [];
+  for (let w = 0; w < numWeeks; w++) {
+    const weekMon = wStart(-w);
+    const weekTo = localIso(addDays(weekMon.date, 6));
+    const prevMon = wStart(-w - 1);
+    const prevFrom = prevMon.iso, prevTo = localIso(addDays(prevMon.date, 6));
+    const from21 = localIso(addDays(weekMon.date, -21));
+    const from42 = localIso(addDays(weekMon.date, -42));
+
+    const weekInsights = [
+      ...detect1RMInsights(setsRows, from21, from42),
+      ...detectBodyTrendInsights((weightRows || []).filter(r => r.measured_at <= weekTo && r.measured_at >= from21)),
+    ];
+
+    const stepsThisVals = (stepsRows || []).filter(r => r.step_date >= weekMon.iso && r.step_date <= weekTo).map(r => r.steps);
+    const stepsLastVals = (stepsRows || []).filter(r => r.step_date >= prevFrom && r.step_date <= prevTo).map(r => r.steps);
+    const stepsInsight = detectStepsInsight(stepsThisVals, stepsLastVals);
+    if (stepsInsight) weekInsights.push(stepsInsight);
+
+    const sleepScoresThis = (sleepRows || []).filter(r => r.sleep_date >= weekMon.iso && r.sleep_date <= weekTo).map(r => calcSleepScore(r)).filter(s => s != null);
+    const sleepScoresLast = (sleepRows || []).filter(r => r.sleep_date >= prevFrom && r.sleep_date <= prevTo).map(r => calcSleepScore(r)).filter(s => s != null);
+    const sleepInsight = detectSleepInsight(sleepScoresThis, sleepScoresLast);
+    if (sleepInsight) weekInsights.push(sleepInsight);
+
+    const deloadInsight = detectDeloadInsight(
+      tonnageForRange(weekMon.iso, weekTo), tonnageForRange(prevFrom, prevTo),
+      sleepScoresThis, sleepScoresLast, false,
+    );
+    if (deloadInsight) weekInsights.push(deloadInsight);
+
+    weekInsights.sort((a, b) => b.magnitude - a.magnitude);
+    if (weekInsights.length) {
+      history.push({
+        weekLabel: `Viikko ${isoWeek(weekMon.date)} / ${isoWeekYear(weekMon.date)}`,
+        insights: weekInsights.slice(0, 3),
+      });
+    }
+  }
+  return history;
+}
+
+async function renderHuomiotHistorySection() {
+  const el = document.getElementById('nakemykset-history-list');
+  if (!el) return;
+  el.innerHTML = '<div class="skel-sub" style="height:60px"></div>';
+  const history = await computeHuomiotHistory(12);
+  if (!history.length) {
+    el.innerHTML = emptyState('trending', 'Ei vielä huomioita — kirjaa treenejä, unta ja mittauksia kertyäksesi historiaa');
+    return;
+  }
+  el.innerHTML = history.map(w => `
+    <div class="card" style="margin-bottom:8px">
+      <div class="card-title">${escapeHtml(w.weekLabel)}</div>
+      ${w.insights.map(i => `<div class="huomio-row">${escapeHtml(i.text)}</div>`).join('')}
+    </div>
+  `).join('');
+}
+
+async function renderNakemyksetPage() {
+  await renderHuomiotHistorySection();
+  await renderSleepTonnageChart();
+  await renderForecastAccuracyChart();
 }
 
 async function loadHuomioita() {
@@ -6031,6 +6139,7 @@ function showPage(name, btn) {
   if (name === 'ohjelma')   renderOhjelma();
   if (name === 'ruoka')     renderRuoka();
   if (name === 'valmentaja') renderCoachPage();
+  if (name === 'nakemykset') renderNakemyksetPage();
 }
 
 window.addEventListener('scroll', () => {
