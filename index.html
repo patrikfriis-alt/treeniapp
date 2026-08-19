@@ -4193,6 +4193,38 @@ async function loadFoodWeekKcal(mondayIso, sundayIso) {
   return (data || []).reduce((sum, r) => sum + (r.kcal || 0), 0);
 }
 
+async function getMealTypesWithEntries(dateIso) {
+  const { data, error } = await sb.from('food_log_entries')
+    .select('meal_type')
+    .eq('logged_at', dateIso);
+  if (error) { console.error('getMealTypesWithEntries failed:', error.message); return new Set(); }
+  return new Set((data || []).map(r => r.meal_type));
+}
+
+async function repeatMealFromPreviousDay(mealType) {
+  const prevIso  = localIso(addDays(new Date(), foodDayOffset - 1));
+  const todayIso = localIso(addDays(new Date(), foodDayOffset));
+  const { data, error } = await sb.from('food_log_entries')
+    .select('food_cache_id, custom_food_id, amount_g, kcal, protein_g')
+    .eq('logged_at', prevIso)
+    .eq('meal_type', mealType);
+  if (error) { console.error('repeatMealFromPreviousDay failed:', error.message); return; }
+  if (!data || !data.length) return;
+
+  const rows = data.map(r => ({
+    meal_type: mealType,
+    logged_at: todayIso,
+    food_cache_id: r.food_cache_id,
+    custom_food_id: r.custom_food_id,
+    amount_g: r.amount_g,
+    kcal: r.kcal,
+    protein_g: r.protein_g,
+  }));
+  const { error: insErr } = await sbWrite({ table: 'food_log_entries', op: 'insert', payload: rows });
+  if (insErr) { console.error('repeatMealFromPreviousDay insert failed:', insErr.message); return; }
+  renderRuoka();
+}
+
 async function getLastRealFoodEntryAt() {
   const { data, error } = await sb.from('food_log_entries')
     .select('created_at')
@@ -4275,20 +4307,22 @@ async function loadFoodDay() {
   const requestId = ++foodDayRequestId;
   const selectedDate = addDays(new Date(), foodDayOffset);
   const dateIso = localIso(selectedDate);
+  const prevIso = localIso(addDays(selectedDate, -1));
   const monday = mondayOf(selectedDate);
   const sunday = addDays(monday, 6);
 
   if (!foodGoals) foodGoals = await loadNutritionGoals();
 
-  const [entries, weekKcal] = await Promise.all([
+  const [entries, weekKcal, prevMealTypes] = await Promise.all([
     loadFoodDayEntries(dateIso),
     loadFoodWeekKcal(localIso(monday), localIso(sunday)),
+    getMealTypesWithEntries(prevIso),
   ]);
   if (requestId !== foodDayRequestId) return;
   foodDayEntries = entries;
 
   renderFoodHero(entries, weekKcal);
-  renderMealCards(entries);
+  renderMealCards(entries, prevMealTypes);
 }
 
 function renderFoodHero(entries, weekKcal) {
@@ -4325,7 +4359,7 @@ function renderFoodHero(entries, weekKcal) {
   }
 }
 
-function renderMealCards(entries) {
+function renderMealCards(entries, prevMealTypes) {
   const el = document.getElementById('food-meals');
   el.innerHTML = MEAL_DEFS.map(meal => {
     const mealEntries = entries.filter(e => e.meal_type === meal.key);
@@ -4335,6 +4369,12 @@ function renderMealCards(entries) {
         <span>${foodItemName(e)}, ${e.amount_g}g</span>
         <span class="meal-entry-kcal">${Math.round(e.kcal)} kcal</span>
       </div>`).join('');
+    const repeatBtn = prevMealTypes.has(meal.key)
+      ? `<button class="meal-add-btn" style="color:var(--accent)" onclick="repeatMealFromPreviousDay('${meal.key}')">↻ Toista eilinen</button>`
+      : '';
+    const saveFavBtn = mealEntries.length
+      ? `<button class="meal-add-btn" style="color:var(--amber)" onclick="openSaveFavoriteModal('${meal.key}')">★ Tallenna suosikiksi</button>`
+      : '';
     return `
       <div class="meal-card">
         <div class="meal-card-header">
@@ -4343,6 +4383,8 @@ function renderMealCards(entries) {
         </div>
         ${rows}
         <button class="meal-add-btn" onclick="openFoodSearch('${meal.key}')">+ Lisää ruoka</button>
+        ${repeatBtn}
+        ${saveFavBtn}
       </div>`;
   }).join('');
 }
@@ -4353,6 +4395,35 @@ let foodRecentItems = [];
 let foodSearchItems = [];
 let foodSearchDebounce = null;
 let foodSearchRequestId = 0;
+
+let foodSearchFavorites = [];
+
+async function loadMealTemplates() {
+  const { data, error } = await sb.from('meal_templates')
+    .select(`
+      id, name,
+      meal_template_items(id, food_cache_id, custom_food_id, amount_g,
+        food_cache(name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g),
+        custom_foods(name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g)
+      )
+    `)
+    .order('created_at', { ascending: false });
+  if (error) { console.error('loadMealTemplates failed:', error.message); return []; }
+  return data || [];
+}
+
+function renderFavoritesSection(templates) {
+  const el = document.getElementById('food-search-favorites');
+  if (!el) return;
+  templates = templates.filter(t => t.meal_template_items && t.meal_template_items.length > 0);
+  if (!templates.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="food-search-section-label">Suosikit</div>` +
+    templates.map(t => `
+      <div class="food-search-result-row" style="align-items:center;">
+        <span onclick="addFavoriteMealToLog('${t.id}')" style="flex:1;cursor:pointer;">${escapeHtml(t.name)}</span>
+        <span onclick="deleteFavoriteMeal('${t.id}')" style="color:var(--red);padding-left:10px;cursor:pointer;">✕</span>
+      </div>`).join('');
+}
 
 async function loadRecentFoods() {
   const from = new Date();
@@ -4485,9 +4556,45 @@ async function openFoodSearch(mealType) {
   document.body.style.overflow = 'hidden';
 
   document.getElementById('food-search-results').innerHTML = `<div class="food-search-empty">Ladataan...</div>`;
-  foodRecentItems = await loadRecentFoods();
+  document.getElementById('food-search-favorites').innerHTML = '';
+  const [recentItems, templates] = await Promise.all([loadRecentFoods(), loadMealTemplates()]);
+  foodRecentItems = recentItems;
   foodSearchItems = foodRecentItems;
+  foodSearchFavorites = templates;
+  renderFavoritesSection(templates);
   renderFoodResultsList(foodSearchItems, 'Viimeksi käytetyt', 'Ei vielä aiempia ruokia');
+}
+
+async function addFavoriteMealToLog(templateId) {
+  const template = foodSearchFavorites.find(t => t.id === templateId);
+  if (!template) return;
+  for (const item of template.meal_template_items) {
+    const src = item.food_cache || item.custom_foods;
+    if (!src) { console.error('addFavoriteMealToLog: missing food reference for item', item.id); continue; }
+    try {
+      await addFoodLogEntry({
+        mealType: foodModalMeal,
+        dateIso: localIso(addDays(new Date(), foodDayOffset)),
+        foodCacheId: item.food_cache_id,
+        customFoodId: item.custom_food_id,
+        amountG: item.amount_g,
+        kcalPer100g: src.kcal_per_100g,
+        proteinPer100g: src.protein_per_100g,
+      });
+    } catch (err) {
+      console.error('addFavoriteMealToLog item failed:', err.message);
+    }
+  }
+  closeFoodSearch();
+  renderRuoka();
+}
+
+async function deleteFavoriteMeal(templateId) {
+  if (!confirm('Poistetaanko suosikki pysyvästi?')) return;
+  const { error } = await sb.from('meal_templates').delete().eq('id', templateId);
+  if (error) { console.error('deleteFavoriteMeal failed:', error.message); return; }
+  foodSearchFavorites = foodSearchFavorites.filter(t => t.id !== templateId);
+  renderFavoritesSection(foodSearchFavorites);
 }
 
 let exercisePickerSessionId = null;
@@ -5400,6 +5507,44 @@ function openMetricModal(title, bodyHtml) {
     </div>
     ${bodyHtml}
   `;
+}
+
+function openSaveFavoriteModal(mealType) {
+  const entries = foodDayEntries.filter(e => e.meal_type === mealType);
+  if (!entries.length) return;
+  const suggestion = foodItemName(entries[0]);
+  const body = `
+    <input type="text" id="save-favorite-name-input" value="${suggestion}" style="width:100%;box-sizing:border-box;margin-bottom:12px;">
+    <button class="btn btn-primary" style="width:100%;" onclick="confirmSaveFavorite('${mealType}')">Tallenna</button>
+    <div class="status" id="save-favorite-status"></div>
+  `;
+  openMetricModal('Tallenna suosikiksi', body);
+}
+
+async function confirmSaveFavorite(mealType) {
+  const name = document.getElementById('save-favorite-name-input').value.trim();
+  if (!name) { showStatus('save-favorite-status', 'Anna nimi', true); return; }
+  await saveMealAsFavorite(mealType, name);
+  const overlay = document.getElementById('metric-info-overlay');
+  if (overlay) overlay.remove();
+}
+
+async function saveMealAsFavorite(mealType, name) {
+  const entries = foodDayEntries.filter(e => e.meal_type === mealType);
+  if (!entries.length || !name.trim()) return;
+
+  const { data: template, error: tErr } = await sb.from('meal_templates')
+    .insert({ name: name.trim() }).select('id').single();
+  if (tErr) { console.error('saveMealAsFavorite (template) failed:', tErr.message); return; }
+
+  const items = entries.map(e => ({
+    template_id: template.id,
+    food_cache_id: e.food_cache_id,
+    custom_food_id: e.custom_food_id,
+    amount_g: e.amount_g,
+  }));
+  const { error: iErr } = await sb.from('meal_template_items').insert(items);
+  if (iErr) { console.error('saveMealAsFavorite (items) failed:', iErr.message); return; }
 }
 
 function openDayBudgetModal(iso, eaten, fairShare, exKcal) {
@@ -6674,6 +6819,7 @@ if ('serviceWorker' in navigator) {
         <button class="btn" onclick="openFoodPhotoPicker()" style="flex:none;padding:0 14px;" title="Tunnista kuvasta">📷</button>
       </div>
       <input type="file" id="food-photo-input" accept="image/*" style="display:none" onchange="onFoodPhotoSelected(this)">
+      <div id="food-search-favorites"></div>
       <div id="food-search-results"></div>
       <div style="text-align:center;margin-top:10px;">
         <span class="food-search-custom-link" onclick="goToCustomFoodStep()">+ Lisää oma tuote</span>
