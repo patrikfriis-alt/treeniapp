@@ -2432,6 +2432,52 @@ async function computeHuomiotHistory(numWeeks = 12) {
   return history;
 }
 
+async function renderSleepTonnageChart() {
+  const wrap = document.getElementById('nakemykset-sleep-chart-wrap');
+  if (!wrap) return;
+  const fromIso = localIso(addDays(new Date(), -90));
+  const todayIso = localIso(new Date());
+  const [{ data: sleepRows }, { data: setsRows }] = await Promise.all([
+    sb.from('sleep_data').select('sleep_date,sleep_score').gte('sleep_date', fromIso).lte('sleep_date', todayIso),
+    sb.from('workout_sets').select('workout_date,weight_kg,reps').gte('workout_date', fromIso).lte('workout_date', todayIso),
+  ]);
+  const sleepByDate = {};
+  (sleepRows || []).forEach(r => { const s = calcSleepScore(r); if (s != null) sleepByDate[r.sleep_date] = s; });
+  const tonnageByDate = {};
+  (setsRows || []).forEach(r => {
+    if (r.weight_kg == null || r.reps == null) return;
+    tonnageByDate[r.workout_date] = (tonnageByDate[r.workout_date] || 0) + r.weight_kg * r.reps;
+  });
+  const points = [];
+  Object.entries(tonnageByDate).forEach(([date, tonnage]) => {
+    const prevDayIso = localIso(addDays(new Date(date + 'T00:00:00'), -1));
+    const sleepScore = sleepByDate[prevDayIso];
+    if (sleepScore != null) points.push({ x: sleepScore, y: Math.round(tonnage) });
+  });
+
+  if (points.length < 3) {
+    wrap.innerHTML = emptyState('moon', 'Ei tarpeeksi dataa — tarvitaan väh. 3 treenipäivää joilla on edellisyön unidata');
+    return;
+  }
+
+  wrap.innerHTML = `<div class="chart-wrap" style="margin-top:12px"><canvas id="sleep-tonnage-chart"></canvas></div>`;
+  if (charts.sleepTonnage) charts.sleepTonnage.destroy();
+  charts.sleepTonnage = new Chart(document.getElementById('sleep-tonnage-chart'), {
+    type: 'scatter',
+    data: {
+      datasets: [{ label: 'Unipisteet vs. tonnimäärä', data: points, backgroundColor: '#30d158' }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { title: { display: true, text: 'Unipisteet (edellisyö)', color: '#555' }, ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#222' } },
+        y: { title: { display: true, text: 'Tonnimäärä (kg)', color: '#555' }, beginAtZero: true, ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#222' } },
+      },
+    },
+  });
+}
+
 async function renderHuomiotHistorySection() {
   const el = document.getElementById('nakemykset-history-list');
   if (!el) return;
