@@ -5697,6 +5697,76 @@ async function openStepsModal() {
   }
 }
 
+async function openWaterModal() {
+  const { modal } = createModalOverlay('metric-info-overlay');
+  modal.style.cssText = 'background:var(--surface);border:1px solid var(--border2);padding:24px;width:100%;max-height:80vh;overflow-y:auto;';
+  modal.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="font-size:16px;font-weight:600;color:var(--text)">Vesi</div>
+      <button onclick="document.getElementById('metric-info-overlay').remove()" style="background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;line-height:1;">✕</button>
+    </div>
+    <div id="water-modal-total" style="font-size:13px;color:var(--text2);margin-bottom:14px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="btn" style="flex:1;" onclick="addWater(250)">+250ml</button>
+      <button class="btn" style="flex:1;" onclick="addWater(500)">+500ml</button>
+    </div>
+    <div class="form-row"><label>Muu määrä (ml)</label><input type="text" inputmode="numeric" id="water-amount-input"></div>
+    <button class="btn" style="width:100%;margin-bottom:10px;" onclick="addWaterCustom()">Lisää</button>
+    <button class="btn" id="water-undo-btn" style="width:100%;background:none;color:var(--text2);display:none;" onclick="undoLastWater()">Kumoa viimeisin</button>
+    <div class="status" id="water-modal-status"></div>
+  `;
+  await refreshWaterModal();
+}
+
+async function refreshWaterModal() {
+  const todayIso = localIso(new Date());
+  const { data, error } = await sb.from('water_log')
+    .select('id,amount_ml,created_at')
+    .eq('logged_at', todayIso)
+    .order('created_at', { ascending: true });
+  if (error) { console.error('refreshWaterModal failed:', error.message); return; }
+  const rows = data || [];
+  const total = rows.reduce((s, r) => s + r.amount_ml, 0);
+  if (!appSettings) appSettings = await loadAppSettings();
+  const goal = appSettings && appSettings.daily_water_goal_ml != null ? appSettings.daily_water_goal_ml : null;
+  const totalEl = document.getElementById('water-modal-total');
+  if (totalEl) totalEl.textContent = goal != null ? `${total} / ${goal} ml` : `${total} ml`;
+  const undoBtn = document.getElementById('water-undo-btn');
+  if (undoBtn) undoBtn.style.display = rows.length ? '' : 'none';
+}
+
+async function addWater(ml) {
+  const todayIso = localIso(new Date());
+  const { error } = await sbWrite({
+    table: 'water_log',
+    op: 'insert',
+    payload: { logged_at: todayIso, amount_ml: ml },
+  });
+  if (error) { console.error('addWater failed:', error.message); return; }
+  await refreshWaterModal();
+}
+
+async function addWaterCustom() {
+  const ml = parseNum('water-amount-input');
+  if (ml == null || ml <= 0) { showStatus('water-modal-status', 'Syötä positiivinen määrä', true); return; }
+  document.getElementById('water-amount-input').value = '';
+  await addWater(Math.round(ml));
+}
+
+async function undoLastWater() {
+  const todayIso = localIso(new Date());
+  const { data, error } = await sb.from('water_log')
+    .select('id')
+    .eq('logged_at', todayIso)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error) { console.error('undoLastWater failed:', error.message); return; }
+  if (!data || !data.length) return;
+  const { error: delErr } = await sbWrite({ table: 'water_log', op: 'delete', eq: { column: 'id', value: data[0].id } });
+  if (delErr) { console.error('undoLastWater delete failed:', delErr.message); return; }
+  await refreshWaterModal();
+}
+
 async function openCalorieSettingsModal() {
   closeSidebar();
   const settings = (await loadAppSettings()) || { calorie_correction: 0.72 };
