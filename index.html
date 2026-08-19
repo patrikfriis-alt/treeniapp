@@ -2269,6 +2269,83 @@ async function checkPlateau(offset = wOff) {
   return null;
 }
 
+function detect1RMInsights(setsRows, from21, from42) {
+  const byExercise = {};
+  (setsRows || []).forEach(r => {
+    if (!r.weight_kg || !r.reps) return;
+    if (!byExercise[r.exercise_name]) byExercise[r.exercise_name] = [];
+    byExercise[r.exercise_name].push(r);
+  });
+  const insights = [];
+  Object.entries(byExercise).forEach(([name, rows]) => {
+    const recent = rows.filter(r => r.workout_date >= from21);
+    const prior  = rows.filter(r => r.workout_date >= from42 && r.workout_date < from21);
+    if (!recent.length || !prior.length) return;
+    const best = arr => arr.reduce((max, r) => Math.max(max, calc1RM(r.weight_kg, r.reps) || 0), 0);
+    const recentBest = best(recent), priorBest = best(prior);
+    if (priorBest > 0 && recentBest > priorBest * 1.03) {
+      const diff = Math.round(recentBest - priorBest);
+      insights.push({ text: `${name} 1RM +${diff} kg (3 vk)`, magnitude: (recentBest - priorBest) / priorBest });
+    }
+  });
+  return insights;
+}
+
+function detectBodyTrendInsights(weightRows) {
+  const halvesTrendInsight = (rows, field, label, unit) => {
+    const vals = rows.filter(r => r[field] != null).map(r => r[field]);
+    if (vals.length < 3) return null;
+    const mid = Math.ceil(vals.length / 2);
+    const firstHalf = vals.slice(0, mid), secondHalf = vals.slice(mid);
+    if (!firstHalf.length || !secondHalf.length) return null;
+    const avgFirst = firstHalf.reduce((s, v) => s + v, 0) / firstHalf.length;
+    const avgSecond = secondHalf.reduce((s, v) => s + v, 0) / secondHalf.length;
+    const totalChange = Math.round((avgSecond - avgFirst) * 10) / 10;
+    if (Math.abs(totalChange) < 1) return null;
+    const dir = totalChange < 0 ? 'laskenut' : 'noussut';
+    return { text: `${label} ${dir} ${Math.abs(totalChange)}${unit} viimeisen 3 viikon aikana`, magnitude: Math.abs(totalChange) / avgFirst };
+  };
+  return [
+    halvesTrendInsight(weightRows || [], 'weight_kg', 'Paino', ' kg'),
+    halvesTrendInsight(weightRows || [], 'fat_pct', 'Rasva%', 'pp'),
+    halvesTrendInsight(weightRows || [], 'muscle_pct', 'Lihas%', 'pp'),
+  ].filter(Boolean);
+}
+
+function detectStepsInsight(stepsThisVals, stepsLastVals) {
+  if (stepsThisVals.length < 3 || stepsLastVals.length < 3) return null;
+  const avgThis = stepsThisVals.reduce((s, v) => s + v, 0) / stepsThisVals.length;
+  const avgLast = stepsLastVals.reduce((s, v) => s + v, 0) / stepsLastVals.length;
+  const pctChange = avgLast > 0 ? (avgThis - avgLast) / avgLast : 0;
+  if (Math.abs(pctChange) < 0.15) return null;
+  const dir = pctChange < 0 ? 'laskenut' : 'noussut';
+  return { text: `Askelmäärä ${dir} keskimäärin ${Math.round(Math.abs(pctChange) * 100)}% viime viikolla`, magnitude: Math.abs(pctChange) };
+}
+
+function detectSleepInsight(sleepScoresThis, sleepScoresLast) {
+  if (sleepScoresThis.length < 3 || sleepScoresLast.length < 3) return null;
+  const avgScoreThis = sleepScoresThis.reduce((s, v) => s + v, 0) / sleepScoresThis.length;
+  const avgScoreLast = sleepScoresLast.reduce((s, v) => s + v, 0) / sleepScoresLast.length;
+  const scoreDrop = Math.round(avgScoreLast - avgScoreThis);
+  if (scoreDrop < 10) return null;
+  return { text: `Unipisteet laskenut ${scoreDrop}p viime viikolla`, magnitude: scoreDrop / 100 };
+}
+
+function detectDeloadInsight(tonnageThis, tonnageLast, sleepScoresThis, sleepScoresLast, includeAction) {
+  const hasSleepScoreData = sleepScoresThis.length >= 3 && sleepScoresLast.length >= 3;
+  if (!hasSleepScoreData || tonnageLast <= 0) return null;
+  const avgScoreThis = sleepScoresThis.reduce((s, v) => s + v, 0) / sleepScoresThis.length;
+  const avgScoreLast = sleepScoresLast.reduce((s, v) => s + v, 0) / sleepScoresLast.length;
+  const scoreDrop = Math.round(avgScoreLast - avgScoreThis);
+  const tonnagePct = (tonnageThis - tonnageLast) / tonnageLast;
+  if (tonnagePct < 0.10 || scoreDrop < 10) return null;
+  return {
+    text: `Treenimäärä +${Math.round(tonnagePct * 100)}%, unipisteet -${scoreDrop}p — harkitse kevyempää viikkoa`,
+    magnitude: tonnagePct + scoreDrop / 100,
+    action: includeAction ? `<button class="huomio-action-btn" onclick="event.stopPropagation();markThisWeekDeload()">Merkitse kevyeksi viikoksi</button>` : '',
+  };
+}
+
 async function loadHuomioita() {
   const container = document.getElementById('huomiot-card');
   const list = document.getElementById('huomiot-list');
@@ -2305,92 +2382,29 @@ async function loadHuomioita() {
     sb.from('step_data').select('steps').gte('step_date', lastWeekFrom).lte('step_date', lastWeekTo),
   ]);
 
-  const insights = [];
-
-  // 1RM-kehitys per liike: paras arvioitu 1RM viim. 21 pv vs. sitä edeltävät 21 pv
-  const byExercise = {};
-  (setsRows || []).forEach(r => {
-    if (!r.weight_kg || !r.reps) return;
-    if (!byExercise[r.exercise_name]) byExercise[r.exercise_name] = [];
-    byExercise[r.exercise_name].push(r);
-  });
-  Object.entries(byExercise).forEach(([name, rows]) => {
-    const recent = rows.filter(r => r.workout_date >= from21);
-    const prior  = rows.filter(r => r.workout_date >= from42 && r.workout_date < from21);
-    if (!recent.length || !prior.length) return;
-    const best = arr => arr.reduce((max, r) => Math.max(max, calc1RM(r.weight_kg, r.reps) || 0), 0);
-    const recentBest = best(recent), priorBest = best(prior);
-    if (priorBest > 0 && recentBest > priorBest * 1.03) {
-      const diff = Math.round(recentBest - priorBest);
-      insights.push({ text: `${name} 1RM +${diff} kg (3 vk)`, magnitude: (recentBest - priorBest) / priorBest });
-    }
-  });
-
-  // Paino/rasva%/lihas%: alkupuoliskon ka vs. loppupuoliskon ka viim. 3 viikolla, väh. 3 mittausta, muutos >= 1
-  const halvesTrendInsight = (rows, field, label, unit) => {
-    const vals = rows.filter(r => r[field] != null).map(r => r[field]);
-    if (vals.length < 3) return null;
-    const mid = Math.ceil(vals.length / 2);
-    const firstHalf = vals.slice(0, mid), secondHalf = vals.slice(mid);
-    if (!firstHalf.length || !secondHalf.length) return null;
-    const avgFirst = firstHalf.reduce((s, v) => s + v, 0) / firstHalf.length;
-    const avgSecond = secondHalf.reduce((s, v) => s + v, 0) / secondHalf.length;
-    const totalChange = Math.round((avgSecond - avgFirst) * 10) / 10;
-    if (Math.abs(totalChange) < 1) return null;
-    const dir = totalChange < 0 ? 'laskenut' : 'noussut';
-    return { text: `${label} ${dir} ${Math.abs(totalChange)}${unit} viimeisen 3 viikon aikana`, magnitude: Math.abs(totalChange) / avgFirst };
-  };
-  [
-    halvesTrendInsight(weightRows || [], 'weight_kg', 'Paino', ' kg'),
-    halvesTrendInsight(weightRows || [], 'fat_pct', 'Rasva%', 'pp'),
-    halvesTrendInsight(weightRows || [], 'muscle_pct', 'Lihas%', 'pp'),
-  ].forEach(i => { if (i) insights.push(i); });
-
-  // Askeleet: tämä viikko vs. viime viikko, väh. 3 kirjausta molemmilla, kynnys 15%
   const stepsThisVals = (stepsThis || []).map(r => r.steps);
   const stepsLastVals = (stepsLast || []).map(r => r.steps);
-  if (stepsThisVals.length >= 3 && stepsLastVals.length >= 3) {
-    const avgThis = stepsThisVals.reduce((s, v) => s + v, 0) / stepsThisVals.length;
-    const avgLast = stepsLastVals.reduce((s, v) => s + v, 0) / stepsLastVals.length;
-    const pctChange = avgLast > 0 ? (avgThis - avgLast) / avgLast : 0;
-    if (Math.abs(pctChange) >= 0.15) {
-      const dir = pctChange < 0 ? 'laskenut' : 'noussut';
-      insights.push({ text: `Askelmäärä ${dir} keskimäärin ${Math.round(Math.abs(pctChange) * 100)}% viime viikolla`, magnitude: Math.abs(pctChange) });
-    }
-  }
-
-  // Unipisteet tälle ja viime viikolle (käytetään sekä uni- että ylikuormitushuomiossa)
   const sleepScoresThis = (sleepThis || []).map(r => calcSleepScore(r)).filter(s => s != null);
   const sleepScoresLast = (sleepLast || []).map(r => calcSleepScore(r)).filter(s => s != null);
-  const hasSleepScoreData = sleepScoresThis.length >= 3 && sleepScoresLast.length >= 3;
-  const avgScoreThis = hasSleepScoreData ? sleepScoresThis.reduce((s, v) => s + v, 0) / sleepScoresThis.length : null;
-  const avgScoreLast = hasSleepScoreData ? sleepScoresLast.reduce((s, v) => s + v, 0) / sleepScoresLast.length : null;
 
-  // Unipisteiden lasku: tämä viikko vs. viime viikko, väh. 3 kirjausta molemmilla, kynnys 10p
-  if (hasSleepScoreData) {
-    const scoreDrop = Math.round(avgScoreLast - avgScoreThis);
-    if (scoreDrop >= 10) {
-      insights.push({ text: `Unipisteet laskenut ${scoreDrop}p viime viikolla`, magnitude: scoreDrop / 100 });
-    }
-  }
-
-  // Treenimäärän ja unipisteiden yhteisvaikutus: tonnimäärä +10% ja unipisteet -10p, molemmat viime viikkoon verrattuna
   const tonnageForRange = (from, to) => (setsRows || [])
     .filter(r => r.workout_date >= from && r.workout_date <= to && r.weight_kg != null && r.reps != null)
     .reduce((s, r) => s + r.weight_kg * r.reps, 0);
   const tonnageThis = tonnageForRange(thisWeekFrom, thisWeekTo);
   const tonnageLast = tonnageForRange(lastWeekFrom, lastWeekTo);
   const alreadyMarkedDeload = !!(appSettings && appSettings.deload_week_monday === thisWeek.iso);
-  if (hasSleepScoreData && tonnageLast > 0 && !alreadyMarkedDeload) {
-    const scoreDrop = Math.round(avgScoreLast - avgScoreThis);
-    const tonnagePct = (tonnageThis - tonnageLast) / tonnageLast;
-    if (tonnagePct >= 0.10 && scoreDrop >= 10) {
-      insights.push({
-        text: `Treenimäärä +${Math.round(tonnagePct * 100)}%, unipisteet -${scoreDrop}p — harkitse kevyempää viikkoa`,
-        magnitude: tonnagePct + scoreDrop / 100,
-        action: `<button class="huomio-action-btn" onclick="event.stopPropagation();markThisWeekDeload()">Merkitse kevyeksi viikoksi</button>`,
-      });
-    }
+
+  const insights = [
+    ...detect1RMInsights(setsRows, from21, from42),
+    ...detectBodyTrendInsights(weightRows),
+  ];
+  const stepsInsight = detectStepsInsight(stepsThisVals, stepsLastVals);
+  if (stepsInsight) insights.push(stepsInsight);
+  const sleepInsight = detectSleepInsight(sleepScoresThis, sleepScoresLast);
+  if (sleepInsight) insights.push(sleepInsight);
+  if (!alreadyMarkedDeload) {
+    const deloadInsight = detectDeloadInsight(tonnageThis, tonnageLast, sleepScoresThis, sleepScoresLast, true);
+    if (deloadInsight) insights.push(deloadInsight);
   }
 
   insights.sort((a, b) => b.magnitude - a.magnitude);
