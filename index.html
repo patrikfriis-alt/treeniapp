@@ -4809,7 +4809,10 @@ async function searchFineli(query) {
     carbohydrate: f.carbs_per_100g,
     fiber: f.fiber_per_100g,
     sugar: f.sugar_per_100g,
-    salt: f.salt_per_100g,
+    // fineli_foods.salt_per_100g is stored in milligrams (unlike fiber/sugar, which are grams) —
+    // convert to grams here so food_cache.salt_per_100g stays consistent with custom_foods
+    // (entered directly in grams) and with entrySalt()'s gram-based math.
+    salt: f.salt_per_100g != null ? f.salt_per_100g / 1000 : null,
   }));
 }
 
