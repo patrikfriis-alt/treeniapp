@@ -5400,14 +5400,35 @@ function updateFoodAmountPreview() {
   el.textContent = `${kcal} kcal · ${protein}g proteiini · ${carbs}g hiilarit · ${fat}g rasva`;
 }
 
+const CUSTOM_FOOD_LABELS = {
+  '100g':  { kcal: 'Kcal/100g',  protein: 'Proteiini/100g',  carbs: 'Hiilarit/100g',  fat: 'Rasva/100g'  },
+  'annos': { kcal: 'Kcal/annos', protein: 'Proteiini/annos', carbs: 'Hiilarit/annos', fat: 'Rasva/annos' },
+};
+
+let customFoodEntryMode = '100g';
+
+function setCustomFoodEntryMode(mode, btn) {
+  customFoodEntryMode = mode;
+  ['custom-food-mode-100g', 'custom-food-mode-annos'].forEach(id => document.getElementById(id).classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('custom-food-servingsize-row').style.display = mode === 'annos' ? '' : 'none';
+  const labels = CUSTOM_FOOD_LABELS[mode];
+  document.getElementById('custom-food-kcal-label').textContent = labels.kcal;
+  document.getElementById('custom-food-protein-label').textContent = labels.protein;
+  document.getElementById('custom-food-carbs-label').textContent = labels.carbs;
+  document.getElementById('custom-food-fat-label').textContent = labels.fat;
+  ['custom-food-kcal', 'custom-food-protein', 'custom-food-carbs', 'custom-food-fat'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+}
+
 function goToCustomFoodStep() {
   document.getElementById('food-search-step-list').style.display = 'none';
   document.getElementById('food-search-step-amount').style.display = 'none';
   document.getElementById('food-search-step-custom').style.display = 'block';
   document.getElementById('custom-food-name').value = document.getElementById('food-search-input').value.trim();
-  ['custom-food-kcal','custom-food-protein','custom-food-carbs','custom-food-fat'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
+  document.getElementById('custom-food-servingsize').value = '';
+  setCustomFoodEntryMode('100g', document.getElementById('custom-food-mode-100g'));
 }
 
 async function createCustomFood({ name, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g }) {
@@ -5424,13 +5445,24 @@ async function createCustomFood({ name, kcalPer100g, proteinPer100g, carbsPer100
 
 async function saveCustomFoodAndContinue() {
   const name = document.getElementById('custom-food-name').value.trim();
-  const kcal = parseNum('custom-food-kcal');
-  const protein = parseNum('custom-food-protein');
-  const carbs = parseNum('custom-food-carbs');
-  const fat = parseNum('custom-food-fat');
+  let kcal = parseNum('custom-food-kcal');
+  let protein = parseNum('custom-food-protein');
+  let carbs = parseNum('custom-food-carbs');
+  let fat = parseNum('custom-food-fat');
   if (!name || kcal == null) {
     showStatus('custom-food-status', 'Nimi ja kcal vaaditaan', true);
     return;
+  }
+  if (customFoodEntryMode === 'annos') {
+    const servingSize = parseNum('custom-food-servingsize');
+    if (!servingSize || servingSize <= 0) {
+      showStatus('custom-food-status', 'Annoskoko vaaditaan', true);
+      return;
+    }
+    kcal    = kcal * 100 / servingSize;
+    protein = protein != null ? protein * 100 / servingSize : null;
+    carbs   = carbs   != null ? carbs   * 100 / servingSize : null;
+    fat     = fat     != null ? fat     * 100 / servingSize : null;
   }
   const btn = document.getElementById('custom-food-save-btn');
   btn.disabled = true;
@@ -7285,10 +7317,15 @@ if ('serviceWorker' in navigator) {
 
     <div id="food-search-step-custom" style="display:none">
       <div class="form-row"><label>Nimi</label><input type="text" id="custom-food-name" placeholder="Oma tuote"></div>
-      <div class="form-row"><label>Kcal/100g</label><input type="text" inputmode="decimal" id="custom-food-kcal"></div>
-      <div class="form-row"><label>Proteiini/100g</label><input type="text" inputmode="decimal" id="custom-food-protein"></div>
-      <div class="form-row"><label>Hiilarit/100g</label><input type="text" inputmode="decimal" id="custom-food-carbs"></div>
-      <div class="form-row"><label>Rasva/100g</label><input type="text" inputmode="decimal" id="custom-food-fat"></div>
+      <div class="stab-bar" style="margin-top:10px">
+        <button class="stab active" id="custom-food-mode-100g" onclick="setCustomFoodEntryMode('100g', this)">Per 100g</button>
+        <button class="stab" id="custom-food-mode-annos" onclick="setCustomFoodEntryMode('annos', this)">Per annos</button>
+      </div>
+      <div class="form-row" id="custom-food-servingsize-row" style="display:none"><label>Annoskoko (g)</label><input type="text" inputmode="decimal" id="custom-food-servingsize"></div>
+      <div class="form-row"><label id="custom-food-kcal-label">Kcal/100g</label><input type="text" inputmode="decimal" id="custom-food-kcal"></div>
+      <div class="form-row"><label id="custom-food-protein-label">Proteiini/100g</label><input type="text" inputmode="decimal" id="custom-food-protein"></div>
+      <div class="form-row"><label id="custom-food-carbs-label">Hiilarit/100g</label><input type="text" inputmode="decimal" id="custom-food-carbs"></div>
+      <div class="form-row"><label id="custom-food-fat-label">Rasva/100g</label><input type="text" inputmode="decimal" id="custom-food-fat"></div>
       <button class="btn btn-primary" id="custom-food-save-btn" onclick="saveCustomFoodAndContinue()">Tallenna ja jatka</button>
       <div class="status" id="custom-food-status"></div>
     </div>
