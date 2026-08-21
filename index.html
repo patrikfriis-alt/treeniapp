@@ -5346,11 +5346,47 @@ function goToAmountStep() {
   document.getElementById('food-amount-name').textContent = foodModalSelected.name;
   document.getElementById('food-amount-grams').value = 100;
   updateFoodAmountPreview();
+  loadLastUsedAmount();
 }
 
 function setFoodAmount(g) {
   document.getElementById('food-amount-grams').value = g;
   updateFoodAmountPreview();
+}
+
+let lastUsedAmountRequestId = 0;
+
+async function loadLastUsedAmount() {
+  const requestId = ++lastUsedAmountRequestId;
+  const btn = document.getElementById('food-amount-last-used-btn');
+  if (!btn) return;
+  btn.style.display = 'none';
+
+  const sel = foodModalSelected;
+  if (!sel) return;
+
+  let cacheId  = sel.source === 'cache'  ? sel.cacheId  : null;
+  let customId = sel.source === 'custom' ? sel.customId : null;
+
+  if (!cacheId && !customId && sel.source === 'fineli' && sel.fineliId) {
+    const { data, error } = await sb.from('food_cache').select('id').eq('fineli_id', sel.fineliId).maybeSingle();
+    if (error) { console.error('loadLastUsedAmount (food_cache lookup) failed:', error.message); return; }
+    if (requestId !== lastUsedAmountRequestId) return;
+    if (data) cacheId = data.id;
+  }
+  if (!cacheId && !customId) return;
+
+  let query = sb.from('food_log_entries').select('amount_g').order('created_at', { ascending: false }).limit(1);
+  query = cacheId != null ? query.eq('food_cache_id', cacheId) : query.eq('custom_food_id', customId);
+  const { data: rows, error: entryErr } = await query;
+  if (entryErr) { console.error('loadLastUsedAmount failed:', entryErr.message); return; }
+  if (requestId !== lastUsedAmountRequestId) return;
+  if (!rows || !rows.length) return;
+
+  const grams = rows[0].amount_g;
+  btn.textContent = `Viimeksi ${grams}g`;
+  btn.onclick = () => setFoodAmount(grams);
+  btn.style.display = '';
 }
 
 function updateFoodAmountPreview() {
@@ -7237,6 +7273,7 @@ if ('serviceWorker' in navigator) {
       <div class="form-row"><label>Määrä (g)</label><input type="number" id="food-amount-grams" value="100" oninput="updateFoodAmountPreview()"></div>
       <div id="food-amount-preview" style="font-size:13px;color:var(--text2);margin:-4px 0 10px;"></div>
       <div class="food-amount-presets">
+        <button class="stab" id="food-amount-last-used-btn" style="display:none"></button>
         <button class="stab" onclick="setFoodAmount(50)">50g</button>
         <button class="stab" onclick="setFoodAmount(100)">100g</button>
         <button class="stab" onclick="setFoodAmount(150)">150g</button>
