@@ -371,6 +371,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .koonti-progress-fill { height:100%; border-radius:3px; background:var(--accent); transition:width .3s ease; }
 .koonti-card--done .koonti-progress-fill { background:var(--green); }
 .koonti-progress-fill.over { background:var(--red); }
+.koonti-progress-fill.good { background:var(--green); }
+.koonti-progress-fill.low  { background:var(--amber); }
+
+.food-nutrient-row { margin-bottom:10px; }
+.food-nutrient-row:last-child { margin-bottom:0; }
+.food-nutrient-row-top { display:flex; justify-content:space-between; font-size:13px; color:var(--text2); margin-bottom:4px; }
 .kc-week-budget-sub { font-size:12px; color:var(--text3); margin-top:4px; }
 .kc-week-daystrip { display:flex; gap:6px; margin-top:8px; }
 .kc-week-day {
@@ -1402,6 +1408,22 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 
   <div class="food-week-row">
     <span>Paasto</span><span class="food-week-val" id="food-fasting-val">—</span>
+  </div>
+
+  <div class="meal-card">
+    <div class="meal-card-header" style="margin-bottom:10px">Ravintoaineet</div>
+    <div class="food-nutrient-row">
+      <div class="food-nutrient-row-top"><span>Kuitu</span><span id="food-nutrient-fiber-val">0g / 25g</span></div>
+      <div class="koonti-progress-track"><div class="koonti-progress-fill" id="food-nutrient-fiber-bar" style="width:0%"></div></div>
+    </div>
+    <div class="food-nutrient-row">
+      <div class="food-nutrient-row-top"><span>Sokeri</span><span id="food-nutrient-sugar-val">0g / 50g</span></div>
+      <div class="koonti-progress-track"><div class="koonti-progress-fill" id="food-nutrient-sugar-bar" style="width:0%"></div></div>
+    </div>
+    <div class="food-nutrient-row">
+      <div class="food-nutrient-row-top"><span>Suola</span><span id="food-nutrient-salt-val">0g / 5g</span></div>
+      <div class="koonti-progress-track"><div class="koonti-progress-fill" id="food-nutrient-salt-bar" style="width:0%"></div></div>
+    </div>
   </div>
 
   <div id="food-meals"></div>
@@ -4598,7 +4620,31 @@ async function loadFoodDay() {
   foodDayEntries = entries;
 
   renderFoodHero(entries, weekKcal);
+  renderFoodNutrientCard(entries);
   renderMealCards(entries, prevMealTypes);
+}
+
+const FIBER_TARGET_G = 25;
+const SUGAR_LIMIT_G = 50;
+const SALT_LIMIT_G = 5;
+
+function setNutrientBar(barId, valId, total, threshold, goodWhenAbove) {
+  const bar = document.getElementById(barId);
+  bar.style.width = Math.min(100, total / threshold * 100) + '%';
+  bar.classList.remove('good', 'low', 'over');
+  const isGood = goodWhenAbove ? total >= threshold : total <= threshold;
+  bar.classList.add(isGood ? 'good' : (goodWhenAbove ? 'low' : 'over'));
+  document.getElementById(valId).textContent = `${Math.round(total)}g / ${threshold}g`;
+}
+
+function renderFoodNutrientCard(entries) {
+  const totalFiber = entries.reduce((s, e) => s + entryFiber(e), 0);
+  const totalSugar = entries.reduce((s, e) => s + entrySugar(e), 0);
+  const totalSalt  = entries.reduce((s, e) => s + entrySalt(e), 0);
+
+  setNutrientBar('food-nutrient-fiber-bar', 'food-nutrient-fiber-val', totalFiber, FIBER_TARGET_G, true);
+  setNutrientBar('food-nutrient-sugar-bar', 'food-nutrient-sugar-val', totalSugar, SUGAR_LIMIT_G, false);
+  setNutrientBar('food-nutrient-salt-bar',  'food-nutrient-salt-val',  totalSalt,  SALT_LIMIT_G,  false);
 }
 
 function renderFoodHero(entries, weekKcal) {
