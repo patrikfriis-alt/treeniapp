@@ -5353,6 +5353,9 @@ function goToAmountStep() {
   document.getElementById('food-search-step-custom').style.display = 'none';
   document.getElementById('food-search-step-amount').style.display = 'flex';
   document.getElementById('food-amount-name').textContent = foodModalSelected.name;
+  const mealSelect = document.getElementById('food-amount-meal');
+  mealSelect.innerHTML = MEAL_DEFS.map(m => `<option value="${m.key}">${m.icon} ${m.label}</option>`).join('');
+  mealSelect.value = foodModalMeal;
   document.getElementById('food-amount-grams').value = 100;
   updateFoodAmountPreview();
   loadLastUsedAmount();
@@ -7340,6 +7343,7 @@ if ('serviceWorker' in navigator) {
 
     <div id="food-search-step-amount" class="food-amount-centered" style="display:none">
       <div class="food-amount-name" id="food-amount-name">—</div>
+      <div class="form-row"><label>Ateria</label><select id="food-amount-meal" onchange="foodModalMeal = this.value"></select></div>
       <div class="form-row"><label>Määrä (g)</label><input type="number" id="food-amount-grams" value="100" oninput="updateFoodAmountPreview()"></div>
       <div id="food-amount-preview" style="font-size:13px;color:var(--text2);margin:-4px 0 10px;"></div>
       <div class="food-amount-presets">
