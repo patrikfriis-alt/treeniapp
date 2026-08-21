@@ -925,6 +925,15 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .food-photo-row { padding:10px 0; border-bottom:1px solid var(--border2); }
 .food-photo-row:last-child { border-bottom:none; }
 .food-search-custom-link { color: var(--green); font-size:13px; cursor:pointer; }
+.custom-food-dup-warning {
+  background: var(--amber-bg);
+  color: var(--amber);
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+.custom-food-dup-warning ul { margin: 4px 0 0; padding-left: 18px; }
 .food-amount-centered { flex-direction: column; justify-content: center; min-height: 50vh; }
 .ex-search-result-row {
   display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border2);
@@ -5422,6 +5431,34 @@ function setCustomFoodEntryMode(mode, btn) {
   });
 }
 
+let customFoodDupDebounce = null;
+let customFoodDupRequestId = 0;
+
+function onCustomFoodNameInput() {
+  clearTimeout(customFoodDupDebounce);
+  const q = document.getElementById('custom-food-name').value.trim();
+  if (q.length < 2) {
+    customFoodDupRequestId++;
+    document.getElementById('custom-food-dup-warning').style.display = 'none';
+    return;
+  }
+  customFoodDupDebounce = setTimeout(() => checkCustomFoodDuplicates(q), 300);
+}
+
+async function checkCustomFoodDuplicates(q) {
+  const requestId = ++customFoodDupRequestId;
+  const { data, error } = await sb.from('custom_foods').select('id, name').ilike('name', `%${q}%`).order('name').limit(5);
+  if (error) { console.error('checkCustomFoodDuplicates failed:', error.message); return; }
+  if (requestId !== customFoodDupRequestId) return;
+  const el = document.getElementById('custom-food-dup-warning');
+  if (!data || !data.length) {
+    el.style.display = 'none';
+    return;
+  }
+  el.innerHTML = `⚠️ Tarkista ettei tuote ole jo lisätty:<ul>${data.map(f => `<li>${escapeHtml(f.name)}</li>`).join('')}</ul>`;
+  el.style.display = 'block';
+}
+
 function goToCustomFoodStep() {
   document.getElementById('food-search-step-list').style.display = 'none';
   document.getElementById('food-search-step-amount').style.display = 'none';
@@ -5429,6 +5466,7 @@ function goToCustomFoodStep() {
   document.getElementById('custom-food-name').value = document.getElementById('food-search-input').value.trim();
   document.getElementById('custom-food-servingsize').value = '';
   setCustomFoodEntryMode('100g', document.getElementById('custom-food-mode-100g'));
+  onCustomFoodNameInput();
 }
 
 async function createCustomFood({ name, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g }) {
@@ -7316,7 +7354,8 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <div id="food-search-step-custom" style="display:none">
-      <div class="form-row"><label>Nimi</label><input type="text" id="custom-food-name" placeholder="Oma tuote"></div>
+      <div class="form-row"><label>Nimi</label><input type="text" id="custom-food-name" placeholder="Oma tuote" oninput="onCustomFoodNameInput()"></div>
+      <div class="custom-food-dup-warning" id="custom-food-dup-warning" style="display:none"></div>
       <div class="stab-bar" style="margin-top:10px">
         <button class="stab active" id="custom-food-mode-100g" onclick="setCustomFoodEntryMode('100g', this)">Per 100g</button>
         <button class="stab" id="custom-food-mode-annos" onclick="setCustomFoodEntryMode('annos', this)">Per annos</button>
