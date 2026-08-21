@@ -4423,6 +4423,24 @@ function entryFat(entry) {
   return src.fat_per_100g * entry.amount_g / 100;
 }
 
+function entryFiber(entry) {
+  const src = entrySource(entry);
+  if (!src || src.fiber_per_100g == null) return 0;
+  return src.fiber_per_100g * entry.amount_g / 100;
+}
+
+function entrySugar(entry) {
+  const src = entrySource(entry);
+  if (!src || src.sugar_per_100g == null) return 0;
+  return src.sugar_per_100g * entry.amount_g / 100;
+}
+
+function entrySalt(entry) {
+  const src = entrySource(entry);
+  if (!src || src.salt_per_100g == null) return 0;
+  return src.salt_per_100g * entry.amount_g / 100;
+}
+
 async function loadNutritionGoals() {
   const { data, error } = await sb.from('nutrition_goals').select('*').eq('id', 1).maybeSingle();
   if (error) { console.error('loadNutritionGoals failed:', error.message); return null; }
@@ -4433,8 +4451,8 @@ async function loadFoodDayEntries(dateIso) {
   const { data, error } = await sb.from('food_log_entries')
     .select(`
       id, meal_type, amount_g, kcal, protein_g, food_cache_id, custom_food_id,
-      food_cache(name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g),
-      custom_foods(name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g)
+      food_cache(name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g),
+      custom_foods(name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g)
     `)
     .eq('logged_at', dateIso)
     .order('created_at', { ascending: true });
@@ -4724,7 +4742,7 @@ async function loadRecentFoods() {
 
 async function searchFineli(query) {
   const q = query.trim();
-  const cols = 'id, name_fi, kcal_per_100g, protein_per_100g, fat_per_100g, carbs_per_100g';
+  const cols = 'id, name_fi, kcal_per_100g, protein_per_100g, fat_per_100g, carbs_per_100g, fiber_per_100g, sugar_per_100g, salt_per_100g';
   const [prefixRes, containsRes] = await Promise.all([
     sb.from('fineli_foods').select(cols).ilike('name_fi', `${q}%`).order('name_fi').limit(20),
     sb.from('fineli_foods').select(cols).ilike('name_fi', `%${q}%`).order('name_fi').limit(20),
@@ -4743,6 +4761,9 @@ async function searchFineli(query) {
     protein: f.protein_per_100g,
     fat: f.fat_per_100g,
     carbohydrate: f.carbs_per_100g,
+    fiber: f.fiber_per_100g,
+    sugar: f.sugar_per_100g,
+    salt: f.salt_per_100g,
   }));
 }
 
@@ -4785,6 +4806,9 @@ async function runFoodSearch(q) {
       proteinPer100g: item.protein || 0,
       carbsPer100g: item.carbohydrate || 0,
       fatPer100g: item.fat || 0,
+      fiberPer100g: item.fiber,
+      sugarPer100g: item.sugar,
+      saltPer100g: item.salt,
       source: 'fineli',
       fineliId: item.id,
     }));
@@ -5528,7 +5552,7 @@ async function saveCustomFoodAndContinue() {
   }
 }
 
-async function ensureFoodCache(fineliId, name, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g) {
+async function ensureFoodCache(fineliId, name, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, sugarPer100g, saltPer100g) {
   const { data, error } = await sb.from('food_cache')
     .upsert({
       fineli_id: fineliId,
@@ -5537,6 +5561,9 @@ async function ensureFoodCache(fineliId, name, kcalPer100g, proteinPer100g, carb
       protein_per_100g: proteinPer100g,
       carbs_per_100g: carbsPer100g,
       fat_per_100g: fatPer100g,
+      fiber_per_100g: fiberPer100g ?? null,
+      sugar_per_100g: sugarPer100g ?? null,
+      salt_per_100g: saltPer100g ?? null,
     }, { onConflict: 'fineli_id', ignoreDuplicates: false })
     .select('id')
     .single();
@@ -5583,6 +5610,9 @@ async function confirmAddFood() {
         foodModalSelected.proteinPer100g,
         foodModalSelected.carbsPer100g,
         foodModalSelected.fatPer100g,
+        foodModalSelected.fiberPer100g,
+        foodModalSelected.sugarPer100g,
+        foodModalSelected.saltPer100g,
       );
     }
 
