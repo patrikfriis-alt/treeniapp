@@ -104,12 +104,15 @@ Kaikki taulut Supabase Postgresissa, `saleikko`-skeemassa (erillään mahdollisi
 - Kaikki salaisuudet (Telegram-botti-token, Anthropic API -avain, Supabase service-role-avain) Hetzner-VPS:n ympäristömuuttujina, ei koodissa eikä versionhallinnassa.
 - Allowlist-tarkistus on gatewayn ensimmäinen askel jokaiselle saapuvalle viestille.
 - `raw_documents` on muuttumaton totuuslähde — Claude ei koskaan muokkaa sitä, vain tuottaa erillisiä, siihen viittaavia tiivistelmiä.
+- **Kulukatto:** Anthropic Consoleen (Settings → Limits) asetetaan kuukausittainen käyttökatto ennen tuotantoon vientiä, jotta ohjelmointivirhe tai odottamaton datamäärä ei voi tuottaa yllättävän suurta laskua (ks. jaksolla #804 käsitelty riski hallitsemattomasta tokenkulusta).
+- **Idempotenssi ingest-ajossa:** jokainen Kokkolan kokousasia tunnistetaan pysyvällä `source_id`:llä (esim. `20261273-7`). Ennen kuin mitään haetaan tai luokitellaan Claudella, ingest-ajo tarkistaa Supabasesta mitkä RSS-syötteen `source_id`:t on jo tallennettu `raw_documents`-tauluun, ja käsittelee (hakee, luokittelee, tiivistää) vain uudet. `raw_documents.source_id` on lisäksi tietokantatasolla `unique`, joten kaksoiskirjaus estyy myös rinnakkaisajossa. Tämä pitää Haiku/Sonnet-kulut suhteessa uusiin pykäliin, ei ajokertoihin.
 
 ## Virheenkäsittely
 
 - Jos kunnan asiakirjahaku epäonnistuu (esim. lähdejärjestelmä muuttunut), Säleikkö ilmoittaa siitä proaktiivisesti Telegramissa sen sijaan että jää hiljaiseksi.
 - Systemd-palvelu käynnistyy automaattisesti uudelleen kaatumisen jälkeen.
 - Claude API -kutsuille tavanomainen retry-logiikka (429/5xx-virheet).
+- **Ulkoinen terveystarkastus:** systemd huomaa vain prosessin oman kaatumisen, ei koko VPS:n tai verkkoyhteyden katkeamista. Säleikkö tarjoaa kevyen `GET /health`-HTTP-päätepisteen, johon osoitetaan ilmainen ulkoinen uptime-tarkistus (esim. UptimeRobot tai Healthchecks.io) muutaman minuutin välein. Jos tarkistus epäonnistuu toistuvasti, palvelu lähettää hälytyksen ulkoisen työkalun kautta (sähköposti/push) — tämä on ainoa tapa huomata täydellinen palvelinkatko, jolloin Säleikkö itse ei voi enää ilmoittaa mitään Telegramissa.
 
 ## Testaus
 
@@ -118,5 +121,5 @@ Kaikki taulut Supabase Postgresissa, `saleikko`-skeemassa (erillään mahdollisi
 
 ## Avoimet kysymykset toteutusvaiheeseen
 
-- Kunnan asiakirjajärjestelmän tarkka rajapinta/rakenne (mikä alusta, onko rakenteista dataa vai pelkkää HTML/PDF-scrapea) — käyttäjä täsmentää kunnan toteutusvaiheen alussa.
+- ~~Kunnan asiakirjajärjestelmän tarkka rajapinta/rakenne~~ — ratkaistu: kunta on Kokkola, joka käyttää Dynasty-järjestelmää (`kokkola10.oncloudos.com`). Rajapinta (RSS-syöte + per-pykälä HTML-sivu) on tarkistettu toteutussuunnitelmassa oikeaa, elävää dataa vasten.
 - Päivittäisen briiffin täsmällinen kellonaika ja mahdollinen viikonloppupoikkeus.
