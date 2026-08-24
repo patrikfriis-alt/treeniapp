@@ -8,7 +8,7 @@
 
 ## Tausta
 
-Sulamo-vertailun kohta 6 (ks. `project_sulamo_comparison_backlog`-muisti): Sulamon "Tilastot"-välilehti näyttää jokaisen logatun ruokakirjauksen taulukkona, järjestettävissä minkä tahansa sarakkeen otsikkoa napauttamalla, neljällä aikagranulariteetilla. Alkuperäinen backlog-merkintä sisälsi kenttiä joita Treeniappissa ei oikeasti ole ("teollinen sokeri" erillään kokonaissokerista, alkoholi, "annos"/kasvis-%-tyylinen mittari) — nämä on jätetty pois, koska kohdan 5 työ vahvisti ettei Fineli tarjoa lisätty-vs-luonnollinen-sokeri-erottelua, eikä alkoholia tai annosmittaria seurata Treeniappissa missään. Kaikki muut 17 ravintoainesaraketta (kcal/proteiini/hiilarit/rasva, kuitu/sokeri/suola, 4 rasvatyyppiä, natrium, 5 kivennäisainetta, C/D-vitamiini) ovat jo `food_cache`/`custom_foods`-tauluissa kohtien 4 ja 5 ansiosta — tämä on siis pääosin näyttö-/järjestämisongelma, ei enää dataongelma.
+Sulamo-vertailun kohta 6 (ks. `project_sulamo_comparison_backlog`-muisti): Sulamon "Tilastot"-välilehti näyttää jokaisen logatun ruokakirjauksen taulukkona, järjestettävissä minkä tahansa sarakkeen otsikkoa napauttamalla, neljällä aikagranulariteetilla. Alkuperäinen backlog-merkintä sisälsi kenttiä joita Treeniappissa ei oikeasti ole ("teollinen sokeri" erillään kokonaissokerista, alkoholi, "annos"/kasvis-%-tyylinen mittari) — nämä on jätetty pois, koska kohdan 5 työ vahvisti ettei Fineli tarjoa lisätty-vs-luonnollinen-sokeri-erottelua, eikä alkoholia tai annosmittaria seurata Treeniappissa missään. Kaikki muut 19 ravintoainesaraketta (kcal/proteiini/hiilarit/rasva, kuitu/sokeri/suola, 4 rasvatyyppiä, natrium, 5 kivennäisainetta, C/D-vitamiini) ovat jo `food_cache`/`custom_foods`-tauluissa kohtien 4 ja 5 ansiosta — tämä on siis pääosin näyttö-/järjestämisongelma, ei enää dataongelma.
 
 ## 1. Sijainti sovelluksessa
 
@@ -16,7 +16,7 @@ Uusi sivu `page-tilastot`, avataan Valikko-sivupalkin uudesta "Tilastot"-napista
 
 ## 2. Data ja sarakkeet
 
-Haku: `food_log_entries` liitettynä `food_cache`/`custom_foods`-tauluihin (sama liitosmalli kuin `loadFoodDayEntries()`:ssä, laajennettuna kaikkiin 17 ravintoainesarakkeeseen + `logged_at`/`meal_type`/`amount_g`), rajattuna päivämääräväliin. Oletusväli: viimeiset 30 päivää. Kaksi `type="date"`-kenttää ("Alkupäivä"/"Loppupäivä") laajentavat väliä, "Näytä"-nappi hakee uudelleen.
+Haku: `food_log_entries` liitettynä `food_cache`/`custom_foods`-tauluihin (sama liitosmalli kuin `loadFoodDayEntries()`:ssä, laajennettuna kaikkiin 19 ravintoainesarakkeeseen + `logged_at`/`meal_type`/`amount_g`), rajattuna päivämääräväliin. Oletusväli: viimeiset 30 päivää. Kaksi `type="date"`-kenttää ("Alkupäivä"/"Loppupäivä") laajentavat väliä, "Näytä"-nappi hakee uudelleen.
 
 Sarakkeet (kaikki näkyvissä samanaikaisesti, taulukko on tarkoituksella leveä — ei yritetä mahduttaa yhdelle ruudulle):
 
@@ -28,8 +28,8 @@ Sarakkeet määritellään yhtenä `TILASTOT_COLUMNS`-konfiguraatiotaulukkona (s
 
 Neljä nappia: **Per kirjaus / Per päivä / Per viikko / Per kuukausi**. Kaikki neljä käyttävät samaa yhtä hakua — vaihtaminen ei hae uudelleen, vain ryhmittelee/laskee uudelleen selaimessa.
 
-- **Per kirjaus**: yksi rivi per `food_log_entries`-rivi. Pvm/Ateria/Nimi täytettyinä. Kcal ja Proteiini luetaan suoraan jo tallennetuista `entry.kcal`/`entry.protein_g`-sarakkeista (lasketaan valmiiksi kirjaushetkellä, ei uudelleen tästä). Loput 15 ravintoainesaraketta (Hiilarit, Rasva, Kuitu, Sokeri, 4 rasvatyyppiä, Suola, Natrium, 4 kivennäisainetta, C/D-vitamiini) lasketaan `entryX()`-apufunktioilla liitetystä `food_cache`/`custom_foods`-rivistä × `amount_g` (`entryCarbs()`/`entryFat()`/`entryFiber()`/`entrySugar()`/`entrySalt()` jo olemassa; 12 uutta apufunktiota lisätään samalla mallilla — kukin palauttaa 0 jos lähdearvo on `null`, samoin kuin olemassa olevat).
-- **Per päivä / viikko / kuukausi**: rivi = aikaväli (ISO-päivä / ISO-viikko / kuukausi). Nimi/Ateria-sarakkeiden tilalla yksi **Kirjauksia**-sarake (kirjausten lukumäärä kyseisellä välillä). Määrä ja kaikki 17 ravintoainesaraketta summataan välin sisällä.
+- **Per kirjaus**: yksi rivi per `food_log_entries`-rivi. Pvm/Ateria/Nimi täytettyinä. Kcal ja Proteiini luetaan suoraan jo tallennetuista `entry.kcal`/`entry.protein_g`-sarakkeista (lasketaan valmiiksi kirjaushetkellä, ei uudelleen tästä). Loput 17 ravintoainesaraketta (Hiilarit, Rasva, Kuitu, Sokeri, 4 rasvatyyppiä, Suola, Natrium, 5 kivennäisainetta, C/D-vitamiini) lasketaan `entryX()`-apufunktioilla liitetystä `food_cache`/`custom_foods`-rivistä × `amount_g` (`entryCarbs()`/`entryFat()`/`entryFiber()`/`entrySugar()`/`entrySalt()` jo olemassa; 12 uutta apufunktiota lisätään samalla mallilla — kukin palauttaa 0 jos lähdearvo on `null`, samoin kuin olemassa olevat).
+- **Per päivä / viikko / kuukausi**: rivi = aikaväli (ISO-päivä / ISO-viikko / kuukausi). Nimi/Ateria-sarakkeiden tilalla yksi **Kirjauksia**-sarake (kirjausten lukumäärä kyseisellä välillä). Määrä ja kaikki 19 ravintoainesaraketta summataan välin sisällä.
 
 ## 4. Järjestäminen
 
@@ -37,11 +37,11 @@ Minkä tahansa sarakeotsikon napautus järjestää sen mukaan nousevasti; toinen
 
 ## 5. Taulukon UI
 
-Oikea `<table>`-elementti `overflow-x:auto`-kääreessä. Ensimmäinen sarake (Pvm tai aikavälin nimi) on `position:sticky; left:0`, jotta se pysyy näkyvissä vaakasuunnassa vieritettäessä 17+ ravintoainesarakkeen läpi. Ladataan-tila ja tyhjä-tila noudattavat muun sovelluksen konventiota ("Ladataan...", "Ei kirjauksia tällä aikavälillä").
+Oikea `<table>`-elementti `overflow-x:auto`-kääreessä. Ensimmäinen sarake (Pvm tai aikavälin nimi) on `position:sticky; left:0`, jotta se pysyy näkyvissä vaakasuunnassa vieritettäessä 19 ravintoainesarakkeen läpi. Ladataan-tila ja tyhjä-tila noudattavat muun sovelluksen konventiota ("Ladataan...", "Ei kirjauksia tällä aikavälillä").
 
 ## 6. CSV-vienti
 
-Uusi "Vie ruokalogi (CSV)" -nappi sivupalkin olemassa olevaan "Vie data" -osioon, täsmälleen `exportActivitiesCSV()`:n mallin mukaan: `downloadCSV()`-apufunktio, `.limit(100000)`, ei päivämäärärajausta (vie kaiken koskaan logatun, ei vain näkyvillä olevaa 30 päivän ikkunaa). Yksi rivi per kirjaus (per-kirjaus-granulariteetin muoto), sarakkeina kaikki 17 ravintoainetta + Pvm/Ateria/Nimi/Määrä.
+Uusi "Vie ruokalogi (CSV)" -nappi sivupalkin olemassa olevaan "Vie data" -osioon, täsmälleen `exportActivitiesCSV()`:n mallin mukaan: `downloadCSV()`-apufunktio, `.limit(100000)`, ei päivämäärärajausta (vie kaiken koskaan logatun, ei vain näkyvillä olevaa 30 päivän ikkunaa). Yksi rivi per kirjaus (per-kirjaus-granulariteetin muoto), sarakkeina kaikki 19 ravintoainetta + Pvm/Ateria/Nimi/Määrä.
 
 ## 7. Rajaus
 
