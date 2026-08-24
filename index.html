@@ -5690,15 +5690,18 @@ async function saveCustomFoodAndContinue() {
       extra[key] = extra[key] != null ? extra[key] * 100 / servingSize : null;
     });
   }
+  const extraFields = {
+    fiberPer100g: extra.fiber, sugarPer100g: extra.sugar, saltPer100g: extra.salt,
+    fatSaturatedPer100g: extra.fatSaturated, fatMonoPer100g: extra.fatMono, fatPolyPer100g: extra.fatPoly, fatTransPer100g: extra.fatTrans,
+    sodiumPer100g: extra.sodium, calciumPer100g: extra.calcium, potassiumPer100g: extra.potassium, magnesiumPer100g: extra.magnesium,
+    ironPer100g: extra.iron, zincPer100g: extra.zinc, vitaminCPer100g: extra.vitaminC, vitaminDPer100g: extra.vitaminD,
+  };
   const btn = document.getElementById('custom-food-save-btn');
   btn.disabled = true;
   try {
     const id = await createCustomFood({
       name, kcalPer100g: kcal, proteinPer100g: protein || 0, carbsPer100g: carbs || 0, fatPer100g: fat || 0,
-      fiberPer100g: extra.fiber, sugarPer100g: extra.sugar, saltPer100g: extra.salt,
-      fatSaturatedPer100g: extra.fatSaturated, fatMonoPer100g: extra.fatMono, fatPolyPer100g: extra.fatPoly, fatTransPer100g: extra.fatTrans,
-      sodiumPer100g: extra.sodium, calciumPer100g: extra.calcium, potassiumPer100g: extra.potassium, magnesiumPer100g: extra.magnesium,
-      ironPer100g: extra.iron, zincPer100g: extra.zinc, vitaminCPer100g: extra.vitaminC, vitaminDPer100g: extra.vitaminD,
+      ...extraFields,
     });
     foodModalSelected = {
       name,
@@ -5706,10 +5709,7 @@ async function saveCustomFoodAndContinue() {
       proteinPer100g: protein || 0,
       carbsPer100g: carbs || 0,
       fatPer100g: fat || 0,
-      fiberPer100g: extra.fiber, sugarPer100g: extra.sugar, saltPer100g: extra.salt,
-      fatSaturatedPer100g: extra.fatSaturated, fatMonoPer100g: extra.fatMono, fatPolyPer100g: extra.fatPoly, fatTransPer100g: extra.fatTrans,
-      sodiumPer100g: extra.sodium, calciumPer100g: extra.calcium, potassiumPer100g: extra.potassium, magnesiumPer100g: extra.magnesium,
-      ironPer100g: extra.iron, zincPer100g: extra.zinc, vitaminCPer100g: extra.vitaminC, vitaminDPer100g: extra.vitaminD,
+      ...extraFields,
       source: 'custom',
       customId: id,
     };
