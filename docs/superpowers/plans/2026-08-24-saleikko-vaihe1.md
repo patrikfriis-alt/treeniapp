@@ -635,6 +635,28 @@ describe("parseMeetingItemDetail", () => {
     expect(result.pdfUrl).toBeNull();
     expect(result.bodyText).toBe("Just text");
   });
+
+  it("throws if the page structure changed and no body text was found", () => {
+    const html = `<html><body><div class='some-other-layout'><p>Dynasty changed their markup</p></div></body></html>`;
+
+    expect(() =>
+      parseMeetingItemDetail(
+        html,
+        "https://kokkola10.oncloudos.com/cgi/DREQUEST.PHP?page=meetingitem&id=1-1",
+      ),
+    ).toThrow(/empty body text/i);
+  });
+
+  it("throws if the body text is suspiciously short", () => {
+    const html = `<html><body><div class='data-part-block-htm'><p>...</p></div></body></html>`;
+
+    expect(() =>
+      parseMeetingItemDetail(
+        html,
+        "https://kokkola10.oncloudos.com/cgi/DREQUEST.PHP?page=meetingitem&id=1-1",
+      ),
+    ).toThrow(/empty body text/i);
+  });
 });
 ```
 
@@ -653,6 +675,8 @@ export interface MeetingItemDetail {
   pdfUrl: string | null;
 }
 
+const MIN_BODY_TEXT_LENGTH = 20;
+
 export function parseMeetingItemDetail(
   html: string,
   pageUrl: string,
@@ -667,6 +691,14 @@ export function parseMeetingItemDetail(
     .filter((line) => line.length > 0)
     .join("\n")
     .trim();
+
+  if (bodyText.length < MIN_BODY_TEXT_LENGTH) {
+    throw new Error(
+      `parseMeetingItemDetail: empty body text extracted from ${pageUrl} - ` +
+        "Kokkola's Dynasty page structure may have changed " +
+        "(expected a 'div.data-part-block-htm' element with real content).",
+    );
+  }
 
   const pdfHref = $("a[href*='/kokous/']").attr("href");
   const pdfUrl = pdfHref ? new URL(pdfHref, pageUrl).toString() : null;
@@ -2503,7 +2535,7 @@ Expected: no errors.
 - [ ] **Step 8: Run the full test suite**
 
 Run: `npm test`
-Expected: all tests pass (Tasks 1, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 — 27 tests total).
+Expected: all tests pass (Tasks 1, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 — 33 tests total).
 
 - [ ] **Step 9: Commit**
 
