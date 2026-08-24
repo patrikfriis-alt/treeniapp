@@ -953,6 +953,14 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .food-amount-name { font-size:15px; font-weight:600; color:var(--text); margin-bottom:14px; }
 .food-amount-presets { display:flex; gap:6px; margin-bottom:14px; }
 .food-amount-presets .stab { flex:1; }
+
+.lisatiedot-badge { font-size:13px; color:var(--text2); margin:-8px 0 10px; }
+.lisatiedot-toggle { font-size:13px; color:var(--accent); cursor:pointer; margin:-4px 0 10px; user-select:none; }
+.lisatiedot-panel { margin:-4px 0 14px; padding:10px 12px; background:var(--surface2); border-radius:10px; }
+.lisatiedot-section { margin-bottom:8px; }
+.lisatiedot-section:last-child { margin-bottom:0; }
+.lisatiedot-section-title { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.03em; color:var(--text2); margin-bottom:4px; }
+.lisatiedot-row { display:flex; justify-content:space-between; font-size:13px; color:var(--text); padding:2px 0; }
 /* ─── Exercise history modal ─────────────────────────────────── */
 .ex-modal-overlay {
   position: fixed; inset: 0; z-index: 999;
@@ -4473,8 +4481,8 @@ async function loadFoodDayEntries(dateIso) {
   const { data, error } = await sb.from('food_log_entries')
     .select(`
       id, meal_type, amount_g, kcal, protein_g, food_cache_id, custom_food_id,
-      food_cache(name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g),
-      custom_foods(name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g)
+      food_cache(name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g,process_code),
+      custom_foods(name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g)
     `)
     .eq('logged_at', dateIso)
     .order('created_at', { ascending: true });
@@ -4753,8 +4761,8 @@ async function loadRecentFoods() {
   const { data, error } = await sb.from('food_log_entries')
     .select(`
       food_cache_id, custom_food_id,
-      food_cache(id,name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g),
-      custom_foods(id,name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g)
+      food_cache(id,name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g,process_code),
+      custom_foods(id,name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g)
     `)
     .gte('logged_at', localIso(from))
     .order('created_at', { ascending: false })
@@ -4774,6 +4782,22 @@ async function loadRecentFoods() {
         proteinPer100g: food.protein_per_100g,
         carbsPer100g: food.carbs_per_100g,
         fatPer100g: food.fat_per_100g,
+        fiberPer100g: food.fiber_per_100g,
+        sugarPer100g: food.sugar_per_100g,
+        saltPer100g: food.salt_per_100g,
+        fatSaturatedPer100g: food.fat_saturated_per_100g,
+        fatMonoPer100g: food.fat_mono_per_100g,
+        fatPolyPer100g: food.fat_poly_per_100g,
+        fatTransPer100g: food.fat_trans_per_100g,
+        sodiumPer100g: food.sodium_per_100g,
+        calciumPer100g: food.calcium_per_100g,
+        potassiumPer100g: food.potassium_per_100g,
+        magnesiumPer100g: food.magnesium_per_100g,
+        ironPer100g: food.iron_per_100g,
+        zincPer100g: food.zinc_per_100g,
+        vitaminCPer100g: food.vitamin_c_per_100g,
+        vitaminDPer100g: food.vitamin_d_per_100g,
+        processCode: isCache ? food.process_code : null,
         source: isCache ? 'cache' : 'custom',
         cacheId: isCache ? food.id : null,
         customId: isCache ? null : food.id,
@@ -4788,7 +4812,7 @@ async function loadRecentFoods() {
 
 async function searchFineli(query) {
   const q = query.trim();
-  const cols = 'id, name_fi, kcal_per_100g, protein_per_100g, fat_per_100g, carbs_per_100g, fiber_per_100g, sugar_per_100g, salt_per_100g';
+  const cols = 'id, name_fi, kcal_per_100g, protein_per_100g, fat_per_100g, carbs_per_100g, fiber_per_100g, sugar_per_100g, salt_per_100g, fat_saturated_per_100g, fat_mono_per_100g, fat_poly_per_100g, fat_trans_per_100g, sodium_per_100g, calcium_per_100g, potassium_per_100g, magnesium_per_100g, iron_per_100g, zinc_per_100g, vitamin_c_per_100g, vitamin_d_per_100g, process_code';
   const [prefixRes, containsRes] = await Promise.all([
     sb.from('fineli_foods').select(cols).ilike('name_fi', `${q}%`).order('name_fi').limit(20),
     sb.from('fineli_foods').select(cols).ilike('name_fi', `%${q}%`).order('name_fi').limit(20),
@@ -4813,6 +4837,19 @@ async function searchFineli(query) {
     // convert to grams here so food_cache.salt_per_100g stays consistent with custom_foods
     // (entered directly in grams) and with entrySalt()'s gram-based math.
     salt: f.salt_per_100g != null ? f.salt_per_100g / 1000 : null,
+    fatSaturated: f.fat_saturated_per_100g,
+    fatMono: f.fat_mono_per_100g,
+    fatPoly: f.fat_poly_per_100g,
+    fatTrans: f.fat_trans_per_100g,
+    sodium: f.sodium_per_100g,
+    calcium: f.calcium_per_100g,
+    potassium: f.potassium_per_100g,
+    magnesium: f.magnesium_per_100g,
+    iron: f.iron_per_100g,
+    zinc: f.zinc_per_100g,
+    vitaminC: f.vitamin_c_per_100g,
+    vitaminD: f.vitamin_d_per_100g,
+    processCode: f.process_code,
   }));
 }
 
@@ -4858,6 +4895,19 @@ async function runFoodSearch(q) {
       fiberPer100g: item.fiber,
       sugarPer100g: item.sugar,
       saltPer100g: item.salt,
+      fatSaturatedPer100g: item.fatSaturated,
+      fatMonoPer100g: item.fatMono,
+      fatPolyPer100g: item.fatPoly,
+      fatTransPer100g: item.fatTrans,
+      sodiumPer100g: item.sodium,
+      calciumPer100g: item.calcium,
+      potassiumPer100g: item.potassium,
+      magnesiumPer100g: item.magnesium,
+      ironPer100g: item.iron,
+      zincPer100g: item.zinc,
+      vitaminCPer100g: item.vitaminC,
+      vitaminDPer100g: item.vitaminD,
+      processCode: item.processCode,
       source: 'fineli',
       fineliId: item.id,
     }));
@@ -5305,6 +5355,19 @@ async function fetchFineliForAllRows() {
         row.fiberPer100g = item.fiber;
         row.sugarPer100g = item.sugar;
         row.saltPer100g = item.salt;
+        row.fatSaturatedPer100g = item.fatSaturated;
+        row.fatMonoPer100g = item.fatMono;
+        row.fatPolyPer100g = item.fatPoly;
+        row.fatTransPer100g = item.fatTrans;
+        row.sodiumPer100g = item.sodium;
+        row.calciumPer100g = item.calcium;
+        row.potassiumPer100g = item.potassium;
+        row.magnesiumPer100g = item.magnesium;
+        row.ironPer100g = item.iron;
+        row.zincPer100g = item.zinc;
+        row.vitaminCPer100g = item.vitaminC;
+        row.vitaminDPer100g = item.vitaminD;
+        row.processCode = item.processCode;
         row.source = 'fineli';
         row.fineliId = item.id;
       }
@@ -5390,7 +5453,13 @@ async function saveAllFoodPhotoRows() {
     let cacheId = null;
     let customId = null;
     if (row.source === 'fineli') {
-      cacheId = await ensureFoodCache(row.fineliId, row.name, row.kcalPer100g, row.proteinPer100g, row.carbsPer100g, row.fatPer100g, row.fiberPer100g, row.sugarPer100g, row.saltPer100g);
+      cacheId = await ensureFoodCache(
+        row.fineliId, row.name, row.kcalPer100g, row.proteinPer100g, row.carbsPer100g, row.fatPer100g,
+        row.fiberPer100g, row.sugarPer100g, row.saltPer100g,
+        row.fatSaturatedPer100g, row.fatMonoPer100g, row.fatPolyPer100g, row.fatTransPer100g,
+        row.sodiumPer100g, row.calciumPer100g, row.potassiumPer100g, row.magnesiumPer100g,
+        row.ironPer100g, row.zincPer100g, row.vitaminCPer100g, row.vitaminDPer100g, row.processCode,
+      );
     } else {
       customId = await createCustomFood({ name: row.name, kcalPer100g: row.kcalPer100g, proteinPer100g: row.proteinPer100g, carbsPer100g: row.carbsPer100g, fatPer100g: row.fatPer100g });
     }
@@ -5424,6 +5493,72 @@ function selectFoodItem(i) {
   goToAmountStep();
 }
 
+const LISATIEDOT_FIELDS = [
+  { key: 'fiberPer100g',        label: 'Kuitu',                    unit: 'g',  decimals: 1, section: 'Hiilihydraatit' },
+  { key: 'sugarPer100g',        label: 'Sokeri',                   unit: 'g',  decimals: 1, section: 'Hiilihydraatit' },
+  { key: 'fatSaturatedPer100g', label: 'Tyydyttynyt rasva',        unit: 'g',  decimals: 1, section: 'Rasvat' },
+  { key: 'fatMonoPer100g',      label: 'Kertatyydyttymätön rasva', unit: 'g',  decimals: 1, section: 'Rasvat' },
+  { key: 'fatPolyPer100g',      label: 'Monityydyttymätön rasva',  unit: 'g',  decimals: 1, section: 'Rasvat' },
+  { key: 'fatTransPer100g',     label: 'Transrasva',               unit: 'g',  decimals: 1, section: 'Rasvat' },
+  { key: 'saltPer100g',         label: 'Suola',                    unit: 'g',  decimals: 2, section: 'Kivennäisaineet' },
+  { key: 'sodiumPer100g',       label: 'Natrium',                  unit: 'mg', decimals: 0, section: 'Kivennäisaineet' },
+  { key: 'calciumPer100g',      label: 'Kalsium',                  unit: 'mg', decimals: 0, section: 'Kivennäisaineet' },
+  { key: 'potassiumPer100g',    label: 'Kalium',                   unit: 'mg', decimals: 0, section: 'Kivennäisaineet' },
+  { key: 'magnesiumPer100g',    label: 'Magnesium',                unit: 'mg', decimals: 0, section: 'Kivennäisaineet' },
+  { key: 'ironPer100g',         label: 'Rauta',                    unit: 'mg', decimals: 1, section: 'Kivennäisaineet' },
+  { key: 'zincPer100g',         label: 'Sinkki',                   unit: 'mg', decimals: 1, section: 'Kivennäisaineet' },
+  { key: 'vitaminCPer100g',     label: 'C-vitamiini',              unit: 'mg', decimals: 0, section: 'Vitamiinit' },
+  { key: 'vitaminDPer100g',     label: 'D-vitamiini',              unit: 'µg', decimals: 1, section: 'Vitamiinit' },
+];
+
+const LISATIEDOT_SECTION_ORDER = ['Hiilihydraatit', 'Rasvat', 'Kivennäisaineet', 'Vitamiinit'];
+
+function toggleCollapsible(headerId, panelId, label) {
+  const panel = document.getElementById(panelId);
+  const header = document.getElementById(headerId);
+  const opening = panel.style.display === 'none' || !panel.style.display;
+  panel.style.display = opening ? 'block' : 'none';
+  header.textContent = (opening ? '▾ ' : '▸ ') + label;
+}
+
+function renderLisatiedotPanel(grams) {
+  const toggle = document.getElementById('food-amount-lisatiedot-toggle');
+  const panel = document.getElementById('food-amount-lisatiedot-panel');
+  const badge = document.getElementById('food-amount-process-badge');
+  if (!toggle || !panel || !foodModalSelected) return;
+
+  const sel = foodModalSelected;
+  const hasAnyData = LISATIEDOT_FIELDS.some(f => sel[f.key] != null);
+  toggle.style.display = hasAnyData ? '' : 'none';
+  if (!hasAnyData) panel.style.display = 'none';
+
+  if (sel.processCode === 'RAW') {
+    badge.textContent = '🟢 Käsittelemätön';
+    badge.style.display = '';
+  } else if (sel.processCode) {
+    badge.textContent = '🟠 Prosessoitu';
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+
+  const bySection = new Map();
+  LISATIEDOT_SECTION_ORDER.forEach(s => bySection.set(s, []));
+  LISATIEDOT_FIELDS.forEach(f => {
+    const raw = sel[f.key];
+    if (raw == null) return;
+    const scaled = raw * grams / 100;
+    const factor = Math.pow(10, f.decimals);
+    const value = Math.round(scaled * factor) / factor;
+    bySection.get(f.section).push(`<div class="lisatiedot-row"><span>${f.label}</span><span>${value}${f.unit}</span></div>`);
+  });
+
+  panel.innerHTML = LISATIEDOT_SECTION_ORDER
+    .filter(s => bySection.get(s).length > 0)
+    .map(s => `<div class="lisatiedot-section"><div class="lisatiedot-section-title">${s}</div>${bySection.get(s).join('')}</div>`)
+    .join('');
+}
+
 function goToAmountStep() {
   document.getElementById('food-search-step-list').style.display = 'none';
   document.getElementById('food-search-step-custom').style.display = 'none';
@@ -5433,6 +5568,8 @@ function goToAmountStep() {
   mealSelect.innerHTML = MEAL_DEFS.map(m => `<option value="${m.key}">${m.icon} ${m.label}</option>`).join('');
   mealSelect.value = foodModalMeal;
   document.getElementById('food-amount-grams').value = 100;
+  document.getElementById('food-amount-lisatiedot-panel').style.display = 'none';
+  document.getElementById('food-amount-lisatiedot-toggle').textContent = '▸ Lisätiedot';
   updateFoodAmountPreview();
   loadLastUsedAmount();
 }
@@ -5486,12 +5623,42 @@ function updateFoodAmountPreview() {
   const carbs   = Math.round(foodModalSelected.carbsPer100g * grams / 100 * 10) / 10;
   const fat     = Math.round(foodModalSelected.fatPer100g * grams / 100 * 10) / 10;
   el.textContent = `${kcal} kcal · ${protein}g proteiini · ${carbs}g hiilarit · ${fat}g rasva`;
+  renderLisatiedotPanel(grams);
 }
 
 const CUSTOM_FOOD_LABELS = {
-  '100g':  { kcal: 'Kcal/100g',  protein: 'Proteiini/100g',  carbs: 'Hiilarit/100g',  fat: 'Rasva/100g',  fiber: 'Kuitu/100g',  sugar: 'Sokeri/100g',  salt: 'Suola/100g'  },
-  'annos': { kcal: 'Kcal/annos', protein: 'Proteiini/annos', carbs: 'Hiilarit/annos', fat: 'Rasva/annos', fiber: 'Kuitu/annos', sugar: 'Sokeri/annos', salt: 'Suola/annos' },
+  '100g': {
+    kcal: 'Kcal/100g', protein: 'Proteiini/100g', carbs: 'Hiilarit/100g', fat: 'Rasva/100g',
+    fiber: 'Kuitu/100g', sugar: 'Sokeri/100g', salt: 'Suola/100g',
+    fatSaturated: 'Tyydyttynyt rasva/100g', fatMono: 'Kertatyydyttymätön rasva/100g',
+    fatPoly: 'Monityydyttymätön rasva/100g', fatTrans: 'Transrasva/100g',
+    sodium: 'Natrium/100g', calcium: 'Kalsium/100g', potassium: 'Kalium/100g',
+    magnesium: 'Magnesium/100g', iron: 'Rauta/100g', zinc: 'Sinkki/100g',
+    vitaminC: 'C-vitamiini/100g', vitaminD: 'D-vitamiini/100g',
+  },
+  'annos': {
+    kcal: 'Kcal/annos', protein: 'Proteiini/annos', carbs: 'Hiilarit/annos', fat: 'Rasva/annos',
+    fiber: 'Kuitu/annos', sugar: 'Sokeri/annos', salt: 'Suola/annos',
+    fatSaturated: 'Tyydyttynyt rasva/annos', fatMono: 'Kertatyydyttymätön rasva/annos',
+    fatPoly: 'Monityydyttymätön rasva/annos', fatTrans: 'Transrasva/annos',
+    sodium: 'Natrium/annos', calcium: 'Kalsium/annos', potassium: 'Kalium/annos',
+    magnesium: 'Magnesium/annos', iron: 'Rauta/annos', zinc: 'Sinkki/annos',
+    vitaminC: 'C-vitamiini/annos', vitaminD: 'D-vitamiini/annos',
+  },
 };
+
+// Maps each label/value key to its input-element id suffix (e.g. custom-food-fat-saturated).
+const CUSTOM_FOOD_FIELD_IDS = {
+  kcal: 'kcal', protein: 'protein', carbs: 'carbs', fat: 'fat',
+  fiber: 'fiber', sugar: 'sugar', salt: 'salt',
+  fatSaturated: 'fat-saturated', fatMono: 'fat-mono', fatPoly: 'fat-poly', fatTrans: 'fat-trans',
+  sodium: 'sodium', calcium: 'calcium', potassium: 'potassium', magnesium: 'magnesium', iron: 'iron', zinc: 'zinc',
+  vitaminC: 'vitamin-c', vitaminD: 'vitamin-d',
+};
+
+// The subset of CUSTOM_FOOD_FIELD_IDS that are optional/null-preserving (everything
+// except kcal/protein/carbs/fat, which keep their existing required/|| 0 behavior).
+const CUSTOM_FOOD_OPTIONAL_FIELDS = ['fiber', 'sugar', 'salt', 'fatSaturated', 'fatMono', 'fatPoly', 'fatTrans', 'sodium', 'calcium', 'potassium', 'magnesium', 'iron', 'zinc', 'vitaminC', 'vitaminD'];
 
 let customFoodEntryMode = '100g';
 
@@ -5501,15 +5668,9 @@ function setCustomFoodEntryMode(mode, btn) {
   btn.classList.add('active');
   document.getElementById('custom-food-servingsize-row').style.display = mode === 'annos' ? '' : 'none';
   const labels = CUSTOM_FOOD_LABELS[mode];
-  document.getElementById('custom-food-kcal-label').textContent = labels.kcal;
-  document.getElementById('custom-food-protein-label').textContent = labels.protein;
-  document.getElementById('custom-food-carbs-label').textContent = labels.carbs;
-  document.getElementById('custom-food-fat-label').textContent = labels.fat;
-  document.getElementById('custom-food-fiber-label').textContent = labels.fiber;
-  document.getElementById('custom-food-sugar-label').textContent = labels.sugar;
-  document.getElementById('custom-food-salt-label').textContent = labels.salt;
-  ['custom-food-kcal', 'custom-food-protein', 'custom-food-carbs', 'custom-food-fat', 'custom-food-fiber', 'custom-food-sugar', 'custom-food-salt'].forEach(id => {
-    document.getElementById(id).value = '';
+  Object.entries(CUSTOM_FOOD_FIELD_IDS).forEach(([key, idSuffix]) => {
+    document.getElementById(`custom-food-${idSuffix}-label`).textContent = labels[key];
+    document.getElementById(`custom-food-${idSuffix}`).value = '';
   });
 }
 
@@ -5551,7 +5712,7 @@ function goToCustomFoodStep() {
   onCustomFoodNameInput();
 }
 
-async function createCustomFood({ name, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, sugarPer100g, saltPer100g }) {
+async function createCustomFood({ name, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, sugarPer100g, saltPer100g, fatSaturatedPer100g, fatMonoPer100g, fatPolyPer100g, fatTransPer100g, sodiumPer100g, calciumPer100g, potassiumPer100g, magnesiumPer100g, ironPer100g, zincPer100g, vitaminCPer100g, vitaminDPer100g }) {
   const { data, error } = await sb.from('custom_foods').insert({
     name,
     kcal_per_100g: kcalPer100g,
@@ -5561,6 +5722,18 @@ async function createCustomFood({ name, kcalPer100g, proteinPer100g, carbsPer100
     fiber_per_100g: fiberPer100g ?? null,
     sugar_per_100g: sugarPer100g ?? null,
     salt_per_100g: saltPer100g ?? null,
+    fat_saturated_per_100g: fatSaturatedPer100g ?? null,
+    fat_mono_per_100g: fatMonoPer100g ?? null,
+    fat_poly_per_100g: fatPolyPer100g ?? null,
+    fat_trans_per_100g: fatTransPer100g ?? null,
+    sodium_per_100g: sodiumPer100g ?? null,
+    calcium_per_100g: calciumPer100g ?? null,
+    potassium_per_100g: potassiumPer100g ?? null,
+    magnesium_per_100g: magnesiumPer100g ?? null,
+    iron_per_100g: ironPer100g ?? null,
+    zinc_per_100g: zincPer100g ?? null,
+    vitamin_c_per_100g: vitaminCPer100g ?? null,
+    vitamin_d_per_100g: vitaminDPer100g ?? null,
   }).select('id').single();
   if (error) { console.error('createCustomFood failed:', error.message); throw error; }
   return data.id;
@@ -5572,9 +5745,10 @@ async function saveCustomFoodAndContinue() {
   let protein = parseNum('custom-food-protein');
   let carbs = parseNum('custom-food-carbs');
   let fat = parseNum('custom-food-fat');
-  let fiber = parseNum('custom-food-fiber');
-  let sugar = parseNum('custom-food-sugar');
-  let salt = parseNum('custom-food-salt');
+  const extra = {};
+  CUSTOM_FOOD_OPTIONAL_FIELDS.forEach(key => {
+    extra[key] = parseNum(`custom-food-${CUSTOM_FOOD_FIELD_IDS[key]}`);
+  });
   if (!name || kcal == null) {
     showStatus('custom-food-status', 'Nimi ja kcal vaaditaan', true);
     return;
@@ -5589,16 +5763,22 @@ async function saveCustomFoodAndContinue() {
     protein = protein != null ? protein * 100 / servingSize : null;
     carbs   = carbs   != null ? carbs   * 100 / servingSize : null;
     fat     = fat     != null ? fat     * 100 / servingSize : null;
-    fiber   = fiber   != null ? fiber   * 100 / servingSize : null;
-    sugar   = sugar   != null ? sugar   * 100 / servingSize : null;
-    salt    = salt    != null ? salt    * 100 / servingSize : null;
+    CUSTOM_FOOD_OPTIONAL_FIELDS.forEach(key => {
+      extra[key] = extra[key] != null ? extra[key] * 100 / servingSize : null;
+    });
   }
+  const extraFields = {
+    fiberPer100g: extra.fiber, sugarPer100g: extra.sugar, saltPer100g: extra.salt,
+    fatSaturatedPer100g: extra.fatSaturated, fatMonoPer100g: extra.fatMono, fatPolyPer100g: extra.fatPoly, fatTransPer100g: extra.fatTrans,
+    sodiumPer100g: extra.sodium, calciumPer100g: extra.calcium, potassiumPer100g: extra.potassium, magnesiumPer100g: extra.magnesium,
+    ironPer100g: extra.iron, zincPer100g: extra.zinc, vitaminCPer100g: extra.vitaminC, vitaminDPer100g: extra.vitaminD,
+  };
   const btn = document.getElementById('custom-food-save-btn');
   btn.disabled = true;
   try {
     const id = await createCustomFood({
       name, kcalPer100g: kcal, proteinPer100g: protein || 0, carbsPer100g: carbs || 0, fatPer100g: fat || 0,
-      fiberPer100g: fiber, sugarPer100g: sugar, saltPer100g: salt,
+      ...extraFields,
     });
     foodModalSelected = {
       name,
@@ -5606,6 +5786,7 @@ async function saveCustomFoodAndContinue() {
       proteinPer100g: protein || 0,
       carbsPer100g: carbs || 0,
       fatPer100g: fat || 0,
+      ...extraFields,
       source: 'custom',
       customId: id,
     };
@@ -5617,7 +5798,7 @@ async function saveCustomFoodAndContinue() {
   }
 }
 
-async function ensureFoodCache(fineliId, name, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, sugarPer100g, saltPer100g) {
+async function ensureFoodCache(fineliId, name, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, sugarPer100g, saltPer100g, fatSaturatedPer100g, fatMonoPer100g, fatPolyPer100g, fatTransPer100g, sodiumPer100g, calciumPer100g, potassiumPer100g, magnesiumPer100g, ironPer100g, zincPer100g, vitaminCPer100g, vitaminDPer100g, processCode) {
   const { data, error } = await sb.from('food_cache')
     .upsert({
       fineli_id: fineliId,
@@ -5629,6 +5810,19 @@ async function ensureFoodCache(fineliId, name, kcalPer100g, proteinPer100g, carb
       fiber_per_100g: fiberPer100g ?? null,
       sugar_per_100g: sugarPer100g ?? null,
       salt_per_100g: saltPer100g ?? null,
+      fat_saturated_per_100g: fatSaturatedPer100g ?? null,
+      fat_mono_per_100g: fatMonoPer100g ?? null,
+      fat_poly_per_100g: fatPolyPer100g ?? null,
+      fat_trans_per_100g: fatTransPer100g ?? null,
+      sodium_per_100g: sodiumPer100g ?? null,
+      calcium_per_100g: calciumPer100g ?? null,
+      potassium_per_100g: potassiumPer100g ?? null,
+      magnesium_per_100g: magnesiumPer100g ?? null,
+      iron_per_100g: ironPer100g ?? null,
+      zinc_per_100g: zincPer100g ?? null,
+      vitamin_c_per_100g: vitaminCPer100g ?? null,
+      vitamin_d_per_100g: vitaminDPer100g ?? null,
+      process_code: processCode ?? null,
     }, { onConflict: 'fineli_id', ignoreDuplicates: false })
     .select('id')
     .single();
@@ -5678,6 +5872,19 @@ async function confirmAddFood() {
         foodModalSelected.fiberPer100g,
         foodModalSelected.sugarPer100g,
         foodModalSelected.saltPer100g,
+        foodModalSelected.fatSaturatedPer100g,
+        foodModalSelected.fatMonoPer100g,
+        foodModalSelected.fatPolyPer100g,
+        foodModalSelected.fatTransPer100g,
+        foodModalSelected.sodiumPer100g,
+        foodModalSelected.calciumPer100g,
+        foodModalSelected.potassiumPer100g,
+        foodModalSelected.magnesiumPer100g,
+        foodModalSelected.ironPer100g,
+        foodModalSelected.zincPer100g,
+        foodModalSelected.vitaminCPer100g,
+        foodModalSelected.vitaminDPer100g,
+        foodModalSelected.processCode,
       );
     }
 
@@ -7438,9 +7645,12 @@ if ('serviceWorker' in navigator) {
 
     <div id="food-search-step-amount" class="food-amount-centered" style="display:none">
       <div class="food-amount-name" id="food-amount-name">—</div>
+      <div class="lisatiedot-badge" id="food-amount-process-badge" style="display:none"></div>
       <div class="form-row"><label>Ateria</label><select id="food-amount-meal" onchange="foodModalMeal = this.value"></select></div>
       <div class="form-row"><label>Määrä (g)</label><input type="number" id="food-amount-grams" value="100" oninput="updateFoodAmountPreview()"></div>
       <div id="food-amount-preview" style="font-size:13px;color:var(--text2);margin:-4px 0 10px;"></div>
+      <div class="lisatiedot-toggle" id="food-amount-lisatiedot-toggle" style="display:none" onclick="toggleCollapsible('food-amount-lisatiedot-toggle','food-amount-lisatiedot-panel','Lisätiedot')">▸ Lisätiedot</div>
+      <div class="lisatiedot-panel" id="food-amount-lisatiedot-panel" style="display:none"></div>
       <div class="food-amount-presets">
         <button class="stab" id="food-amount-last-used-btn" style="display:none"></button>
         <button class="stab" onclick="setFoodAmount(50)">50g</button>
@@ -7467,6 +7677,24 @@ if ('serviceWorker' in navigator) {
       <div class="form-row"><label id="custom-food-fiber-label">Kuitu/100g</label><input type="text" inputmode="decimal" id="custom-food-fiber" placeholder="valinnainen"></div>
       <div class="form-row"><label id="custom-food-sugar-label">Sokeri/100g</label><input type="text" inputmode="decimal" id="custom-food-sugar" placeholder="valinnainen"></div>
       <div class="form-row"><label id="custom-food-salt-label">Suola/100g</label><input type="text" inputmode="decimal" id="custom-food-salt" placeholder="valinnainen"></div>
+      <div class="lisatiedot-toggle" id="custom-food-fats-toggle" onclick="toggleCollapsible('custom-food-fats-toggle','custom-food-fats-panel','Rasvat')">▸ Rasvat</div>
+      <div class="lisatiedot-panel" id="custom-food-fats-panel" style="display:none">
+        <div class="form-row"><label id="custom-food-fat-saturated-label">Tyydyttynyt rasva/100g</label><input type="text" inputmode="decimal" id="custom-food-fat-saturated" placeholder="valinnainen"></div>
+        <div class="form-row"><label id="custom-food-fat-mono-label">Kertatyydyttymätön rasva/100g</label><input type="text" inputmode="decimal" id="custom-food-fat-mono" placeholder="valinnainen"></div>
+        <div class="form-row"><label id="custom-food-fat-poly-label">Monityydyttymätön rasva/100g</label><input type="text" inputmode="decimal" id="custom-food-fat-poly" placeholder="valinnainen"></div>
+        <div class="form-row"><label id="custom-food-fat-trans-label">Transrasva/100g</label><input type="text" inputmode="decimal" id="custom-food-fat-trans" placeholder="valinnainen"></div>
+      </div>
+      <div class="lisatiedot-toggle" id="custom-food-micros-toggle" onclick="toggleCollapsible('custom-food-micros-toggle','custom-food-micros-panel','Kivennäisaineet ja vitamiinit')">▸ Kivennäisaineet ja vitamiinit</div>
+      <div class="lisatiedot-panel" id="custom-food-micros-panel" style="display:none">
+        <div class="form-row"><label id="custom-food-sodium-label">Natrium/100g</label><input type="text" inputmode="decimal" id="custom-food-sodium" placeholder="valinnainen"></div>
+        <div class="form-row"><label id="custom-food-calcium-label">Kalsium/100g</label><input type="text" inputmode="decimal" id="custom-food-calcium" placeholder="valinnainen"></div>
+        <div class="form-row"><label id="custom-food-potassium-label">Kalium/100g</label><input type="text" inputmode="decimal" id="custom-food-potassium" placeholder="valinnainen"></div>
+        <div class="form-row"><label id="custom-food-magnesium-label">Magnesium/100g</label><input type="text" inputmode="decimal" id="custom-food-magnesium" placeholder="valinnainen"></div>
+        <div class="form-row"><label id="custom-food-iron-label">Rauta/100g</label><input type="text" inputmode="decimal" id="custom-food-iron" placeholder="valinnainen"></div>
+        <div class="form-row"><label id="custom-food-zinc-label">Sinkki/100g</label><input type="text" inputmode="decimal" id="custom-food-zinc" placeholder="valinnainen"></div>
+        <div class="form-row"><label id="custom-food-vitamin-c-label">C-vitamiini/100g</label><input type="text" inputmode="decimal" id="custom-food-vitamin-c" placeholder="valinnainen"></div>
+        <div class="form-row"><label id="custom-food-vitamin-d-label">D-vitamiini/100g</label><input type="text" inputmode="decimal" id="custom-food-vitamin-d" placeholder="valinnainen"></div>
+      </div>
       <button class="btn btn-primary" id="custom-food-save-btn" onclick="saveCustomFoodAndContinue()">Tallenna ja jatka</button>
       <div class="status" id="custom-food-status"></div>
     </div>
