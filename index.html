@@ -4473,8 +4473,8 @@ async function loadFoodDayEntries(dateIso) {
   const { data, error } = await sb.from('food_log_entries')
     .select(`
       id, meal_type, amount_g, kcal, protein_g, food_cache_id, custom_food_id,
-      food_cache(name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g),
-      custom_foods(name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g)
+      food_cache(name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g,process_code),
+      custom_foods(name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g)
     `)
     .eq('logged_at', dateIso)
     .order('created_at', { ascending: true });
@@ -4753,8 +4753,8 @@ async function loadRecentFoods() {
   const { data, error } = await sb.from('food_log_entries')
     .select(`
       food_cache_id, custom_food_id,
-      food_cache(id,name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g),
-      custom_foods(id,name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g)
+      food_cache(id,name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g,process_code),
+      custom_foods(id,name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g)
     `)
     .gte('logged_at', localIso(from))
     .order('created_at', { ascending: false })
@@ -4774,6 +4774,22 @@ async function loadRecentFoods() {
         proteinPer100g: food.protein_per_100g,
         carbsPer100g: food.carbs_per_100g,
         fatPer100g: food.fat_per_100g,
+        fiberPer100g: food.fiber_per_100g,
+        sugarPer100g: food.sugar_per_100g,
+        saltPer100g: food.salt_per_100g,
+        fatSaturatedPer100g: food.fat_saturated_per_100g,
+        fatMonoPer100g: food.fat_mono_per_100g,
+        fatPolyPer100g: food.fat_poly_per_100g,
+        fatTransPer100g: food.fat_trans_per_100g,
+        sodiumPer100g: food.sodium_per_100g,
+        calciumPer100g: food.calcium_per_100g,
+        potassiumPer100g: food.potassium_per_100g,
+        magnesiumPer100g: food.magnesium_per_100g,
+        ironPer100g: food.iron_per_100g,
+        zincPer100g: food.zinc_per_100g,
+        vitaminCPer100g: food.vitamin_c_per_100g,
+        vitaminDPer100g: food.vitamin_d_per_100g,
+        processCode: isCache ? food.process_code : null,
         source: isCache ? 'cache' : 'custom',
         cacheId: isCache ? food.id : null,
         customId: isCache ? null : food.id,
@@ -4788,7 +4804,7 @@ async function loadRecentFoods() {
 
 async function searchFineli(query) {
   const q = query.trim();
-  const cols = 'id, name_fi, kcal_per_100g, protein_per_100g, fat_per_100g, carbs_per_100g, fiber_per_100g, sugar_per_100g, salt_per_100g';
+  const cols = 'id, name_fi, kcal_per_100g, protein_per_100g, fat_per_100g, carbs_per_100g, fiber_per_100g, sugar_per_100g, salt_per_100g, fat_saturated_per_100g, fat_mono_per_100g, fat_poly_per_100g, fat_trans_per_100g, sodium_per_100g, calcium_per_100g, potassium_per_100g, magnesium_per_100g, iron_per_100g, zinc_per_100g, vitamin_c_per_100g, vitamin_d_per_100g, process_code';
   const [prefixRes, containsRes] = await Promise.all([
     sb.from('fineli_foods').select(cols).ilike('name_fi', `${q}%`).order('name_fi').limit(20),
     sb.from('fineli_foods').select(cols).ilike('name_fi', `%${q}%`).order('name_fi').limit(20),
@@ -4813,6 +4829,19 @@ async function searchFineli(query) {
     // convert to grams here so food_cache.salt_per_100g stays consistent with custom_foods
     // (entered directly in grams) and with entrySalt()'s gram-based math.
     salt: f.salt_per_100g != null ? f.salt_per_100g / 1000 : null,
+    fatSaturated: f.fat_saturated_per_100g,
+    fatMono: f.fat_mono_per_100g,
+    fatPoly: f.fat_poly_per_100g,
+    fatTrans: f.fat_trans_per_100g,
+    sodium: f.sodium_per_100g,
+    calcium: f.calcium_per_100g,
+    potassium: f.potassium_per_100g,
+    magnesium: f.magnesium_per_100g,
+    iron: f.iron_per_100g,
+    zinc: f.zinc_per_100g,
+    vitaminC: f.vitamin_c_per_100g,
+    vitaminD: f.vitamin_d_per_100g,
+    processCode: f.process_code,
   }));
 }
 
@@ -4858,6 +4887,19 @@ async function runFoodSearch(q) {
       fiberPer100g: item.fiber,
       sugarPer100g: item.sugar,
       saltPer100g: item.salt,
+      fatSaturatedPer100g: item.fatSaturated,
+      fatMonoPer100g: item.fatMono,
+      fatPolyPer100g: item.fatPoly,
+      fatTransPer100g: item.fatTrans,
+      sodiumPer100g: item.sodium,
+      calciumPer100g: item.calcium,
+      potassiumPer100g: item.potassium,
+      magnesiumPer100g: item.magnesium,
+      ironPer100g: item.iron,
+      zincPer100g: item.zinc,
+      vitaminCPer100g: item.vitaminC,
+      vitaminDPer100g: item.vitaminD,
+      processCode: item.processCode,
       source: 'fineli',
       fineliId: item.id,
     }));
@@ -5617,7 +5659,7 @@ async function saveCustomFoodAndContinue() {
   }
 }
 
-async function ensureFoodCache(fineliId, name, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, sugarPer100g, saltPer100g) {
+async function ensureFoodCache(fineliId, name, kcalPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, sugarPer100g, saltPer100g, fatSaturatedPer100g, fatMonoPer100g, fatPolyPer100g, fatTransPer100g, sodiumPer100g, calciumPer100g, potassiumPer100g, magnesiumPer100g, ironPer100g, zincPer100g, vitaminCPer100g, vitaminDPer100g, processCode) {
   const { data, error } = await sb.from('food_cache')
     .upsert({
       fineli_id: fineliId,
@@ -5629,6 +5671,19 @@ async function ensureFoodCache(fineliId, name, kcalPer100g, proteinPer100g, carb
       fiber_per_100g: fiberPer100g ?? null,
       sugar_per_100g: sugarPer100g ?? null,
       salt_per_100g: saltPer100g ?? null,
+      fat_saturated_per_100g: fatSaturatedPer100g ?? null,
+      fat_mono_per_100g: fatMonoPer100g ?? null,
+      fat_poly_per_100g: fatPolyPer100g ?? null,
+      fat_trans_per_100g: fatTransPer100g ?? null,
+      sodium_per_100g: sodiumPer100g ?? null,
+      calcium_per_100g: calciumPer100g ?? null,
+      potassium_per_100g: potassiumPer100g ?? null,
+      magnesium_per_100g: magnesiumPer100g ?? null,
+      iron_per_100g: ironPer100g ?? null,
+      zinc_per_100g: zincPer100g ?? null,
+      vitamin_c_per_100g: vitaminCPer100g ?? null,
+      vitamin_d_per_100g: vitaminDPer100g ?? null,
+      process_code: processCode ?? null,
     }, { onConflict: 'fineli_id', ignoreDuplicates: false })
     .select('id')
     .single();
@@ -5678,6 +5733,19 @@ async function confirmAddFood() {
         foodModalSelected.fiberPer100g,
         foodModalSelected.sugarPer100g,
         foodModalSelected.saltPer100g,
+        foodModalSelected.fatSaturatedPer100g,
+        foodModalSelected.fatMonoPer100g,
+        foodModalSelected.fatPolyPer100g,
+        foodModalSelected.fatTransPer100g,
+        foodModalSelected.sodiumPer100g,
+        foodModalSelected.calciumPer100g,
+        foodModalSelected.potassiumPer100g,
+        foodModalSelected.magnesiumPer100g,
+        foodModalSelected.ironPer100g,
+        foodModalSelected.zincPer100g,
+        foodModalSelected.vitaminCPer100g,
+        foodModalSelected.vitaminDPer100g,
+        foodModalSelected.processCode,
       );
     }
 
