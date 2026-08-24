@@ -953,6 +953,14 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .food-amount-name { font-size:15px; font-weight:600; color:var(--text); margin-bottom:14px; }
 .food-amount-presets { display:flex; gap:6px; margin-bottom:14px; }
 .food-amount-presets .stab { flex:1; }
+
+.lisatiedot-badge { font-size:13px; color:var(--text2); margin:-8px 0 10px; }
+.lisatiedot-toggle { font-size:13px; color:var(--accent); cursor:pointer; margin:-4px 0 10px; user-select:none; }
+.lisatiedot-panel { margin:-4px 0 14px; padding:10px 12px; background:var(--surface2); border-radius:10px; }
+.lisatiedot-section { margin-bottom:8px; }
+.lisatiedot-section:last-child { margin-bottom:0; }
+.lisatiedot-section-title { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.03em; color:var(--text2); margin-bottom:4px; }
+.lisatiedot-row { display:flex; justify-content:space-between; font-size:13px; color:var(--text); padding:2px 0; }
 /* ─── Exercise history modal ─────────────────────────────────── */
 .ex-modal-overlay {
   position: fixed; inset: 0; z-index: 999;
@@ -5485,6 +5493,72 @@ function selectFoodItem(i) {
   goToAmountStep();
 }
 
+const LISATIEDOT_FIELDS = [
+  { key: 'fiberPer100g',        label: 'Kuitu',                    unit: 'g',  decimals: 1, section: 'Hiilihydraatit' },
+  { key: 'sugarPer100g',        label: 'Sokeri',                   unit: 'g',  decimals: 1, section: 'Hiilihydraatit' },
+  { key: 'fatSaturatedPer100g', label: 'Tyydyttynyt rasva',        unit: 'g',  decimals: 1, section: 'Rasvat' },
+  { key: 'fatMonoPer100g',      label: 'Kertatyydyttymätön rasva', unit: 'g',  decimals: 1, section: 'Rasvat' },
+  { key: 'fatPolyPer100g',      label: 'Monityydyttymätön rasva',  unit: 'g',  decimals: 1, section: 'Rasvat' },
+  { key: 'fatTransPer100g',     label: 'Transrasva',               unit: 'g',  decimals: 1, section: 'Rasvat' },
+  { key: 'saltPer100g',         label: 'Suola',                    unit: 'g',  decimals: 2, section: 'Kivennäisaineet' },
+  { key: 'sodiumPer100g',       label: 'Natrium',                  unit: 'mg', decimals: 0, section: 'Kivennäisaineet' },
+  { key: 'calciumPer100g',      label: 'Kalsium',                  unit: 'mg', decimals: 0, section: 'Kivennäisaineet' },
+  { key: 'potassiumPer100g',    label: 'Kalium',                   unit: 'mg', decimals: 0, section: 'Kivennäisaineet' },
+  { key: 'magnesiumPer100g',    label: 'Magnesium',                unit: 'mg', decimals: 0, section: 'Kivennäisaineet' },
+  { key: 'ironPer100g',         label: 'Rauta',                    unit: 'mg', decimals: 1, section: 'Kivennäisaineet' },
+  { key: 'zincPer100g',         label: 'Sinkki',                   unit: 'mg', decimals: 1, section: 'Kivennäisaineet' },
+  { key: 'vitaminCPer100g',     label: 'C-vitamiini',              unit: 'mg', decimals: 0, section: 'Vitamiinit' },
+  { key: 'vitaminDPer100g',     label: 'D-vitamiini',              unit: 'µg', decimals: 1, section: 'Vitamiinit' },
+];
+
+const LISATIEDOT_SECTION_ORDER = ['Hiilihydraatit', 'Rasvat', 'Kivennäisaineet', 'Vitamiinit'];
+
+function toggleCollapsible(headerId, panelId, label) {
+  const panel = document.getElementById(panelId);
+  const header = document.getElementById(headerId);
+  const opening = panel.style.display === 'none' || !panel.style.display;
+  panel.style.display = opening ? 'block' : 'none';
+  header.textContent = (opening ? '▾ ' : '▸ ') + label;
+}
+
+function renderLisatiedotPanel(grams) {
+  const toggle = document.getElementById('food-amount-lisatiedot-toggle');
+  const panel = document.getElementById('food-amount-lisatiedot-panel');
+  const badge = document.getElementById('food-amount-process-badge');
+  if (!toggle || !panel || !foodModalSelected) return;
+
+  const sel = foodModalSelected;
+  const hasAnyData = LISATIEDOT_FIELDS.some(f => sel[f.key] != null);
+  toggle.style.display = hasAnyData ? '' : 'none';
+  if (!hasAnyData) panel.style.display = 'none';
+
+  if (sel.processCode === 'RAW') {
+    badge.textContent = '🟢 Käsittelemätön';
+    badge.style.display = '';
+  } else if (sel.processCode) {
+    badge.textContent = '🟠 Prosessoitu';
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+
+  const bySection = new Map();
+  LISATIEDOT_SECTION_ORDER.forEach(s => bySection.set(s, []));
+  LISATIEDOT_FIELDS.forEach(f => {
+    const raw = sel[f.key];
+    if (raw == null) return;
+    const scaled = raw * grams / 100;
+    const factor = Math.pow(10, f.decimals);
+    const value = Math.round(scaled * factor) / factor;
+    bySection.get(f.section).push(`<div class="lisatiedot-row"><span>${f.label}</span><span>${value}${f.unit}</span></div>`);
+  });
+
+  panel.innerHTML = LISATIEDOT_SECTION_ORDER
+    .filter(s => bySection.get(s).length > 0)
+    .map(s => `<div class="lisatiedot-section"><div class="lisatiedot-section-title">${s}</div>${bySection.get(s).join('')}</div>`)
+    .join('');
+}
+
 function goToAmountStep() {
   document.getElementById('food-search-step-list').style.display = 'none';
   document.getElementById('food-search-step-custom').style.display = 'none';
@@ -5494,6 +5568,8 @@ function goToAmountStep() {
   mealSelect.innerHTML = MEAL_DEFS.map(m => `<option value="${m.key}">${m.icon} ${m.label}</option>`).join('');
   mealSelect.value = foodModalMeal;
   document.getElementById('food-amount-grams').value = 100;
+  document.getElementById('food-amount-lisatiedot-panel').style.display = 'none';
+  document.getElementById('food-amount-lisatiedot-toggle').textContent = '▸ Lisätiedot';
   updateFoodAmountPreview();
   loadLastUsedAmount();
 }
@@ -5547,6 +5623,7 @@ function updateFoodAmountPreview() {
   const carbs   = Math.round(foodModalSelected.carbsPer100g * grams / 100 * 10) / 10;
   const fat     = Math.round(foodModalSelected.fatPer100g * grams / 100 * 10) / 10;
   el.textContent = `${kcal} kcal · ${protein}g proteiini · ${carbs}g hiilarit · ${fat}g rasva`;
+  renderLisatiedotPanel(grams);
 }
 
 const CUSTOM_FOOD_LABELS = {
@@ -7568,9 +7645,12 @@ if ('serviceWorker' in navigator) {
 
     <div id="food-search-step-amount" class="food-amount-centered" style="display:none">
       <div class="food-amount-name" id="food-amount-name">—</div>
+      <div class="lisatiedot-badge" id="food-amount-process-badge" style="display:none"></div>
       <div class="form-row"><label>Ateria</label><select id="food-amount-meal" onchange="foodModalMeal = this.value"></select></div>
       <div class="form-row"><label>Määrä (g)</label><input type="number" id="food-amount-grams" value="100" oninput="updateFoodAmountPreview()"></div>
       <div id="food-amount-preview" style="font-size:13px;color:var(--text2);margin:-4px 0 10px;"></div>
+      <div class="lisatiedot-toggle" id="food-amount-lisatiedot-toggle" style="display:none" onclick="toggleCollapsible('food-amount-lisatiedot-toggle','food-amount-lisatiedot-panel','Lisätiedot')">▸ Lisätiedot</div>
+      <div class="lisatiedot-panel" id="food-amount-lisatiedot-panel" style="display:none"></div>
       <div class="food-amount-presets">
         <button class="stab" id="food-amount-last-used-btn" style="display:none"></button>
         <button class="stab" onclick="setFoodAmount(50)">50g</button>
