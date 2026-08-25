@@ -384,9 +384,10 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   display:flex; align-items:center; justify-content:center;
   font-size:11px; font-weight:600; color:var(--text3);
 }
-.kc-week-day.under { background:var(--green); color:#fff; }
-.kc-week-day.over  { background:var(--red); color:#fff; }
-.kc-week-day.under, .kc-week-day.over { cursor: pointer; }
+.kc-week-day.under { background:var(--green); color:#fff; } /* weekly-kcal-budget strip only: under the daily fair share */
+.kc-week-day.over  { background:var(--red); color:#fff; } /* weekly-kcal-budget strip only: over the daily fair share */
+.kc-week-day.active { background:var(--green); color:#fff; } /* endurance-goal strip: activity logged that day */
+.kc-week-day.under, .kc-week-day.over, .kc-week-day.active { cursor: pointer; }
 .kc-weekly-row { padding: 9px 0; border-bottom: 1px solid var(--border); }
 .kc-weekly-row:last-child { border-bottom: none; }
 .kc-weekly-row-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
@@ -3732,7 +3733,7 @@ async function renderAerobiaGoalCard() {
     let cls = '';
     let onclickAttr = '';
     if (iso <= todayIso && activeDates.has(iso)) {
-      cls = ' under';
+      cls = ' active';
       onclickAttr = ` onclick="openActivityDayModal('${iso}')"`;
     }
     dayCells.push(`<div class="kc-week-day${cls}"${onclickAttr}>${DAYS[i][0]}</div>`);
