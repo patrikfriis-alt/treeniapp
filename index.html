@@ -4572,6 +4572,177 @@ function entryVitaminD(entry) {
   return src.vitamin_d_per_100g * entry.amount_g / 100;
 }
 
+const TILASTOT_COLUMNS = [
+  { key: 'amount_g',     label: 'Määrä (g)',                 decimals: 0, value: e => e.amount_g },
+  { key: 'kcal',         label: 'Kcal',                       decimals: 0, value: e => e.kcal },
+  { key: 'protein_g',    label: 'Proteiini',                  decimals: 1, value: e => e.protein_g },
+  { key: 'carbs',        label: 'Hiilarit',                   decimals: 1, value: entryCarbs },
+  { key: 'fat',          label: 'Rasva',                      decimals: 1, value: entryFat },
+  { key: 'fiber',        label: 'Kuitu',                      decimals: 1, value: entryFiber },
+  { key: 'sugar',        label: 'Sokeri',                     decimals: 1, value: entrySugar },
+  { key: 'fatSaturated', label: 'Tyydyttynyt rasva',          decimals: 1, value: entryFatSaturated },
+  { key: 'fatMono',      label: 'Kertatyydyttymätön rasva',   decimals: 1, value: entryFatMono },
+  { key: 'fatPoly',      label: 'Monityydyttymätön rasva',    decimals: 1, value: entryFatPoly },
+  { key: 'fatTrans',     label: 'Transrasva',                 decimals: 1, value: entryFatTrans },
+  { key: 'salt',         label: 'Suola',                      decimals: 2, value: entrySalt },
+  { key: 'sodium',       label: 'Natrium',                    decimals: 0, value: entrySodium },
+  { key: 'calcium',      label: 'Kalsium',                    decimals: 0, value: entryCalcium },
+  { key: 'potassium',    label: 'Kalium',                     decimals: 0, value: entryPotassium },
+  { key: 'magnesium',    label: 'Magnesium',                  decimals: 0, value: entryMagnesium },
+  { key: 'iron',         label: 'Rauta',                      decimals: 1, value: entryIron },
+  { key: 'zinc',         label: 'Sinkki',                     decimals: 1, value: entryZinc },
+  { key: 'vitaminC',     label: 'C-vitamiini',                decimals: 0, value: entryVitaminC },
+  { key: 'vitaminD',     label: 'D-vitamiini',                decimals: 1, value: entryVitaminD },
+];
+
+let tilastotEntries = [];
+let tilastotGranularity = 'entry';
+let tilastotSortKey = 'label';
+let tilastotSortDir = 'desc';
+
+async function loadTilastotEntries(fromIso, toIso) {
+  const { data, error } = await sb.from('food_log_entries')
+    .select(`
+      id, logged_at, meal_type, amount_g, kcal, protein_g, food_cache_id, custom_food_id,
+      food_cache(name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g),
+      custom_foods(name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g)
+    `)
+    .gte('logged_at', fromIso)
+    .lte('logged_at', toIso)
+    .order('logged_at', { ascending: false });
+  if (error) { console.error('loadTilastotEntries failed:', error.message); return []; }
+  return data || [];
+}
+
+function renderTilastotPage() {
+  const toEl = document.getElementById('tilastot-to');
+  const fromEl = document.getElementById('tilastot-from');
+  if (!toEl.value) toEl.value = localIso(new Date());
+  if (!fromEl.value) fromEl.value = localIso(addDays(new Date(), -30));
+  loadAndRenderTilastot();
+}
+
+async function loadAndRenderTilastot() {
+  const wrap = document.getElementById('tilastot-table-wrap');
+  wrap.innerHTML = '<div class="skel-sub" style="height:60px"></div>';
+  const from = document.getElementById('tilastot-from').value;
+  const to = document.getElementById('tilastot-to').value;
+  if (!from || !to) return;
+  tilastotEntries = await loadTilastotEntries(from, to);
+  renderTilastotTable();
+}
+
+function tilastotWeekKey(dateIso) {
+  const d = new Date(dateIso);
+  return `${isoWeekYear(d)}-W${String(isoWeek(d)).padStart(2, '0')}`;
+}
+
+function tilastotBucketKey(entry, granularity) {
+  if (granularity === 'day') return entry.logged_at;
+  if (granularity === 'week') return tilastotWeekKey(entry.logged_at);
+  return entry.logged_at.slice(0, 7);
+}
+
+function tilastotBuildRows() {
+  if (tilastotGranularity === 'entry') {
+    return tilastotEntries.map(entry => ({
+      label: entry.logged_at,
+      meal: MEAL_DEFS.find(m => m.key === entry.meal_type)?.label || entry.meal_type,
+      name: foodItemName(entry),
+      count: null,
+      values: TILASTOT_COLUMNS.map(col => col.value(entry)),
+    }));
+  }
+  const buckets = new Map();
+  tilastotEntries.forEach(entry => {
+    const key = tilastotBucketKey(entry, tilastotGranularity);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(entry);
+  });
+  return [...buckets.entries()].map(([key, entries]) => ({
+    label: key,
+    meal: null,
+    name: null,
+    count: entries.length,
+    values: TILASTOT_COLUMNS.map(col => entries.reduce((sum, e) => sum + col.value(e), 0)),
+  }));
+}
+
+function tilastotSortValue(row, key) {
+  if (key === 'label') return row.label;
+  if (key === 'meal') return row.meal || '';
+  if (key === 'name') return row.name || '';
+  if (key === 'count') return row.count ?? 0;
+  const idx = TILASTOT_COLUMNS.findIndex(c => c.key === key);
+  return row.values[idx];
+}
+
+function tilastotSortRows(rows) {
+  const sorted = [...rows].sort((a, b) => {
+    const av = tilastotSortValue(a, tilastotSortKey);
+    const bv = tilastotSortValue(b, tilastotSortKey);
+    if (typeof av === 'string' || typeof bv === 'string') {
+      return String(av).localeCompare(String(bv));
+    }
+    return av - bv;
+  });
+  if (tilastotSortDir === 'desc') sorted.reverse();
+  return sorted;
+}
+
+function sortTilastotBy(key) {
+  if (tilastotSortKey === key) {
+    tilastotSortDir = tilastotSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    tilastotSortKey = key;
+    tilastotSortDir = 'asc';
+  }
+  renderTilastotTable();
+}
+
+function setTilastotGranularity(granularity, btn) {
+  tilastotGranularity = granularity;
+  ['entry', 'day', 'week', 'month'].forEach(g => document.getElementById(`tilastot-gran-${g}`).classList.remove('active'));
+  btn.classList.add('active');
+  tilastotSortKey = 'label';
+  tilastotSortDir = 'desc';
+  renderTilastotTable();
+}
+
+function renderTilastotTable() {
+  const wrap = document.getElementById('tilastot-table-wrap');
+  if (!tilastotEntries.length) {
+    wrap.innerHTML = '<div class="food-search-empty">Ei kirjauksia tällä aikavälillä</div>';
+    return;
+  }
+  const rows = tilastotSortRows(tilastotBuildRows());
+  const isEntry = tilastotGranularity === 'entry';
+
+  const identityHeaders = isEntry
+    ? [{ key: 'label', label: 'Pvm' }, { key: 'meal', label: 'Ateria' }, { key: 'name', label: 'Nimi' }]
+    : [{ key: 'label', label: 'Aikaväli' }, { key: 'count', label: 'Kirjauksia' }];
+
+  const headerCells = [...identityHeaders, ...TILASTOT_COLUMNS].map(col => {
+    const sorted = tilastotSortKey === col.key;
+    const arrow = sorted ? (tilastotSortDir === 'asc' ? ' ▲' : ' ▼') : '';
+    return `<th class="${sorted ? 'sorted' : ''}" onclick="sortTilastotBy('${col.key}')">${col.label}${arrow}</th>`;
+  }).join('');
+
+  const bodyRows = rows.map(row => {
+    const identityCells = isEntry
+      ? `<td>${escapeHtml(row.label)}</td><td>${escapeHtml(row.meal)}</td><td>${row.name}</td>`
+      : `<td>${escapeHtml(row.label)}</td><td>${row.count}</td>`;
+    const valueCells = TILASTOT_COLUMNS.map((col, i) => {
+      const factor = Math.pow(10, col.decimals);
+      const value = Math.round(row.values[i] * factor) / factor;
+      return `<td>${value}</td>`;
+    }).join('');
+    return `<tr>${identityCells}${valueCells}</tr>`;
+  }).join('');
+
+  wrap.innerHTML = `<table class="tilastot-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+}
+
 async function loadNutritionGoals() {
   const { data, error } = await sb.from('nutrition_goals').select('*').eq('id', 1).maybeSingle();
   if (error) { console.error('loadNutritionGoals failed:', error.message); return null; }
@@ -6768,6 +6939,7 @@ function showPage(name, btn) {
   if (name === 'ruoka')     renderRuoka();
   if (name === 'valmentaja') renderCoachPage();
   if (name === 'nakemykset') renderNakemyksetPage();
+  if (name === 'tilastot') renderTilastotPage();
 }
 
 window.addEventListener('scroll', () => {
