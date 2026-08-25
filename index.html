@@ -4641,7 +4641,8 @@ async function loadTilastotEntries(fromIso, toIso) {
     `)
     .gte('logged_at', fromIso)
     .lte('logged_at', toIso)
-    .order('logged_at', { ascending: false });
+    .order('logged_at', { ascending: false })
+    .limit(100000);
   if (error) { console.error('loadTilastotEntries failed:', error.message); return []; }
   return data || [];
 }
