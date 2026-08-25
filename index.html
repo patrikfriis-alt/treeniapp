@@ -3680,7 +3680,7 @@ async function loadActivityGoalProgress(offset = wOff) {
   const from = mon.iso, to = localIso(sun);
 
   const { data, error } = await sb.from('activity_data')
-    .select('distance_km,duration_min')
+    .select('id,activity_date,activity_type,distance_km,duration_min')
     .gte('activity_date', from).lte('activity_date', to);
   if (error) { console.error('loadActivityGoalProgress failed:', error.message); return null; }
 
@@ -3692,7 +3692,7 @@ async function loadActivityGoalProgress(offset = wOff) {
   const totalPaceMin = paced.reduce((s, r) => s + r.duration_min, 0);
   const avgPace = totalPaceKm > 0 ? totalPaceMin / totalPaceKm : null;
 
-  return { goals: activityGoals, totalKm, sessionCount, avgPace };
+  return { goals: activityGoals, totalKm, sessionCount, avgPace, rows, monDate: mon.date };
 }
 
 function formatPaceMinPerKm(pace) {
@@ -6285,6 +6285,7 @@ function openEditEntryDialog(entryId) {
 }
 
 let activityGoals = null;
+let activityGoalWeekRows = [];
 
 async function loadActivityGoals() {
   const { data, error } = await sb.from('activity_goals').select('*').eq('id', 1).maybeSingle();
