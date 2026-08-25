@@ -1514,6 +1514,9 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <button id="export-sets-btn" onclick="exportWorkoutSetsCSV();closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="upload" style="display:inline-flex"></span> Vie salilokit (CSV)
   </button>
+  <button id="export-food-btn" onclick="exportFoodLogCSV();closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
+    <span data-icon="upload" style="display:inline-flex"></span> Vie ruokalogi (CSV)
+  </button>
 </div>
 
 <script>
@@ -3886,6 +3889,35 @@ async function exportWorkoutSetsCSV() {
     const headers = ['workout_date', 'exercise_name', 'set_number', 'weight_kg', 'reps', 'session_type'];
     const rows = (data || []).map(s => [s.workout_date, s.exercise_name, s.set_number, s.weight_kg, s.reps, s.session_type]);
     downloadCSV(`treeniapp-salilokit-${localIso(new Date())}.csv`, headers, rows);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function exportFoodLogCSV() {
+  const btn = document.getElementById('export-food-btn');
+  btn.disabled = true;
+  try {
+    const { data, error } = await sb.from('food_log_entries')
+      .select(`
+        id, logged_at, meal_type, amount_g, kcal, protein_g, food_cache_id, custom_food_id,
+        food_cache(name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g),
+        custom_foods(name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g)
+      `)
+      .order('logged_at', { ascending: false })
+      .limit(100000);
+    if (error) { console.error('exportFoodLogCSV failed:', error.message); return; }
+    const headers = ['logged_at', 'meal_type', 'name', ...TILASTOT_COLUMNS.map(c => c.key)];
+    const rows = (data || []).map(entry => {
+      const name = entry.food_cache ? entry.food_cache.name_fi : (entry.custom_foods ? entry.custom_foods.name : '');
+      return [
+        entry.logged_at,
+        entry.meal_type,
+        name,
+        ...TILASTOT_COLUMNS.map(c => Math.round(c.value(entry) * 100) / 100),
+      ];
+    });
+    downloadCSV(`treeniapp-ruokalogi-${localIso(new Date())}.csv`, headers, rows);
   } finally {
     btn.disabled = false;
   }
