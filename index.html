@@ -755,6 +755,13 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 }
 .stab.active { background: var(--accent-bg); color: var(--accent); }
 
+.tilastot-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tilastot-table { border-collapse: collapse; white-space: nowrap; font-size: 13px; width: 100%; }
+.tilastot-table th, .tilastot-table td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--border); }
+.tilastot-table th:first-child, .tilastot-table td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); }
+.tilastot-table th { color: var(--text2); font-weight: 600; cursor: pointer; user-select: none; }
+.tilastot-table th.sorted { color: var(--accent); }
+
 /* ─── Session components ─────────────────────────────────────── */
 .sess-btn { font-size:11px; font-weight:400; padding:7px 3px; flex:1; min-width:64px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text2); cursor:pointer; white-space:normal; }
 .sess-btn.active { background:var(--accent-bg); border-color:var(--accent); color:var(--accent); font-weight:600; }
@@ -1389,6 +1396,24 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   </div>
 </div>
 
+<!-- ── TILASTOT ────────────────────────────────────────────────── -->
+<div id="page-tilastot" class="page">
+  <div class="page-header">
+    <button class="back-btn" onclick="showPage('koonti', document.getElementById('nav-koonti'))">‹</button>
+    <span class="page-title">Tilastot</span>
+  </div>
+  <div class="form-row"><label>Alkupäivä</label><input type="date" id="tilastot-from"></div>
+  <div class="form-row"><label>Loppupäivä</label><input type="date" id="tilastot-to"></div>
+  <button class="btn" onclick="loadAndRenderTilastot()" style="margin-bottom:14px;">Näytä</button>
+  <div class="stab-bar">
+    <button class="stab active" id="tilastot-gran-entry" onclick="setTilastotGranularity('entry', this)">Per kirjaus</button>
+    <button class="stab" id="tilastot-gran-day" onclick="setTilastotGranularity('day', this)">Per päivä</button>
+    <button class="stab" id="tilastot-gran-week" onclick="setTilastotGranularity('week', this)">Per viikko</button>
+    <button class="stab" id="tilastot-gran-month" onclick="setTilastotGranularity('month', this)">Per kuukausi</button>
+  </div>
+  <div id="tilastot-table-wrap" class="tilastot-table-wrap"></div>
+</div>
+
 <!-- ── RUOKA ───────────────────────────────────────────────────── -->
 <div id="page-ruoka" class="page">
   <div class="week-nav">
@@ -1450,8 +1475,11 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <button onclick="showPage('valmentaja',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="chat" style="display:inline-flex"></span> Valmentaja
   </button>
-  <button onclick="showPage('nakemykset',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
+  <button onclick="showPage('nakemykset',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
     <span data-icon="trending" style="display:inline-flex"></span> Näkemykset
+  </button>
+  <button onclick="showPage('tilastot',null);closeSidebar()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;">
+    <span data-icon="table" style="display:inline-flex"></span> Tilastot
   </button>
   <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:20px;margin-bottom:12px;">Asetukset</div>
   <button onclick="openGoalsModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:14px;cursor:pointer;">
@@ -1511,6 +1539,7 @@ const ICONS = {
   timer:     '<path d="M6 2h12v4l-5 6 5 6v4H6v-4l5-6-5-6z"/>',
   droplet:   '<path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/>',
   trending:  '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+  table:     '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/>',
 };
 
 function svgIcon(name, color, size) {
