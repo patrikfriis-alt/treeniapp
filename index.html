@@ -4471,6 +4471,78 @@ function entrySalt(entry) {
   return src.salt_per_100g * entry.amount_g / 100;
 }
 
+function entryFatSaturated(entry) {
+  const src = entrySource(entry);
+  if (!src || src.fat_saturated_per_100g == null) return 0;
+  return src.fat_saturated_per_100g * entry.amount_g / 100;
+}
+
+function entryFatMono(entry) {
+  const src = entrySource(entry);
+  if (!src || src.fat_mono_per_100g == null) return 0;
+  return src.fat_mono_per_100g * entry.amount_g / 100;
+}
+
+function entryFatPoly(entry) {
+  const src = entrySource(entry);
+  if (!src || src.fat_poly_per_100g == null) return 0;
+  return src.fat_poly_per_100g * entry.amount_g / 100;
+}
+
+function entryFatTrans(entry) {
+  const src = entrySource(entry);
+  if (!src || src.fat_trans_per_100g == null) return 0;
+  return src.fat_trans_per_100g * entry.amount_g / 100;
+}
+
+function entrySodium(entry) {
+  const src = entrySource(entry);
+  if (!src || src.sodium_per_100g == null) return 0;
+  return src.sodium_per_100g * entry.amount_g / 100;
+}
+
+function entryCalcium(entry) {
+  const src = entrySource(entry);
+  if (!src || src.calcium_per_100g == null) return 0;
+  return src.calcium_per_100g * entry.amount_g / 100;
+}
+
+function entryPotassium(entry) {
+  const src = entrySource(entry);
+  if (!src || src.potassium_per_100g == null) return 0;
+  return src.potassium_per_100g * entry.amount_g / 100;
+}
+
+function entryMagnesium(entry) {
+  const src = entrySource(entry);
+  if (!src || src.magnesium_per_100g == null) return 0;
+  return src.magnesium_per_100g * entry.amount_g / 100;
+}
+
+function entryIron(entry) {
+  const src = entrySource(entry);
+  if (!src || src.iron_per_100g == null) return 0;
+  return src.iron_per_100g * entry.amount_g / 100;
+}
+
+function entryZinc(entry) {
+  const src = entrySource(entry);
+  if (!src || src.zinc_per_100g == null) return 0;
+  return src.zinc_per_100g * entry.amount_g / 100;
+}
+
+function entryVitaminC(entry) {
+  const src = entrySource(entry);
+  if (!src || src.vitamin_c_per_100g == null) return 0;
+  return src.vitamin_c_per_100g * entry.amount_g / 100;
+}
+
+function entryVitaminD(entry) {
+  const src = entrySource(entry);
+  if (!src || src.vitamin_d_per_100g == null) return 0;
+  return src.vitamin_d_per_100g * entry.amount_g / 100;
+}
+
 async function loadNutritionGoals() {
   const { data, error } = await sb.from('nutrition_goals').select('*').eq('id', 1).maybeSingle();
   if (error) { console.error('loadNutritionGoals failed:', error.message); return null; }
