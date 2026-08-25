@@ -3706,21 +3706,40 @@ async function renderAerobiaGoalCard() {
   const card = document.getElementById('aerobia-goal-card');
   const content = document.getElementById('aerobia-goal-content');
   if (!progress || !progress.goals) { card.style.display = 'none'; return; }
-  const { goals, totalKm, sessionCount, avgPace } = progress;
-  const rows = [];
+  const { goals, totalKm, sessionCount, avgPace, rows, monDate } = progress;
+  const goalRows = [];
   if (goals.weekly_km != null) {
-    rows.push(`<div class="hist-item"><div class="hist-label">Kilometrit</div><div class="hist-val">${totalKm.toFixed(1)} / ${goals.weekly_km} km</div></div>`);
+    goalRows.push(`<div class="hist-item"><div class="hist-label">Kilometrit</div><div class="hist-val">${totalKm.toFixed(1)} / ${goals.weekly_km} km</div></div>`);
   }
   if (goals.weekly_sessions != null) {
-    rows.push(`<div class="hist-item"><div class="hist-label">Kerrat</div><div class="hist-val">${sessionCount} / ${goals.weekly_sessions}</div></div>`);
+    goalRows.push(`<div class="hist-item"><div class="hist-label">Kerrat</div><div class="hist-val">${sessionCount} / ${goals.weekly_sessions}</div></div>`);
   }
   if (goals.target_pace_min_per_km != null) {
     const targetStr = formatPaceMinPerKm(goals.target_pace_min_per_km);
     const avgStr = avgPace != null ? formatPaceMinPerKm(avgPace) : '—';
-    rows.push(`<div class="hist-item"><div class="hist-label">Keskivauhti</div><div class="hist-val">${avgStr} / ${targetStr} min/km</div></div>`);
+    goalRows.push(`<div class="hist-item"><div class="hist-label">Keskivauhti</div><div class="hist-val">${avgStr} / ${targetStr} min/km</div></div>`);
   }
-  if (!rows.length) { card.style.display = 'none'; return; }
-  content.innerHTML = rows.join('');
+  if (!goalRows.length) { card.style.display = 'none'; return; }
+
+  activityGoalWeekRows = rows;
+  const todayIso = localIso(new Date());
+  const activeDates = new Set(rows.map(r => r.activity_date));
+  const dayCells = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monDate);
+    d.setDate(monDate.getDate() + i);
+    const iso = localIso(d);
+    let cls = '';
+    let onclickAttr = '';
+    if (iso <= todayIso && activeDates.has(iso)) {
+      cls = ' under';
+      onclickAttr = ` onclick="openActivityDayModal('${iso}')"`;
+    }
+    dayCells.push(`<div class="kc-week-day${cls}"${onclickAttr}>${DAYS[i][0]}</div>`);
+  }
+  const daystripHtml = `<div class="kc-week-daystrip">${dayCells.join('')}</div>`;
+
+  content.innerHTML = goalRows.join('') + daystripHtml;
   card.style.display = '';
 }
 
@@ -6511,6 +6530,18 @@ async function saveMealAsFavorite(mealType, name) {
   }));
   const { error: iErr } = await sb.from('meal_template_items').insert(items);
   if (iErr) { console.error('saveMealAsFavorite (items) failed:', iErr.message); return; }
+}
+
+function openActivityDayModal(iso) {
+  const dayRows = activityGoalWeekRows.filter(r => r.activity_date === iso);
+  if (!dayRows.length) return;
+  const dateObj = new Date(iso + 'T00:00:00');
+  const title = dateObj.toLocaleDateString('fi-FI', { weekday: 'long', day: 'numeric', month: 'numeric' });
+  const body = dayRows.map(r => {
+    const distStr = r.distance_km ? ` · ${r.distance_km} km` : '';
+    return `<div class="metric-modal-row"><span>${escapeHtml(r.activity_type)}</span><span class="val">${r.duration_min ?? '—'} min${distStr}</span></div>`;
+  }).join('');
+  openMetricModal(title, body);
 }
 
 function openDayBudgetModal(iso, eaten, fairShare, exKcal) {
