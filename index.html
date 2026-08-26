@@ -7912,7 +7912,19 @@ window.addEventListener('online', flushQueue);
 /* ═══════════════════════════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════════════════════════ */
-(async () => {
+let appInitialized = false;
+
+function showAuthGate() {
+  document.getElementById('auth-gate').classList.add('open');
+  document.querySelector('nav').style.display = 'none';
+}
+
+function hideAuthGate() {
+  document.getElementById('auth-gate').classList.remove('open');
+  document.querySelector('nav').style.display = '';
+}
+
+async function initApp() {
   renderIcons();
   updateOfflineBanner(loadQueue());
   flushQueue();
@@ -7929,7 +7941,19 @@ window.addEventListener('online', flushQueue);
     console.error('Ohjelmadataa ei saatu ladattua — ohitetaan kertaluontoiset migraatiot tällä kertaa.');
   }
   loadKoonti();
-})();
+}
+
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (session) {
+    hideAuthGate();
+    if (!appInitialized) {
+      appInitialized = true;
+      await initApp();
+    }
+  } else {
+    showAuthGate();
+  }
+});
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW rekisteröinti epäonnistui:', e));
