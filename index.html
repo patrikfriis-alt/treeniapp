@@ -142,7 +142,7 @@ nav button:not(.active):hover { color: var(--text); background: var(--surface2);
 /* ─── Forms ──────────────────────────────────────────────────── */
 .form-row { display: flex; gap: 8px; align-items: center; margin-bottom: 9px; }
 .form-row label { font-size: 13px; color: var(--text2); min-width: 90px; }
-input[type=number], input[type=date], input[type=text], input[type=password], select {
+input[type=number], input[type=date], input[type=text], input[type=password], input[type=email], select {
   flex: 1;
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -777,6 +777,24 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .day-state-dot.done   { background:var(--green); }
 .prefill-btn { font-size:11px; padding:4px 10px; background:var(--surface3); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--accent); cursor:pointer; white-space:nowrap; margin-top:6px; display:inline-block; }
 
+/* ─── Auth-gate (kirjautumisnäkymä) ─────────────────────────── */
+#auth-gate {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--bg);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+#auth-gate.open { display: flex; }
+.auth-gate-box { width: 100%; max-width: 340px; }
+.auth-gate-title { font-size: 22px; font-weight: 700; color: var(--text); text-align: center; margin-bottom: 6px; }
+.auth-gate-subtitle { font-size: 14px; color: var(--text2); text-align: center; margin-bottom: 24px; }
+
 /* ─── Sidebar ────────────────────────────────────────────────── */
 #sidebar {
   position: fixed;
@@ -1012,6 +1030,16 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 </style>
 </head>
 <body>
+
+<div id="auth-gate">
+  <div class="auth-gate-box">
+    <div class="auth-gate-title">Valkku</div>
+    <div class="auth-gate-subtitle">Kirjaudu sisään jatkaaksesi</div>
+    <input type="email" id="auth-gate-email" placeholder="sähköposti@esimerkki.fi" autocomplete="email" style="width:100%;box-sizing:border-box;">
+    <button class="btn-primary" onclick="sendAuthMagicLink()">Lähetä kirjautumislinkki</button>
+    <div id="auth-gate-status" class="status"></div>
+  </div>
+</div>
 
 <div id="offline-banner"><span id="offline-banner-text"></span><button id="offline-banner-discard-btn" onclick="discardStuckQueueEntries()">Poista jumissa olevat</button></div>
 
