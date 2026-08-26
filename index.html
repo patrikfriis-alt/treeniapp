@@ -1633,7 +1633,8 @@ async function sendAuthMagicLink() {
 }
 
 async function signOutUser() {
-  await sb.auth.signOut();
+  const { error } = await sb.auth.signOut();
+  if (error) console.error('signOutUser failed:', error.message);
 }
 
 /* ═══════════════════════════════════════════════════════════════
