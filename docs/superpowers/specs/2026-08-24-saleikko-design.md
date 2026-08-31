@@ -47,7 +47,7 @@ Hetzner VPS — "Säleikön runko"
         ▼
 Supabase — "Säleikön muisti"
   - Postgres: raw_documents, document_summaries, conversation_log,
-    positions, reminders, topics_of_interest
+    positions, reminders, gatekeeper_profile, gatekeeper_feedback
   - Storage: alkuperäiset PDF/asiakirjat kunnan järjestelmästä
 ```
 
@@ -68,30 +68,36 @@ Kaikki taulut Supabase Postgresissa, `saleikko`-skeemassa (erillään mahdollisi
 
 | Taulu | Tarkoitus |
 |---|---|
-| `raw_documents` | Kunnan järjestelmästä haetut alkuperäiset pykälät/asiakirjat sellaisenaan: lähde-URL, kokous, päivämäärä, alkuperäistiedosto (linkki Storageen). Ei koskaan muokata jälkikäteen — tämä on totuuslähde. |
-| `document_summaries` | Claude-generoidut tiivistelmät per pykälä, viittaus `raw_documents`-riviin. Sisältää myös Haiku-luokittelun tuloksen (osui/ei osunut/epävarma, mihin `topics_of_interest`-riviin). |
-| `topics_of_interest` | Käyttäjän ylläpitämä lista seurattavista aiheista/avainsanoista/lautakunnista. Muokattavissa Telegram-komennoilla `/seuraa` ja `/lopeta_seuranta`. |
+| `raw_documents` | Yksi rivi per RSS:stä nähty pykälä, riippumatta portinvartijan päätöksestä. Sisältää aina otsikon, toimielimen, kokouspäivän, lähde-URL:n ja portinvartijan päätöksen (`match`/`no_match`/`uncertain`) + lyhyen perustelun. `body_text` ja `pdf_url` täytetään vasta jos päätös oli match/uncertain — hylätyille pykälille ei koskaan haeta täyttä sisältöä. Rivi on aina totuuslähde eikä sitä muokata jälkikäteen. |
+| `document_summaries` | Claude-generoitu tiivistelmä per **match/uncertain**-pykälä, 1:1-viittaus `raw_documents`-riviin. Luodaan vasta täyden sisällön haun jälkeen. |
+| `gatekeeper_profile` | Yksi rivi, vapaamuotoinen tekstidokumentti joka kuvaa mikä käyttäjää kiinnostaa ja miksi (ei pelkkä avainsanalista). Tätä käytetään Haiku-portinvartijan system-promptina jokaisella luokittelukerralla. Päivittyy `/opeta`-komennolla käyttäjän hyväksynnän kautta. |
+| `gatekeeper_feedback` | Loki `/opeta`-komennoilla annetusta vapaamuotoisesta palautteesta ja siitä generoidusta profiiliehdotuksesta, sekä onko ehdotus hyväksytty (`applied`). Uusin hyväksymätön rivi on aina "odottava ehdotus". |
 | `positions` | Käyttäjän aiemmat kannanotot/puheenvuorot — tyyli- ja arvopohjareferenssi uusia kannanottoja varten. |
-| `reminders` | Kokoukset ja määräajat, erityisesti osuneisiin pykäliin liittyvät. |
+| `reminders` | Kokoukset ja määräajat, erityisesti match/uncertain-pykäliin liittyvät. |
 | `conversation_log` | Koko Telegram-keskusteluhistoria, tallennetaan ennen kuin Claude näkee viestin (lossless-periaate). |
 
 ## Paikallispolitiikka-taidon toiminta
 
-1. **Ingest-ajo** (ajastettu, esim. muutaman tunnin välein): hakee kunnan järjestelmästä uudet/muuttuneet esityslistat ja pöytäkirjat. Konkreettinen hakutapa (mikä kunnan asiakirjajärjestelmä, esim. Dynasty10/CaseM-tyyppinen ratkaisu tai muu) tarkennetaan toteutusvaiheessa käyttäjän kunnan mukaan — tässä specissä rajapintavaatimus on: "palauttaa lista uusista pykälistä metatietoineen (otsikko, kokous, päivämäärä, linkki alkuperäiseen)".
-2. Jokainen uusi pykälä tallennetaan `raw_documents`-tauluun riippumatta kiinnostavuudesta.
-3. **Kiinnostusluokittelu** (Haiku): jokainen uusi pykälä luokitellaan `topics_of_interest`-listaa vasten. Vain osuvat ja epävarmat (varmuuden vuoksi mieluummin liian herkkä kuin liian tiukka kynnys) etenevät seuraavaan vaiheeseen.
-4. **Tiivistys** (Sonnet): osuneille pykälille tuotetaan tiivistelmä, tallennetaan `document_summaries`-tauluun.
+Kaksivaiheinen suodatus, jotta kalliimpi käsittely (täyden sisällön haku, Sonnet-tiivistys) kohdistuu vain oikeasti relevantteihin pykäliin — ei koko kunnan kaikkiin kokousasioihin:
+
+1. **Ingest-ajo** (ajastettu, esim. muutaman tunnin välein): hakee kunnan RSS-syötteestä uudet pykälät metatietoineen (otsikko, toimielin, kokouspäivä, linkki). Konkreettinen hakutapa on toteutussuunnitelmassa tarkistettu oikeaa, elävää dataa vasten (Kokkolan Dynasty-järjestelmä).
+2. **Idempotenssitarkistus:** jo nähdyt `source_id`:t (`raw_documents`-taulussa, riippumatta aiemmasta päätöksestä) ohitetaan — ei koskaan luokitella samaa pykälää uudelleen.
+3. **Vaihe 1 — Portinvartija (Haiku, halpa, vain otsikko+lyhyt kuvaus):** uusi pykälä luokitellaan `gatekeeper_profile`-dokumenttia vasten pelkän RSS-otsikon perusteella, **ei täyttä sisältöä hakematta**. Tulos (`match`/`no_match`/`uncertain` + lyhyt perustelu) tallennetaan suoraan `raw_documents`-riviin — tämä rivi luodaan aina, myös hylätyille, jotta idempotenssi säilyy ilman että hylättyjen pykälien täyttä sisältöä koskaan haetaan tai luokitellaan uudelleen. Epävarmuustilanteessa valitaan mieluummin "uncertain" kuin "no_match" — relevantin asian huomaamatta jättäminen on pahempi virhe kuin turha jatkokäsittely.
+4. **Vaihe 2 — vain match/uncertain-pykälille:** haetaan täysi sisältö kunnan järjestelmästä, päivitetään `raw_documents`-rivi (`body_text`, `pdf_url`), ja tuotetaan Sonnet-tiivistelmä `document_summaries`-tauluun.
 5. **Ulostulot:**
-   - Päivittäinen/viikoittainen Telegram-briiffi: vain osuneet pykälät kyseiseltä jaksolta, linkki alkuperäiseen dokumenttiin.
-   - Välitön ilmoitus, jos osuneella pykälällä on lähestyvä määräaika (esim. < 48h).
+   - Päivittäinen/viikoittainen Telegram-briiffi: vain match/uncertain-pykälät kyseiseltä jaksolta, linkki alkuperäiseen dokumenttiin.
+   - Välitön ilmoitus, jos match/uncertain-pykälällä on lähestyvä kokous (esim. < 48h).
    - Komento `/kannanotto <pykälä>`: hakee pykälän + `positions`-taulun aiemmat kannanotot tyylireferenssiksi, auttaa muotoilla luonnoksen käyttäjän viimeisteltäväksi.
-   - Komento `/hae <hakusana>`: vapaa haku koko arkistosta (`raw_documents` + `document_summaries`), kattaa myös ei-osuneet pykälät.
+   - Komento `/hae <hakusana>`: vapaa haku koko `raw_documents`-arkistosta (myös hylätyt pykälät löytyvät otsikkotasolla, vaikka täyttä sisältöä ei ole haettu).
+   - Komento `/opeta <vapaa teksti>`: käyttäjä kuvaa vapaasti mikä on/ei ole kiinnostavaa. Sonnet muotoilee tästä ehdotuksen `gatekeeper_profile`-päivitykseksi ja näyttää sen käyttäjälle diffinä, tallentaen sen `gatekeeper_feedback`-riviksi (`applied=false`).
+   - Komento `/hyväksy`: soveltaa uusimman hyväksymättömän `gatekeeper_feedback`-ehdotuksen `gatekeeper_profile`-dokumenttiin.
+   - Komento `/hylkää`: hylkää uusimman hyväksymättömän ehdotuksen soveltamatta sitä.
 
 ## Telegram-kanava ja komennot
 
 - Yksityinen botti, allowlist rajaa vastaukset yhteen Telegram-käyttäjä-ID:hen. Muut käyttäjät saavat hiljaisen hylkäyksen (ei paljasteta botin olemassaoloa/toimintaa).
 - Vapaamuotoinen keskustelu tuetaan (kysymykset arkistosta, pyynnöt tiivistää jotain uudelleen jne.) — ei vain kiinteät komennot.
-- Kiinteät komennot: `/seuraa <aihe>`, `/lopeta_seuranta <aihe>`, `/hae <hakusana>`, `/kannanotto <pykälä>`.
+- Kiinteät komennot: `/hae <hakusana>`, `/kannanotto <pykälä>`, `/opeta <vapaa teksti>`, `/hyväksy`, `/hylkää`.
 
 ## Proaktiivisuusmoottori
 

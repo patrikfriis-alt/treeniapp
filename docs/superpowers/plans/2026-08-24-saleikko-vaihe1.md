@@ -311,28 +311,40 @@ create table saleikko.raw_documents (
   board text not null,
   meeting_date date not null,
   title text not null,
-  body_text text not null,
   source_url text not null,
+  gatekeeper_decision text not null check (gatekeeper_decision in ('match', 'no_match', 'uncertain')),
+  gatekeeper_reasoning text,
+  body_text text,
   pdf_url text,
-  fetched_at timestamptz not null default now()
-);
-
-create table saleikko.topics_of_interest (
-  id uuid primary key default gen_random_uuid(),
-  keyword text not null unique,
-  created_at timestamptz not null default now()
+  seen_at timestamptz not null default now(),
+  fetched_at timestamptz,
+  check (gatekeeper_decision = 'no_match' or body_text is not null or fetched_at is null)
 );
 
 create table saleikko.document_summaries (
   id uuid primary key default gen_random_uuid(),
-  raw_document_id uuid not null references saleikko.raw_documents(id),
-  matched boolean not null,
-  matched_topic text,
-  confidence text not null check (confidence in ('match', 'no_match', 'uncertain')),
-  summary text,
-  created_at timestamptz not null default now(),
-  check (matched = (confidence <> 'no_match')),
-  check (matched or matched_topic is null)
+  raw_document_id uuid not null unique references saleikko.raw_documents(id),
+  summary text not null,
+  created_at timestamptz not null default now()
+);
+
+create table saleikko.gatekeeper_profile (
+  id int primary key default 1,
+  profile_text text not null,
+  updated_at timestamptz not null default now(),
+  check (id = 1)
+);
+
+insert into saleikko.gatekeeper_profile (id, profile_text)
+values (1, 'Ei vielä ohjeistusta. Merkitse kaikki "uncertain", kunnes käyttäjä antaa palautetta /opeta-komennolla.')
+on conflict (id) do nothing;
+
+create table saleikko.gatekeeper_feedback (
+  id uuid primary key default gen_random_uuid(),
+  raw_text text not null,
+  proposed_profile_text text,
+  applied boolean not null default false,
+  created_at timestamptz not null default now()
 );
 
 create table saleikko.positions (
@@ -368,9 +380,11 @@ values ('last_briefing_at', '1970-01-01T00:00:00Z')
 on conflict (key) do nothing;
 ```
 
+Note on `raw_documents`: a row is created for every RSS item seen, regardless of `gatekeeper_decision` — this is what makes the idempotency check in the ingest pipeline work without ever re-classifying a `no_match` item. `body_text`/`pdf_url`/`fetched_at` stay null for `no_match` rows, since Vaihe 2 (full content fetch) never runs for them — this is the mechanism that avoids "parsing everything."
+
 - [ ] **Step 2: Apply the schema**
 
-Open the Supabase project dashboard → SQL Editor → paste the contents of `supabase/schema.sql` → Run. Verify all 7 tables appear under the `saleikko` schema in the Table Editor.
+Open the Supabase project dashboard → SQL Editor → paste the contents of `supabase/schema.sql` → Run. Verify all 9 tables appear under the `saleikko` schema in the Table Editor.
 
 - [ ] **Step 3: Commit**
 
@@ -390,6 +404,8 @@ git commit -m "feat: add Supabase schema for saleikko"
 - [ ] **Step 1: Write `src/types.ts`**
 
 ```typescript
+export type GatekeeperDecision = "match" | "no_match" | "uncertain";
+
 export interface RawDocument {
   id: string;
   source_id: string;
@@ -397,27 +413,33 @@ export interface RawDocument {
   board: string;
   meeting_date: string;
   title: string;
-  body_text: string;
   source_url: string;
+  gatekeeper_decision: GatekeeperDecision;
+  gatekeeper_reasoning: string | null;
+  body_text: string | null;
   pdf_url: string | null;
-  fetched_at: string;
+  seen_at: string;
+  fetched_at: string | null;
 }
-
-export interface TopicOfInterest {
-  id: string;
-  keyword: string;
-  created_at: string;
-}
-
-export type ClassificationConfidence = "match" | "no_match" | "uncertain";
 
 export interface DocumentSummary {
   id: string;
   raw_document_id: string;
-  matched: boolean;
-  matched_topic: string | null;
-  confidence: ClassificationConfidence;
-  summary: string | null;
+  summary: string;
+  created_at: string;
+}
+
+export interface GatekeeperProfile {
+  id: number;
+  profile_text: string;
+  updated_at: string;
+}
+
+export interface GatekeeperFeedback {
+  id: string;
+  raw_text: string;
+  proposed_profile_text: string | null;
+  applied: boolean;
   created_at: string;
 }
 
@@ -798,132 +820,392 @@ git commit -m "feat: add Anthropic client factory"
 
 ---
 
-## Task 7: Topics of interest
+## Task 7: Gatekeeper profile management
+
+Replaces a flat keyword list with a single evolving free-text profile document, refined over time via user feedback (`/opeta`) — the profile is what Task 8's classifier reads on every decision. Updates always go through a propose → user-approves flow, never applied automatically.
 
 **Files:**
-- Create: `src/skills/politics/topics.ts`
-- Test: `src/skills/politics/topics.test.ts`
+- Create: `src/skills/politics/gatekeeper.ts`
+- Test: `src/skills/politics/gatekeeper.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
 ```typescript
-// src/skills/politics/topics.test.ts
+// src/skills/politics/gatekeeper.test.ts
 import { describe, it, expect, vi } from "vitest";
-import { addTopic, removeTopic, listTopics } from "./topics.js";
+import {
+  getProfile,
+  proposeProfileUpdate,
+  getPendingFeedback,
+  approvePendingFeedback,
+  rejectPendingFeedback,
+} from "./gatekeeper.js";
 import type { SupabaseClient } from "../../supabase/client.js";
+import type Anthropic from "@anthropic-ai/sdk";
 
 function makeFakeSupabase(overrides: Partial<Record<string, any>> = {}) {
   return {
-    from: vi.fn(() => ({
-      insert: overrides.insert ?? vi.fn(() => ({ error: null })),
-      delete: overrides.delete ?? vi.fn(() => ({
-        eq: vi.fn(() => ({ error: null })),
-      })),
-      select: overrides.select ?? vi.fn(() => ({
-        order: vi.fn(() =>
-          Promise.resolve({
-            data: [{ id: "1", keyword: "kaavoitus", created_at: "2026-01-01" }],
-            error: null,
-          }),
-        ),
-      })),
-    })),
+    from: vi.fn((table: string) => {
+      if (table === "gatekeeper_profile") {
+        return (
+          overrides.gatekeeper_profile ?? {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(() =>
+                  Promise.resolve({
+                    data: { profile_text: "Kaavoitus kiinnostaa aina." },
+                    error: null,
+                  }),
+                ),
+              })),
+            })),
+            update: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ error: null })) })),
+          }
+        );
+      }
+      if (table === "gatekeeper_feedback") {
+        return overrides.gatekeeper_feedback ?? {};
+      }
+      throw new Error(`Unexpected table in test: ${table}`);
+    }),
   } as unknown as SupabaseClient;
 }
 
-describe("topics of interest", () => {
-  it("addTopic inserts a keyword", async () => {
-    const insert = vi.fn(() => ({ error: null }));
-    const supabase = makeFakeSupabase({ insert });
-
-    await addTopic(supabase, "kaavoitus");
-
-    expect(insert).toHaveBeenCalledWith({ keyword: "kaavoitus" });
-  });
-
-  it("removeTopic deletes by keyword", async () => {
-    const eq = vi.fn(() => ({ error: null }));
-    const del = vi.fn(() => ({ eq }));
-    const supabase = makeFakeSupabase({ delete: del });
-
-    await removeTopic(supabase, "kaavoitus");
-
-    expect(eq).toHaveBeenCalledWith("keyword", "kaavoitus");
-  });
-
-  it("listTopics returns keywords", async () => {
+describe("getProfile", () => {
+  it("returns the current profile text", async () => {
     const supabase = makeFakeSupabase();
+    const text = await getProfile(supabase);
+    expect(text).toBe("Kaavoitus kiinnostaa aina.");
+  });
+});
 
-    const topics = await listTopics(supabase);
+describe("proposeProfileUpdate", () => {
+  it("asks Sonnet to merge feedback into the profile and stores the proposal unapplied", async () => {
+    const insertedRow = {
+      id: "fb-1",
+      raw_text: "kaavoitus kiinnostaa, mutta ei rakennusluvat",
+      proposed_profile_text: "Kaavoitus kiinnostaa aina. Rakennusluvat eivät kiinnosta.",
+      applied: false,
+      created_at: "2026-01-01",
+    };
+    const insert = vi.fn(() => ({
+      select: vi.fn(() => ({
+        single: vi.fn(() => Promise.resolve({ data: insertedRow, error: null })),
+      })),
+    }));
+    const supabase = makeFakeSupabase({ gatekeeper_feedback: { insert } });
 
-    expect(topics).toEqual([
-      { id: "1", keyword: "kaavoitus", created_at: "2026-01-01" },
-    ]);
+    const create = vi.fn(() =>
+      Promise.resolve({
+        content: [
+          { type: "text", text: "Kaavoitus kiinnostaa aina. Rakennusluvat eivät kiinnosta." },
+        ],
+      }),
+    );
+    const anthropic = { messages: { create } } as unknown as Anthropic;
+
+    const result = await proposeProfileUpdate(
+      supabase,
+      anthropic,
+      "kaavoitus kiinnostaa, mutta ei rakennusluvat",
+    );
+
+    expect(result).toEqual(insertedRow);
+    expect(insert).toHaveBeenCalledWith({
+      raw_text: "kaavoitus kiinnostaa, mutta ei rakennusluvat",
+      proposed_profile_text: "Kaavoitus kiinnostaa aina. Rakennusluvat eivät kiinnosta.",
+      applied: false,
+    });
+    const callArgs = create.mock.calls[0][0];
+    expect(JSON.stringify(callArgs)).toContain("Kaavoitus kiinnostaa aina.");
+    expect(JSON.stringify(callArgs)).toContain("kaavoitus kiinnostaa, mutta ei rakennusluvat");
+  });
+});
+
+describe("getPendingFeedback", () => {
+  it("returns the latest unapplied feedback row", async () => {
+    const limit = vi.fn(() =>
+      Promise.resolve({
+        data: [{ id: "fb-2", raw_text: "x", proposed_profile_text: "y", applied: false, created_at: "2026-01-02" }],
+        error: null,
+      }),
+    );
+    const order = vi.fn(() => ({ limit }));
+    const eq = vi.fn(() => ({ order }));
+    const select = vi.fn(() => ({ eq }));
+    const supabase = makeFakeSupabase({ gatekeeper_feedback: { select } });
+
+    const pending = await getPendingFeedback(supabase);
+
+    expect(eq).toHaveBeenCalledWith("applied", false);
+    expect(pending?.id).toBe("fb-2");
+  });
+
+  it("returns null when there is no pending feedback", async () => {
+    const limit = vi.fn(() => Promise.resolve({ data: [], error: null }));
+    const order = vi.fn(() => ({ limit }));
+    const eq = vi.fn(() => ({ order }));
+    const select = vi.fn(() => ({ eq }));
+    const supabase = makeFakeSupabase({ gatekeeper_feedback: { select } });
+
+    const pending = await getPendingFeedback(supabase);
+
+    expect(pending).toBeNull();
+  });
+});
+
+describe("approvePendingFeedback", () => {
+  it("applies the pending proposal to the profile and marks it applied", async () => {
+    const limit = vi.fn(() =>
+      Promise.resolve({
+        data: [{ id: "fb-3", raw_text: "x", proposed_profile_text: "Uusi profiiliteksti.", applied: false, created_at: "2026-01-03" }],
+        error: null,
+      }),
+    );
+    const order = vi.fn(() => ({ limit }));
+    const eqSelect = vi.fn(() => ({ order }));
+    const select = vi.fn(() => ({ eq: eqSelect }));
+
+    const eqUpdateFeedback = vi.fn(() => Promise.resolve({ error: null }));
+    const updateFeedback = vi.fn(() => ({ eq: eqUpdateFeedback }));
+
+    const eqUpdateProfile = vi.fn(() => Promise.resolve({ error: null }));
+    const updateProfile = vi.fn(() => ({ eq: eqUpdateProfile }));
+
+    const supabase = makeFakeSupabase({
+      gatekeeper_feedback: { select, update: updateFeedback },
+      gatekeeper_profile: {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            single: vi.fn(() =>
+              Promise.resolve({ data: { profile_text: "Vanha." }, error: null }),
+            ),
+          })),
+        })),
+        update: updateProfile,
+      },
+    });
+
+    await approvePendingFeedback(supabase);
+
+    expect(updateProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ profile_text: "Uusi profiiliteksti." }),
+    );
+    expect(eqUpdateProfile).toHaveBeenCalledWith("id", 1);
+    expect(updateFeedback).toHaveBeenCalledWith({ applied: true });
+    expect(eqUpdateFeedback).toHaveBeenCalledWith("id", "fb-3");
+  });
+
+  it("throws when there is no pending feedback to approve", async () => {
+    const limit = vi.fn(() => Promise.resolve({ data: [], error: null }));
+    const order = vi.fn(() => ({ limit }));
+    const eq = vi.fn(() => ({ order }));
+    const select = vi.fn(() => ({ eq }));
+    const supabase = makeFakeSupabase({ gatekeeper_feedback: { select } });
+
+    await expect(approvePendingFeedback(supabase)).rejects.toThrow(/no pending proposal/i);
+  });
+});
+
+describe("rejectPendingFeedback", () => {
+  it("marks the pending feedback applied without changing the profile", async () => {
+    const limit = vi.fn(() =>
+      Promise.resolve({
+        data: [{ id: "fb-4", raw_text: "x", proposed_profile_text: "y", applied: false, created_at: "2026-01-04" }],
+        error: null,
+      }),
+    );
+    const order = vi.fn(() => ({ limit }));
+    const eqSelect = vi.fn(() => ({ order }));
+    const select = vi.fn(() => ({ eq: eqSelect }));
+
+    const eqUpdate = vi.fn(() => Promise.resolve({ error: null }));
+    const update = vi.fn(() => ({ eq: eqUpdate }));
+
+    const profileUpdate = vi.fn();
+    const supabase = makeFakeSupabase({
+      gatekeeper_feedback: { select, update },
+      gatekeeper_profile: {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({ single: vi.fn(() => Promise.resolve({ data: { profile_text: "x" }, error: null })) })),
+        })),
+        update: profileUpdate,
+      },
+    });
+
+    await rejectPendingFeedback(supabase);
+
+    expect(update).toHaveBeenCalledWith({ applied: true });
+    expect(eqUpdate).toHaveBeenCalledWith("id", "fb-4");
+    expect(profileUpdate).not.toHaveBeenCalled();
+  });
+
+  it("throws when there is no pending feedback to reject", async () => {
+    const limit = vi.fn(() => Promise.resolve({ data: [], error: null }));
+    const order = vi.fn(() => ({ limit }));
+    const eq = vi.fn(() => ({ order }));
+    const select = vi.fn(() => ({ eq }));
+    const supabase = makeFakeSupabase({ gatekeeper_feedback: { select } });
+
+    await expect(rejectPendingFeedback(supabase)).rejects.toThrow(/no pending proposal/i);
   });
 });
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `npx vitest run src/skills/politics/topics.test.ts`
-Expected: FAIL — `Cannot find module './topics.js'`
+Run: `npx vitest run src/skills/politics/gatekeeper.test.ts`
+Expected: FAIL — `Cannot find module './gatekeeper.js'`
 
-- [ ] **Step 3: Write `src/skills/politics/topics.ts`**
+- [ ] **Step 3: Write `src/skills/politics/gatekeeper.ts`**
 
 ```typescript
+import Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "../../supabase/client.js";
-import type { TopicOfInterest } from "../../types.js";
+import type { GatekeeperFeedback } from "../../types.js";
+import { SONNET_MODEL } from "../../claude/client.js";
 
-export async function addTopic(
-  supabase: SupabaseClient,
-  keyword: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from("topics_of_interest")
-    .insert({ keyword });
-  if (error) throw new Error(`addTopic failed: ${error.message}`);
-}
-
-export async function removeTopic(
-  supabase: SupabaseClient,
-  keyword: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from("topics_of_interest")
-    .delete()
-    .eq("keyword", keyword);
-  if (error) throw new Error(`removeTopic failed: ${error.message}`);
-}
-
-export async function listTopics(
-  supabase: SupabaseClient,
-): Promise<TopicOfInterest[]> {
+export async function getProfile(supabase: SupabaseClient): Promise<string> {
   const { data, error } = await supabase
-    .from("topics_of_interest")
+    .from("gatekeeper_profile")
+    .select("profile_text")
+    .eq("id", 1)
+    .single();
+  if (error) throw new Error(`getProfile failed: ${error.message}`);
+  return data.profile_text;
+}
+
+export async function proposeProfileUpdate(
+  supabase: SupabaseClient,
+  anthropic: Anthropic,
+  feedbackText: string,
+): Promise<GatekeeperFeedback> {
+  const currentProfile = await getProfile(supabase);
+
+  const response = await anthropic.messages.create({
+    model: SONNET_MODEL,
+    max_tokens: 1024,
+    system:
+      "Olet Säleikkö. Käyttäjä antaa sinulle vapaamuotoista palautetta siitä, " +
+      "mitkä kunnan kokousasiat kiinnostavat häntä ja mitkä eivät. Päivitä " +
+      "annettu portinvartijaprofiili tämän palautteen perusteella. Säilytä " +
+      "aiemmat, yhä relevantit ohjeet, lisää tai tarkenna uuden palautteen " +
+      "perusteella. Vastaa VAIN päivitetyllä profiilitekstillä, ei muuta.",
+    messages: [
+      {
+        role: "user",
+        content:
+          `Nykyinen profiili:\n${currentProfile}\n\nUusi palaute:\n${feedbackText}`,
+      },
+    ],
+  });
+
+  const textBlock = response.content.find(
+    (block): block is Anthropic.TextBlock => block.type === "text",
+  );
+  if (!textBlock) {
+    throw new Error("proposeProfileUpdate: no text block in response");
+  }
+
+  const { data, error } = await supabase
+    .from("gatekeeper_feedback")
+    .insert({
+      raw_text: feedbackText,
+      proposed_profile_text: textBlock.text,
+      applied: false,
+    })
+    .select()
+    .single();
+  if (error || !data) {
+    throw new Error(
+      `proposeProfileUpdate: failed to store feedback: ${error?.message}`,
+    );
+  }
+  return data as GatekeeperFeedback;
+}
+
+export async function getPendingFeedback(
+  supabase: SupabaseClient,
+): Promise<GatekeeperFeedback | null> {
+  const { data, error } = await supabase
+    .from("gatekeeper_feedback")
     .select("*")
-    .order("created_at", { ascending: true });
-  if (error) throw new Error(`listTopics failed: ${error.message}`);
-  return data ?? [];
+    .eq("applied", false)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(`getPendingFeedback failed: ${error.message}`);
+  return data && data.length > 0 ? data[0] : null;
+}
+
+export async function approvePendingFeedback(
+  supabase: SupabaseClient,
+): Promise<void> {
+  const pending = await getPendingFeedback(supabase);
+  if (!pending || !pending.proposed_profile_text) {
+    throw new Error("approvePendingFeedback: no pending proposal to approve");
+  }
+
+  const { error: updateError } = await supabase
+    .from("gatekeeper_profile")
+    .update({
+      profile_text: pending.proposed_profile_text,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", 1);
+  if (updateError) {
+    throw new Error(
+      `approvePendingFeedback: failed to update profile: ${updateError.message}`,
+    );
+  }
+
+  const { error: markError } = await supabase
+    .from("gatekeeper_feedback")
+    .update({ applied: true })
+    .eq("id", pending.id);
+  if (markError) {
+    throw new Error(
+      `approvePendingFeedback: failed to mark feedback applied: ${markError.message}`,
+    );
+  }
+}
+
+export async function rejectPendingFeedback(
+  supabase: SupabaseClient,
+): Promise<void> {
+  const pending = await getPendingFeedback(supabase);
+  if (!pending) {
+    throw new Error("rejectPendingFeedback: no pending proposal to reject");
+  }
+
+  const { error } = await supabase
+    .from("gatekeeper_feedback")
+    .update({ applied: true })
+    .eq("id", pending.id);
+  if (error) {
+    throw new Error(
+      `rejectPendingFeedback: failed to mark feedback rejected: ${error.message}`,
+    );
+  }
 }
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `npx vitest run src/skills/politics/topics.test.ts`
-Expected: PASS (3 tests)
+Run: `npx vitest run src/skills/politics/gatekeeper.test.ts`
+Expected: PASS (9 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/skills/politics/topics.ts src/skills/politics/topics.test.ts
-git commit -m "feat: add topics-of-interest CRUD"
+git add src/skills/politics/gatekeeper.ts src/skills/politics/gatekeeper.test.ts
+git commit -m "feat: add gatekeeper profile management (propose/approve/reject)"
 ```
 
 ---
 
-## Task 8: Classification (Haiku)
+## Task 8: Gatekeeper classification (Haiku, title-only)
 
-Uses `client.messages.parse` with a Zod output schema (structured outputs), per the Claude API TypeScript reference. Errs toward `"uncertain"` rather than `"no_match"` when unsure — a missed relevant item is worse than one extra summary (per spec's Testing section).
+Uses `client.messages.parse` with a Zod output schema (structured outputs), per the Claude API TypeScript reference. Classifies using **only the RSS item's title/board/date** — deliberately does NOT fetch or read the full document body. This is what keeps the cost and the archive proportional to what the user actually cares about: this cheap classification runs on every new item from the RSS feed (city-wide, all boards), and only items it flags `match`/`uncertain` ever trigger a full-content fetch (Task 5) or Sonnet summarization (Task 9). Errs toward `"uncertain"` rather than `"no_match"` when unsure — a missed relevant item is worse than one extra fetch (per spec's Testing section).
 
 **Files:**
 - Create: `src/skills/politics/classify.ts`
@@ -934,8 +1216,9 @@ Uses `client.messages.parse` with a Zod output schema (structured outputs), per 
 ```typescript
 // src/skills/politics/classify.test.ts
 import { describe, it, expect, vi } from "vitest";
-import { classifyDocument } from "./classify.js";
+import { classifyByTitle } from "./classify.js";
 import type Anthropic from "@anthropic-ai/sdk";
+import type { MeetingItemLink } from "./kokkolaRss.js";
 
 function makeFakeAnthropic(parsedOutput: unknown) {
   return {
@@ -945,48 +1228,39 @@ function makeFakeAnthropic(parsedOutput: unknown) {
   } as unknown as Anthropic;
 }
 
-const DOC = {
-  id: "doc-1",
-  source_id: "20261273-7",
-  meeting_id: "20261273",
+const ITEM: MeetingItemLink = {
+  sourceId: "20261273-7",
+  meetingId: "20261273",
   board: "Konserni- ja kaupunkikehitysjaosto",
-  meeting_date: "2026-08-27",
+  meetingDate: "2026-08-27",
   title: "Asuntotuotannon edistäminen kunnassa",
-  body_text: "Kunta voi vaikuttaa asuntomarkkinoihin...",
-  source_url: "https://kokkola10.oncloudos.com/...",
-  pdf_url: null,
-  fetched_at: "2026-08-24T10:00:00Z",
+  url: "https://kokkola10.oncloudos.com/cgi/DREQUEST.PHP?page=meetingitem&id=20261273-7",
 };
 
-const TOPICS = [
-  { id: "t1", keyword: "asuntopolitiikka", created_at: "2026-01-01" },
-];
+const PROFILE_TEXT = "Asuntopolitiikka ja kaavoitus kiinnostavat aina.";
 
-describe("classifyDocument", () => {
-  it("returns a match result from the parsed output", async () => {
+describe("classifyByTitle", () => {
+  it("returns a match decision from the parsed output", async () => {
     const anthropic = makeFakeAnthropic({
-      confidence: "match",
-      matchedTopic: "asuntopolitiikka",
-      reasoning: "Item is directly about housing production policy.",
+      decision: "match",
+      reasoning: "Title is directly about housing production policy.",
     });
 
-    const result = await classifyDocument(anthropic, DOC, TOPICS);
+    const result = await classifyByTitle(anthropic, ITEM, PROFILE_TEXT);
 
-    expect(result.confidence).toBe("match");
-    expect(result.matchedTopic).toBe("asuntopolitiikka");
+    expect(result.decision).toBe("match");
+    expect(result.reasoning).toContain("housing");
   });
 
-  it("returns no_match with null matchedTopic", async () => {
+  it("returns no_match when the title is unrelated to the profile", async () => {
     const anthropic = makeFakeAnthropic({
-      confidence: "no_match",
-      matchedTopic: null,
-      reasoning: "Unrelated procedural item.",
+      decision: "no_match",
+      reasoning: "Procedural item unrelated to the profile.",
     });
 
-    const result = await classifyDocument(anthropic, DOC, TOPICS);
+    const result = await classifyByTitle(anthropic, ITEM, PROFILE_TEXT);
 
-    expect(result.confidence).toBe("no_match");
-    expect(result.matchedTopic).toBeNull();
+    expect(result.decision).toBe("no_match");
   });
 });
 ```
@@ -1003,51 +1277,52 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { HAIKU_MODEL } from "../../claude/client.js";
-import type { RawDocument, TopicOfInterest, ClassificationConfidence } from "../../types.js";
+import type { GatekeeperDecision } from "../../types.js";
+import type { MeetingItemLink } from "./kokkolaRss.js";
 
-const ClassificationSchema = z.object({
-  confidence: z.enum(["match", "no_match", "uncertain"]),
-  matchedTopic: z.string().nullable(),
+const GatekeeperSchema = z.object({
+  decision: z.enum(["match", "no_match", "uncertain"]),
   reasoning: z.string(),
 });
 
-export interface ClassificationResult {
-  confidence: ClassificationConfidence;
-  matchedTopic: string | null;
+export interface GatekeeperResult {
+  decision: GatekeeperDecision;
   reasoning: string;
 }
 
-export async function classifyDocument(
+export async function classifyByTitle(
   anthropic: Anthropic,
-  doc: RawDocument,
-  topics: TopicOfInterest[],
-): Promise<ClassificationResult> {
-  const topicList = topics.map((t) => `- ${t.keyword}`).join("\n");
-
+  item: MeetingItemLink,
+  profileText: string,
+): Promise<GatekeeperResult> {
   const response = await anthropic.messages.parse({
     model: HAIKU_MODEL,
     max_tokens: 512,
     system:
-      "Olet Säleikkö, kunnanvaltuutetun avustaja. Tehtäväsi on arvioida osuuko " +
-      "yksi kunnan kokousasia käyttäjän seuraamiin aihepiireihin. Jos olet " +
-      "epävarma, valitse mieluummin 'uncertain' kuin 'no_match' - relevantin " +
-      "asian huomaamatta jättäminen on pahempi virhe kuin turha ilmoitus.",
+      "Olet Säleikkö, kunnanvaltuutetun portinvartija-avustaja. Päätä PELKÄN " +
+      "OTSIKON perusteella (et näe vielä koko sisältöä) kannattaako tämä " +
+      "kunnan kokousasia hakea ja käsitellä kokonaan. Käytä annettua " +
+      "profiilia siitä mikä käyttäjää kiinnostaa. Jos olet epävarma, valitse " +
+      "mieluummin 'uncertain' kuin 'no_match' - relevantin asian huomaamatta " +
+      "jättäminen on pahempi virhe kuin turha jatkokäsittely.",
     messages: [
       {
         role: "user",
         content:
-          `Seurattavat aihepiirit:\n${topicList}\n\n` +
-          `Kokousasian otsikko: ${doc.title}\n` +
-          `Toimielin: ${doc.board}\n` +
-          `Sisältö:\n${doc.body_text}\n\n` +
-          "Osuuko tämä asia johonkin seurattuun aihepiiriin?",
+          `Käyttäjän kiinnostusprofiili:\n${profileText}\n\n` +
+          `Toimielin: ${item.board}\n` +
+          `Kokouspäivä: ${item.meetingDate}\n` +
+          `Asian otsikko: ${item.title}\n\n` +
+          "Kannattaako tämä asia hakea ja käsitellä kokonaan?",
       },
     ],
-    output_config: { format: zodOutputFormat(ClassificationSchema) },
+    output_config: { format: zodOutputFormat(GatekeeperSchema) },
   });
 
   if (!response.parsed_output) {
-    throw new Error(`classifyDocument: failed to parse output for ${doc.source_id}`);
+    throw new Error(
+      `classifyByTitle: failed to parse output for ${item.sourceId}`,
+    );
   }
 
   return response.parsed_output;
@@ -1063,7 +1338,7 @@ Expected: PASS (2 tests)
 
 ```bash
 git add src/skills/politics/classify.ts src/skills/politics/classify.test.ts
-git commit -m "feat: add Haiku-based interest classification"
+git commit -m "feat: add title-only gatekeeper classification (Haiku)"
 ```
 
 ---
@@ -1099,9 +1374,12 @@ const DOC = {
   board: "Konserni- ja kaupunkikehitysjaosto",
   meeting_date: "2026-08-27",
   title: "Asuntotuotannon edistäminen kunnassa",
-  body_text: "Kunta voi vaikuttaa asuntomarkkinoihin...",
   source_url: "https://kokkola10.oncloudos.com/...",
+  gatekeeper_decision: "match" as const,
+  gatekeeper_reasoning: "Matches housing policy interest.",
+  body_text: "Kunta voi vaikuttaa asuntomarkkinoihin...",
   pdf_url: null,
+  seen_at: "2026-08-24T09:00:00Z",
   fetched_at: "2026-08-24T10:00:00Z",
 };
 
@@ -1186,7 +1464,7 @@ git commit -m "feat: add Sonnet-based document summarization"
 
 ## Task 10: Ingest pipeline orchestration
 
-Combines Tasks 4/5/7/8/9: fetch new RSS items → skip already-ingested `source_id`s → fetch detail → store `raw_documents` → classify against topics → store `document_summaries` → summarize matches → create a `reminders` row when the meeting is within 14 days → return the list of newly matched items (used by Task 12 for immediate urgent notification).
+Combines Tasks 4/5/7/8/9 into the two-stage flow: fetch new RSS items → skip already-ingested `source_id`s → **Stage 1**: classify by title only against the gatekeeper profile (Task 8), insert a `raw_documents` row for every item regardless of decision (this is what preserves idempotency without ever re-classifying a rejected item) → **Stage 2, only for match/uncertain**: fetch full detail (Task 5), update the row with the fetched content, summarize (Task 9), store `document_summaries`, create a `reminders` row when the meeting is within 14 days → return the list of matched items (used by Task 16 for immediate urgent notification). `no_match` items never trigger a detail fetch or a Sonnet call.
 
 **Files:**
 - Create: `src/skills/politics/pipeline.ts`
@@ -1224,12 +1502,8 @@ vi.mock("./kokkolaDetail.js", () => ({
 }));
 
 vi.mock("./classify.js", () => ({
-  classifyDocument: vi.fn(() =>
-    Promise.resolve({
-      confidence: "match",
-      matchedTopic: "asuntopolitiikka",
-      reasoning: "About housing policy.",
-    }),
+  classifyByTitle: vi.fn(() =>
+    Promise.resolve({ decision: "match", reasoning: "About housing policy." }),
   ),
 }));
 
@@ -1237,49 +1511,37 @@ vi.mock("./summarize.js", () => ({
   summarizeDocument: vi.fn(() => Promise.resolve("Lyhyt tiivistelmä.")),
 }));
 
+vi.mock("./gatekeeper.js", () => ({
+  getProfile: vi.fn(() => Promise.resolve("Asuntopolitiikka kiinnostaa aina.")),
+}));
+
 function makeFakeSupabase() {
-  const existingSourceIds = new Set<string>();
-  const insertedDocs: any[] = [];
+  let nextId = 1;
 
   return {
     from: vi.fn((table: string) => {
       if (table === "raw_documents") {
         return {
           select: vi.fn(() => ({
-            in: vi.fn((_col: string, ids: string[]) =>
-              Promise.resolve({
-                data: ids
-                  .filter((id) => existingSourceIds.has(id))
-                  .map((id) => ({ source_id: id })),
-                error: null,
-              }),
-            ),
+            in: vi.fn(() => Promise.resolve({ data: [], error: null })),
           })),
           insert: vi.fn((row: any) => ({
             select: vi.fn(() => ({
-              single: vi.fn(() => {
-                const inserted = { id: "doc-1", ...row };
-                insertedDocs.push(inserted);
-                return Promise.resolve({ data: inserted, error: null });
-              }),
+              single: vi.fn(() =>
+                Promise.resolve({
+                  data: { id: `doc-${nextId++}`, ...row },
+                  error: null,
+                }),
+              ),
             })),
+          })),
+          update: vi.fn(() => ({
+            eq: vi.fn(() => Promise.resolve({ error: null })),
           })),
         };
       }
       if (table === "document_summaries") {
         return { insert: vi.fn(() => Promise.resolve({ error: null })) };
-      }
-      if (table === "topics_of_interest") {
-        return {
-          select: vi.fn(() => ({
-            order: vi.fn(() =>
-              Promise.resolve({
-                data: [{ id: "t1", keyword: "asuntopolitiikka", created_at: "2026-01-01" }],
-                error: null,
-              }),
-            ),
-          })),
-        };
       }
       if (table === "reminders") {
         return { insert: vi.fn(() => Promise.resolve({ error: null })) };
@@ -1294,7 +1556,7 @@ describe("runIngestPipeline", () => {
     vi.clearAllMocks();
   });
 
-  it("ingests, classifies, summarizes a new matched item and returns it", async () => {
+  it("classifies a new item by title, fetches and summarizes a match, and returns it", async () => {
     const supabase = makeFakeSupabase();
     const anthropic = {} as Anthropic;
 
@@ -1303,11 +1565,34 @@ describe("runIngestPipeline", () => {
     expect(matched).toHaveLength(1);
     expect(matched[0].summary.summary).toBe("Lyhyt tiivistelmä.");
     expect(matched[0].doc.title).toBe("Asuntotuotannon edistäminen kunnassa");
+    expect(matched[0].doc.body_text).toBe(
+      "Kunta voi vaikuttaa asuntomarkkinoihin...",
+    );
+    expect(matched[0].doc.gatekeeper_decision).toBe("match");
   });
 
-  it("is idempotent: skips fetch/classify/summarize entirely for an already-known source_id", async () => {
+  it("stores a lightweight record but never fetches or summarizes a no_match item", async () => {
+    const { classifyByTitle } = await import("./classify.js");
+    (classifyByTitle as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      decision: "no_match",
+      reasoning: "Unrelated procedural item.",
+    });
     const { fetchMeetingItemDetail } = await import("./kokkolaDetail.js");
-    const { classifyDocument } = await import("./classify.js");
+    const { summarizeDocument } = await import("./summarize.js");
+
+    const supabase = makeFakeSupabase();
+    const anthropic = {} as Anthropic;
+
+    const matched = await runIngestPipeline(supabase, anthropic);
+
+    expect(matched).toEqual([]);
+    expect(fetchMeetingItemDetail).not.toHaveBeenCalled();
+    expect(summarizeDocument).not.toHaveBeenCalled();
+  });
+
+  it("is idempotent: skips classify/fetch/summarize entirely for an already-known source_id", async () => {
+    const { classifyByTitle } = await import("./classify.js");
+    const { fetchMeetingItemDetail } = await import("./kokkolaDetail.js");
     const { summarizeDocument } = await import("./summarize.js");
 
     const supabase = {
@@ -1324,13 +1609,6 @@ describe("runIngestPipeline", () => {
             })),
           };
         }
-        if (table === "topics_of_interest") {
-          return {
-            select: vi.fn(() => ({
-              order: vi.fn(() => Promise.resolve({ data: [], error: null })),
-            })),
-          };
-        }
         throw new Error(`Unexpected table in idempotency test: ${table}`);
       }),
     } as unknown as SupabaseClient;
@@ -1339,8 +1617,8 @@ describe("runIngestPipeline", () => {
     const matched = await runIngestPipeline(supabase, anthropic);
 
     expect(matched).toEqual([]);
+    expect(classifyByTitle).not.toHaveBeenCalled();
     expect(fetchMeetingItemDetail).not.toHaveBeenCalled();
-    expect(classifyDocument).not.toHaveBeenCalled();
     expect(summarizeDocument).not.toHaveBeenCalled();
   });
 });
@@ -1359,9 +1637,9 @@ import type { SupabaseClient } from "../../supabase/client.js";
 import type { RawDocument, DocumentSummary } from "../../types.js";
 import { fetchMeetingItemsRss } from "./kokkolaRss.js";
 import { fetchMeetingItemDetail } from "./kokkolaDetail.js";
-import { classifyDocument } from "./classify.js";
+import { classifyByTitle } from "./classify.js";
 import { summarizeDocument } from "./summarize.js";
-import { listTopics } from "./topics.js";
+import { getProfile } from "./gatekeeper.js";
 
 export interface MatchedItem {
   doc: RawDocument;
@@ -1389,11 +1667,14 @@ export async function runIngestPipeline(
   const newItems = rssItems.filter((item) => !existingIds.has(item.sourceId));
   if (newItems.length === 0) return [];
 
-  const topics = await listTopics(supabase);
+  const profileText = await getProfile(supabase);
   const matched: MatchedItem[] = [];
 
   for (const item of newItems) {
-    const detail = await fetchMeetingItemDetail(item.sourceId);
+    const classification = await classifyByTitle(anthropic, item, profileText);
+    const isRelevant =
+      classification.decision === "match" ||
+      classification.decision === "uncertain";
 
     const { data: inserted, error: insertError } = await supabase
       .from("raw_documents")
@@ -1403,9 +1684,9 @@ export async function runIngestPipeline(
         board: item.board,
         meeting_date: item.meetingDate,
         title: item.title,
-        body_text: detail.bodyText,
         source_url: item.url,
-        pdf_url: detail.pdfUrl,
+        gatekeeper_decision: classification.decision,
+        gatekeeper_reasoning: classification.reasoning,
       })
       .select()
       .single();
@@ -1414,58 +1695,64 @@ export async function runIngestPipeline(
         `runIngestPipeline: failed to insert ${item.sourceId}: ${insertError?.message}`,
       );
     }
-    const doc = inserted as RawDocument;
 
-    const classification = await classifyDocument(anthropic, doc, topics);
-    const isRelevant =
-      classification.confidence === "match" ||
-      classification.confidence === "uncertain";
+    if (!isRelevant) continue;
 
-    let summaryText: string | null = null;
-    if (isRelevant) {
-      summaryText = await summarizeDocument(anthropic, doc);
+    let doc = inserted as RawDocument;
+    const detail = await fetchMeetingItemDetail(item.sourceId);
+    const fetchedAt = new Date().toISOString();
+
+    const { error: updateError } = await supabase
+      .from("raw_documents")
+      .update({
+        body_text: detail.bodyText,
+        pdf_url: detail.pdfUrl,
+        fetched_at: fetchedAt,
+      })
+      .eq("id", doc.id);
+    if (updateError) {
+      throw new Error(
+        `runIngestPipeline: failed to update ${item.sourceId} with fetched content: ${updateError.message}`,
+      );
     }
+    doc = {
+      ...doc,
+      body_text: detail.bodyText,
+      pdf_url: detail.pdfUrl,
+      fetched_at: fetchedAt,
+    };
+
+    const summaryText = await summarizeDocument(anthropic, doc);
 
     const { error: summaryError } = await supabase
       .from("document_summaries")
-      .insert({
-        raw_document_id: doc.id,
-        matched: isRelevant,
-        matched_topic: classification.matchedTopic,
-        confidence: classification.confidence,
-        summary: summaryText,
-      });
+      .insert({ raw_document_id: doc.id, summary: summaryText });
     if (summaryError) {
       throw new Error(
         `runIngestPipeline: failed to insert summary for ${doc.source_id}: ${summaryError.message}`,
       );
     }
 
-    if (isRelevant) {
-      const daysUntilMeeting =
-        (new Date(doc.meeting_date).getTime() - Date.now()) /
-        (1000 * 60 * 60 * 24);
-      if (daysUntilMeeting >= 0 && daysUntilMeeting <= URGENT_WINDOW_DAYS) {
-        await supabase.from("reminders").insert({
-          raw_document_id: doc.id,
-          due_at: doc.meeting_date,
-          description: `${doc.board}: ${doc.title}`,
-        });
-      }
-
-      matched.push({
-        doc,
-        summary: {
-          id: "",
-          raw_document_id: doc.id,
-          matched: true,
-          matched_topic: classification.matchedTopic,
-          confidence: classification.confidence,
-          summary: summaryText,
-          created_at: new Date().toISOString(),
-        },
+    const daysUntilMeeting =
+      (new Date(doc.meeting_date).getTime() - Date.now()) /
+      (1000 * 60 * 60 * 24);
+    if (daysUntilMeeting >= 0 && daysUntilMeeting <= URGENT_WINDOW_DAYS) {
+      await supabase.from("reminders").insert({
+        raw_document_id: doc.id,
+        due_at: doc.meeting_date,
+        description: `${doc.board}: ${doc.title}`,
       });
     }
+
+    matched.push({
+      doc,
+      summary: {
+        id: "",
+        raw_document_id: doc.id,
+        summary: summaryText,
+        created_at: fetchedAt,
+      },
+    });
   }
 
   return matched;
@@ -1475,13 +1762,13 @@ export async function runIngestPipeline(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/skills/politics/pipeline.test.ts`
-Expected: PASS (1 test)
+Expected: PASS (3 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/skills/politics/pipeline.ts src/skills/politics/pipeline.test.ts
-git commit -m "feat: wire ingest pipeline (fetch, classify, summarize, remind)"
+git commit -m "feat: wire two-stage ingest pipeline (title-gate, fetch, summarize, remind)"
 ```
 
 ---
@@ -1521,24 +1808,22 @@ function makeFakeSupabase() {
       if (table === "document_summaries") {
         return {
           select: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              gt: vi.fn(() =>
-                Promise.resolve({
-                  data: [
-                    {
-                      summary: "Kaupunki ei edistä markkinaehtoista asuntotuotantoa.",
-                      raw_documents: {
-                        title: "Asuntotuotannon edistäminen kunnassa",
-                        board: "Konserni- ja kaupunkikehitysjaosto",
-                        meeting_date: "2026-08-27",
-                        source_url: "https://kokkola10.oncloudos.com/...",
-                      },
+            gt: vi.fn(() =>
+              Promise.resolve({
+                data: [
+                  {
+                    summary: "Kaupunki ei edistä markkinaehtoista asuntotuotantoa.",
+                    raw_documents: {
+                      title: "Asuntotuotannon edistäminen kunnassa",
+                      board: "Konserni- ja kaupunkikehitysjaosto",
+                      meeting_date: "2026-08-27",
+                      source_url: "https://kokkola10.oncloudos.com/...",
                     },
-                  ],
-                  error: null,
-                }),
-              ),
-            })),
+                  },
+                ],
+                error: null,
+              }),
+            ),
           })),
         };
       }
@@ -1596,7 +1881,7 @@ describe("composeDailyBriefing", () => {
         if (table === "document_summaries") {
           return {
             select: vi.fn(() => ({
-              eq: vi.fn(() => ({ gt: vi.fn(() => Promise.resolve({ data: [], error: null })) })),
+              gt: vi.fn(() => Promise.resolve({ data: [], error: null })),
             })),
           };
         }
@@ -1638,7 +1923,6 @@ export async function composeDailyBriefing(
   const { data: summaries, error: summariesError } = await supabase
     .from("document_summaries")
     .select("summary, raw_documents(title, board, meeting_date, source_url)")
-    .eq("matched", true)
     .gt("created_at", since);
   if (summariesError) {
     throw new Error(`composeDailyBriefing: ${summariesError.message}`);
@@ -1780,9 +2064,12 @@ const DOC = {
   board: "Konserni- ja kaupunkikehitysjaosto",
   meeting_date: "2026-08-27",
   title: "Asuntotuotannon edistäminen kunnassa",
-  body_text: "Kunta voi vaikuttaa asuntomarkkinoihin...",
   source_url: "https://kokkola10.oncloudos.com/...",
+  gatekeeper_decision: "match" as const,
+  gatekeeper_reasoning: "Matches housing policy interest.",
+  body_text: "Kunta voi vaikuttaa asuntomarkkinoihin...",
   pdf_url: null,
+  seen_at: "2026-08-24T09:00:00Z",
   fetched_at: "2026-08-24T10:00:00Z",
 };
 
@@ -2134,7 +2421,7 @@ function makeFakeBot() {
 }
 
 describe("registerCommands", () => {
-  it("registers /seuraa, /lopeta_seuranta, /hae, /kannanotto and text handler", async () => {
+  it("registers /opeta, /hyvaksy, /hylkaa, /hae, /kannanotto and text handler", async () => {
     const { bot, handlers } = makeFakeBot();
     const supabase = {} as SupabaseClient;
     const anthropic = {} as Anthropic;
@@ -2142,24 +2429,59 @@ describe("registerCommands", () => {
     registerCommands(bot, supabase, anthropic);
 
     expect(Object.keys(handlers)).toEqual(
-      expect.arrayContaining(["seuraa", "lopeta_seuranta", "hae", "kannanotto", "__text__"]),
+      expect.arrayContaining([
+        "opeta",
+        "hyvaksy",
+        "hylkaa",
+        "hae",
+        "kannanotto",
+        "__text__",
+      ]),
     );
   });
 
-  it("/seuraa adds a topic via Supabase and replies with confirmation", async () => {
+  it("/opeta proposes a profile update and shows it for approval", async () => {
     const { bot, handlers } = makeFakeBot();
-    const insert = vi.fn(() => Promise.resolve({ error: null }));
-    const supabase = { from: vi.fn(() => ({ insert })) } as unknown as SupabaseClient;
-    const anthropic = {} as Anthropic;
+    const proposeResult = {
+      id: "fb-1",
+      raw_text: "kaavoitus kiinnostaa",
+      proposed_profile_text: "Kaavoitus kiinnostaa aina.",
+      applied: false,
+      created_at: "2026-01-01",
+    };
+    const insert = vi.fn(() => ({
+      select: vi.fn(() => ({
+        single: vi.fn(() => Promise.resolve({ data: proposeResult, error: null })),
+      })),
+    }));
+    const profileSingle = vi.fn(() =>
+      Promise.resolve({ data: { profile_text: "Vanha profiili." }, error: null }),
+    );
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === "gatekeeper_profile") {
+          return { select: vi.fn(() => ({ eq: vi.fn(() => ({ single: profileSingle })) })) };
+        }
+        if (table === "gatekeeper_feedback") {
+          return { insert };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    } as unknown as SupabaseClient;
+    const create = vi.fn(() =>
+      Promise.resolve({ content: [{ type: "text", text: "Kaavoitus kiinnostaa aina." }] }),
+    );
+    const anthropic = { messages: { create } } as unknown as Anthropic;
 
     registerCommands(bot, supabase, anthropic);
 
     const reply = vi.fn();
-    const ctx = { match: "kaavoitus", reply } as any;
-    await handlers["seuraa"](ctx);
+    const ctx = { match: "kaavoitus kiinnostaa", reply } as any;
+    await handlers["opeta"](ctx);
 
-    expect(insert).toHaveBeenCalledWith({ keyword: "kaavoitus" });
-    expect(reply).toHaveBeenCalledWith(expect.stringContaining("kaavoitus"));
+    expect(reply).toHaveBeenCalledWith(
+      expect.stringContaining("Kaavoitus kiinnostaa aina."),
+    );
   });
 });
 ```
@@ -2175,7 +2497,11 @@ Expected: FAIL — `Cannot find module './commands.js'`
 import type { Bot } from "grammy";
 import Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "../supabase/client.js";
-import { addTopic, removeTopic } from "../skills/politics/topics.js";
+import {
+  proposeProfileUpdate,
+  approvePendingFeedback,
+  rejectPendingFeedback,
+} from "../skills/politics/gatekeeper.js";
 import { searchArchive } from "../skills/politics/search.js";
 import { draftPosition } from "../skills/politics/positions.js";
 import { handleFreeTextMessage } from "../gateway/chat.js";
@@ -2185,24 +2511,29 @@ export function registerCommands(
   supabase: SupabaseClient,
   anthropic: Anthropic,
 ): void {
-  bot.command("seuraa", async (ctx) => {
-    const keyword = ctx.match?.toString().trim();
-    if (!keyword) {
-      await ctx.reply("Käytä muotoa: /seuraa <aihe>");
+  bot.command("opeta", async (ctx) => {
+    const feedbackText = ctx.match?.toString().trim();
+    if (!feedbackText) {
+      await ctx.reply(
+        "Käytä muotoa: /opeta <vapaa teksti siitä mikä kiinnostaa tai ei kiinnosta>",
+      );
       return;
     }
-    await addTopic(supabase, keyword);
-    await ctx.reply(`Lisätty seurantaan: ${keyword}`);
+    const feedback = await proposeProfileUpdate(supabase, anthropic, feedbackText);
+    await ctx.reply(
+      `Ehdotus päivitetyksi profiiliksi:\n\n${feedback.proposed_profile_text}\n\n` +
+        "Hyväksy komennolla /hyvaksy tai hylkää komennolla /hylkaa.",
+    );
   });
 
-  bot.command("lopeta_seuranta", async (ctx) => {
-    const keyword = ctx.match?.toString().trim();
-    if (!keyword) {
-      await ctx.reply("Käytä muotoa: /lopeta_seuranta <aihe>");
-      return;
-    }
-    await removeTopic(supabase, keyword);
-    await ctx.reply(`Poistettu seurannasta: ${keyword}`);
+  bot.command("hyvaksy", async (ctx) => {
+    await approvePendingFeedback(supabase);
+    await ctx.reply("Profiili päivitetty.");
+  });
+
+  bot.command("hylkaa", async (ctx) => {
+    await rejectPendingFeedback(supabase);
+    await ctx.reply("Ehdotus hylätty, profiili ennallaan.");
   });
 
   bot.command("hae", async (ctx) => {
@@ -2564,7 +2895,7 @@ Expected: no errors.
 - [ ] **Step 8: Run the full test suite**
 
 Run: `npm test`
-Expected: all tests pass (Tasks 1, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 — 34 tests total).
+Expected: all tests pass (Tasks 1, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 — 41 tests total).
 
 - [ ] **Step 9: Commit**
 
@@ -2615,7 +2946,7 @@ WantedBy=default.target
 4. Kloonaa repo palvelimelle: `sudo -u saleikko git clone <repo-url> /opt/saleikko`
 5. `cd /opt/saleikko && sudo -u saleikko npm install && sudo -u saleikko npm run build`
 6. Kopioi `.env.example` -> `.env` ja täytä oikeat arvot (Telegram-token, Anthropic-avain, Supabase-tunnukset). `sudo chown saleikko:saleikko .env && sudo chmod 600 .env`
-7. Aseta paikallispolitiikan seurantatopikit ensimmäisellä käynnistyksellä Telegramissa `/seuraa`-komennoilla.
+7. Kirjoita portinvartijaprofiilin ensimmäiset ohjeet ensimmäisellä käynnistyksellä Telegramissa `/opeta`-komennolla, ja vahvista ehdotus `/hyvaksy`-komennolla.
 8. Kopioi systemd-yksikkö: `sudo cp deploy/saleikko.service /etc/systemd/system/saleikko.service`
 9. `sudo systemctl daemon-reload && sudo systemctl enable --now saleikko`
 10. Varmista tila: `sudo systemctl status saleikko` ja `sudo journalctl -u saleikko -f`
@@ -2652,9 +2983,9 @@ Message `@BotFather` on Telegram, run `/newbot`, follow prompts, copy the token 
 
 Follow Task 2, Step 2 against your real Supabase project.
 
-- [ ] **Step 3: Add one real topic of interest**
+- [ ] **Step 3: Set the gatekeeper profile's first real instructions**
 
-Run locally: `npm run dev`, then in Telegram send `/seuraa asuntopolitiikka` (or another topic matching a currently open Kokkola agenda item, checkable at `https://www.kokkola.fi/hallinto-ja-paatoksenteko/esityslistat-poytakirjat-ja-viranhaltijapaatokset/`).
+Run locally: `npm run dev`, then in Telegram send `/opeta asuntopolitiikka ja kaavoitus kiinnostavat aina` (or feedback matching a currently open Kokkola agenda item, checkable at `https://www.kokkola.fi/hallinto-ja-paatoksenteko/esityslistat-poytakirjat-ja-viranhaltijapaatokset/`), then confirm the proposal with `/hyvaksy`.
 
 - [ ] **Step 4: Trigger one manual ingest run**
 
