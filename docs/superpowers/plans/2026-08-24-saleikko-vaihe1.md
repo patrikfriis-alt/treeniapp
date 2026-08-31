@@ -754,7 +754,7 @@ export async function fetchMeetingItemDetail(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/skills/politics/kokkolaDetail.test.ts`
-Expected: PASS (2 tests)
+Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
 
