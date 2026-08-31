@@ -3358,6 +3358,19 @@ describe("createHealthServer", () => {
 
     expect(res.status).toBe(404);
   });
+
+  it("responds 404 for non-GET methods on /health", async () => {
+    server = createHealthServer(0);
+    await new Promise<void>((resolve) => server!.once("listening", resolve));
+    const address = server.address();
+    if (address === null || typeof address === "string") {
+      throw new Error("expected server to bind a port");
+    }
+
+    const res = await fetch(`http://127.0.0.1:${address.port}/health`, { method: "POST" });
+
+    expect(res.status).toBe(404);
+  });
 });
 ```
 
@@ -3381,6 +3394,12 @@ export function createHealthServer(port: number): Server {
     res.writeHead(404, { "Content-Type": "text/plain" });
     res.end("not found");
   });
+  server.on("error", (err) => {
+    // server.listen() is async and doesn't throw on failure (e.g. port
+    // already in use) — without this, the health endpoint would silently
+    // never come up and nothing would say why.
+    console.error(`Health server error: ${err.message}`);
+  });
   server.listen(port);
   return server;
 }
@@ -3389,7 +3408,7 @@ export function createHealthServer(port: number): Server {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/health.test.ts`
-Expected: PASS (2 tests)
+Expected: PASS (3 tests)
 
 - [ ] **Step 5: Commit**
 
