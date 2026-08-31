@@ -330,7 +330,9 @@ create table saleikko.document_summaries (
   matched_topic text,
   confidence text not null check (confidence in ('match', 'no_match', 'uncertain')),
   summary text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  check (matched = (confidence <> 'no_match')),
+  check (matched or matched_topic is null)
 );
 
 create table saleikko.positions (
