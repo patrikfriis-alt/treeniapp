@@ -1558,7 +1558,18 @@ function makeFakeSupabase() {
         };
       }
       if (table === "document_summaries") {
-        return { insert: vi.fn(() => Promise.resolve({ error: null })) };
+        return {
+          insert: vi.fn((row: any) => ({
+            select: vi.fn(() => ({
+              single: vi.fn(() =>
+                Promise.resolve({
+                  data: { id: `sum-${nextId++}`, created_at: "2026-08-24T10:05:00Z", ...row },
+                  error: null,
+                }),
+              ),
+            })),
+          })),
+        };
       }
       if (table === "reminders") {
         return { insert: vi.fn(() => Promise.resolve({ error: null })) };
@@ -1741,12 +1752,14 @@ export async function runIngestPipeline(
 
     const summaryText = await summarizeDocument(anthropic, doc);
 
-    const { error: summaryError } = await supabase
+    const { data: insertedSummary, error: summaryError } = await supabase
       .from("document_summaries")
-      .insert({ raw_document_id: doc.id, summary: summaryText });
-    if (summaryError) {
+      .insert({ raw_document_id: doc.id, summary: summaryText })
+      .select()
+      .single();
+    if (summaryError || !insertedSummary) {
       throw new Error(
-        `runIngestPipeline: failed to insert summary for ${doc.source_id}: ${summaryError.message}`,
+        `runIngestPipeline: failed to insert summary for ${doc.source_id}: ${summaryError?.message}`,
       );
     }
 
@@ -1754,21 +1767,21 @@ export async function runIngestPipeline(
       (new Date(doc.meeting_date).getTime() - Date.now()) /
       (1000 * 60 * 60 * 24);
     if (daysUntilMeeting >= 0 && daysUntilMeeting <= URGENT_WINDOW_DAYS) {
-      await supabase.from("reminders").insert({
+      const { error: reminderError } = await supabase.from("reminders").insert({
         raw_document_id: doc.id,
         due_at: doc.meeting_date,
         description: `${doc.board}: ${doc.title}`,
       });
+      if (reminderError) {
+        throw new Error(
+          `runIngestPipeline: failed to insert reminder for ${doc.source_id}: ${reminderError.message}`,
+        );
+      }
     }
 
     matched.push({
       doc,
-      summary: {
-        id: "",
-        raw_document_id: doc.id,
-        summary: summaryText,
-        created_at: fetchedAt,
-      },
+      summary: insertedSummary as DocumentSummary,
     });
   }
 
