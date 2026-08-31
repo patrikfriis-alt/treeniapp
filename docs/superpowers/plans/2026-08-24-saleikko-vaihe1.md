@@ -2425,6 +2425,57 @@ describe("handleFreeTextMessage", () => {
       expect.objectContaining({ telegram_user_id: 123456, role: "assistant", content: "Vastaus käyttäjälle." }),
     );
   });
+
+  it("throws when logging the user message fails", async () => {
+    const insert = vi.fn(() => Promise.resolve({ error: { message: "insert failed" } }));
+    const supabase = {
+      from: vi.fn(() => ({ insert })),
+    } as unknown as SupabaseClient;
+    const anthropic = { messages: { create: vi.fn() } } as unknown as Anthropic;
+
+    await expect(handleFreeTextMessage(supabase, anthropic, 123456, "Kysymys")).rejects.toThrow(
+      "insert failed",
+    );
+  });
+
+  it("throws when fetching history fails", async () => {
+    const insert = vi.fn(() => Promise.resolve({ error: null }));
+    const limit = vi.fn(() => Promise.resolve({ data: null, error: { message: "select failed" } }));
+    const order = vi.fn(() => ({ limit }));
+    const eq = vi.fn(() => ({ order }));
+    const select = vi.fn(() => ({ eq }));
+    const supabase = {
+      from: vi.fn(() => ({ insert, select })),
+    } as unknown as SupabaseClient;
+    const anthropic = { messages: { create: vi.fn() } } as unknown as Anthropic;
+
+    await expect(handleFreeTextMessage(supabase, anthropic, 123456, "Kysymys")).rejects.toThrow(
+      "select failed",
+    );
+  });
+
+  it("still returns the reply even when logging the assistant message fails", async () => {
+    const insert = vi
+      .fn()
+      .mockResolvedValueOnce({ error: null })
+      .mockResolvedValueOnce({ error: { message: "log failed" } });
+    const limit = vi.fn(() => Promise.resolve({ data: [], error: null }));
+    const order = vi.fn(() => ({ limit }));
+    const eq = vi.fn(() => ({ order }));
+    const select = vi.fn(() => ({ eq }));
+    const supabase = {
+      from: vi.fn(() => ({ insert, select })),
+    } as unknown as SupabaseClient;
+
+    const create = vi.fn(() =>
+      Promise.resolve({ content: [{ type: "text", text: "Vastaus." }] }),
+    );
+    const anthropic = { messages: { create } } as unknown as Anthropic;
+
+    const reply = await handleFreeTextMessage(supabase, anthropic, 123456, "Kysymys");
+
+    expect(reply).toBe("Vastaus.");
+  });
 });
 ```
 
@@ -2448,16 +2499,22 @@ export async function handleFreeTextMessage(
   telegramUserId: number,
   text: string,
 ): Promise<string> {
-  await supabase
+  const { error: userInsertError } = await supabase
     .from("conversation_log")
     .insert({ telegram_user_id: telegramUserId, role: "user", content: text });
+  if (userInsertError) {
+    throw new Error(`handleFreeTextMessage: ${userInsertError.message}`);
+  }
 
-  const { data: history } = await supabase
+  const { data: history, error: historyError } = await supabase
     .from("conversation_log")
     .select("role, content")
     .eq("telegram_user_id", telegramUserId)
     .order("created_at", { ascending: false })
     .limit(HISTORY_LIMIT);
+  if (historyError) {
+    throw new Error(`handleFreeTextMessage: ${historyError.message}`);
+  }
 
   const messages: Anthropic.MessageParam[] = (history ?? [])
     .reverse()
@@ -2478,9 +2535,17 @@ export async function handleFreeTextMessage(
   );
   const reply = textBlock?.text ?? "En osannut muodostaa vastausta.";
 
-  await supabase
+  const { error: assistantInsertError } = await supabase
     .from("conversation_log")
     .insert({ telegram_user_id: telegramUserId, role: "assistant", content: reply });
+  if (assistantInsertError) {
+    // The reply was already generated (an API call already happened) — don't
+    // withhold it from the user just because logging it failed. Surface the
+    // failure to the console instead of throwing, unlike the two checks above.
+    console.error(
+      `handleFreeTextMessage: failed to log assistant reply: ${assistantInsertError.message}`,
+    );
+  }
 
   return reply;
 }
@@ -2489,7 +2554,7 @@ export async function handleFreeTextMessage(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/gateway/chat.test.ts`
-Expected: PASS (1 test)
+Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
 
