@@ -2088,6 +2088,26 @@ describe("searchArchive", () => {
     );
     expect(results).toHaveLength(1);
   });
+
+  it("strips % and _ wildcard characters from the query before building the filter", async () => {
+    const or = vi.fn(() => Promise.resolve({ data: [], error: null }));
+    const select = vi.fn(() => ({ or }));
+    const supabase = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient;
+
+    await searchArchive(supabase, "50%_alennus");
+
+    expect(or).toHaveBeenCalledWith(
+      "title.ilike.%50alennus%,body_text.ilike.%50alennus%",
+    );
+  });
+
+  it("throws when the Supabase query fails", async () => {
+    const or = vi.fn(() => Promise.resolve({ data: null, error: { message: "boom" } }));
+    const select = vi.fn(() => ({ or }));
+    const supabase = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient;
+
+    await expect(searchArchive(supabase, "asunto")).rejects.toThrow("searchArchive failed: boom");
+  });
 });
 ```
 
@@ -2119,7 +2139,7 @@ export async function searchArchive(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/skills/politics/search.test.ts`
-Expected: PASS (1 test)
+Expected: PASS (3 tests)
 
 - [ ] **Step 5: Write the failing test for kannanotto drafting**
 
@@ -2171,6 +2191,15 @@ describe("draftPosition", () => {
     const callArgs = create.mock.calls[0][0];
     expect(JSON.stringify(callArgs)).toContain("Aiempi teksti tyylinäytteeksi.");
   });
+
+  it("throws when the document has no body_text", async () => {
+    const supabase = { from: vi.fn() } as unknown as SupabaseClient;
+    const anthropic = { messages: { create: vi.fn() } } as unknown as Anthropic;
+
+    await expect(draftPosition(supabase, anthropic, { ...DOC, body_text: null })).rejects.toThrow(
+      "no body_text",
+    );
+  });
 });
 ```
 
@@ -2201,6 +2230,9 @@ export async function draftPosition(
   anthropic: Anthropic,
   doc: RawDocument,
 ): Promise<string> {
+  if (!doc.body_text) {
+    throw new Error(`draftPosition: document ${doc.source_id} has no body_text to draft from`);
+  }
   const pastPositions = await listPositions(supabase);
   const styleReference = pastPositions
     .slice(0, 5)
@@ -2240,7 +2272,7 @@ export async function draftPosition(
 - [ ] **Step 8: Run test to verify it passes**
 
 Run: `npx vitest run src/skills/politics/positions.test.ts`
-Expected: PASS (1 test)
+Expected: PASS (2 tests)
 
 - [ ] **Step 9: Commit**
 
