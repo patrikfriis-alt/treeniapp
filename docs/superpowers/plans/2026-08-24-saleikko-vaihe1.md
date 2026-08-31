@@ -1814,7 +1814,7 @@ git commit -m "feat: wire two-stage ingest pipeline (title-gate, fetch, summariz
 ```typescript
 // src/skills/politics/briefing.test.ts
 import { describe, it, expect, vi } from "vitest";
-import { composeDailyBriefing } from "./briefing.js";
+import { composeDailyBriefing, markBriefingSent } from "./briefing.js";
 import type { SupabaseClient } from "../../supabase/client.js";
 
 function makeFakeSupabase() {
@@ -1832,7 +1832,6 @@ function makeFakeSupabase() {
               ),
             })),
           })),
-          update: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ error: null })) })),
         };
       }
       if (table === "document_summaries") {
@@ -1860,7 +1859,7 @@ function makeFakeSupabase() {
       if (table === "reminders") {
         return {
           select: vi.fn(() => ({
-            gt: vi.fn(() =>
+            gte: vi.fn(() =>
               Promise.resolve({
                 data: [
                   {
@@ -1883,11 +1882,12 @@ describe("composeDailyBriefing", () => {
   it("includes matched summaries and upcoming reminders", async () => {
     const supabase = makeFakeSupabase();
 
-    const message = await composeDailyBriefing(supabase);
+    const { message, generatedAt } = await composeDailyBriefing(supabase);
 
     expect(message).toContain("Asuntotuotannon edistäminen kunnassa");
     expect(message).toContain("Kaupunki ei edistä markkinaehtoista asuntotuotantoa.");
     expect(message).toContain("Tulevat kokoukset");
+    expect(typeof generatedAt).toBe("string");
   });
 
   it("says nothing new when there are no matched summaries", async () => {
@@ -1905,7 +1905,6 @@ describe("composeDailyBriefing", () => {
                 ),
               })),
             })),
-            update: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ error: null })) })),
           };
         }
         if (table === "document_summaries") {
@@ -1916,15 +1915,40 @@ describe("composeDailyBriefing", () => {
           };
         }
         if (table === "reminders") {
-          return { select: vi.fn(() => ({ gt: vi.fn(() => Promise.resolve({ data: [], error: null })) })) };
+          return { select: vi.fn(() => ({ gte: vi.fn(() => Promise.resolve({ data: [], error: null })) })) };
         }
         throw new Error(`Unexpected table: ${table}`);
       }),
     } as unknown as SupabaseClient;
 
-    const message = await composeDailyBriefing(supabase);
+    const { message } = await composeDailyBriefing(supabase);
 
     expect(message).toContain("Ei uusia");
+  });
+});
+
+describe("markBriefingSent", () => {
+  it("updates app_state with the generated timestamp", async () => {
+    const eq = vi.fn(() => Promise.resolve({ error: null }));
+    const update = vi.fn(() => ({ eq }));
+    const supabase = {
+      from: vi.fn(() => ({ update })),
+    } as unknown as SupabaseClient;
+
+    await markBriefingSent(supabase, "2026-08-31T06:00:00.000Z");
+
+    expect(update).toHaveBeenCalledWith({ value: "2026-08-31T06:00:00.000Z" });
+    expect(eq).toHaveBeenCalledWith("key", "last_briefing_at");
+  });
+
+  it("throws when the update fails", async () => {
+    const eq = vi.fn(() => Promise.resolve({ error: { message: "boom" } }));
+    const update = vi.fn(() => ({ eq }));
+    const supabase = {
+      from: vi.fn(() => ({ update })),
+    } as unknown as SupabaseClient;
+
+    await expect(markBriefingSent(supabase, "2026-08-31T06:00:00.000Z")).rejects.toThrow("boom");
   });
 });
 ```
@@ -1939,16 +1963,21 @@ Expected: FAIL — `Cannot find module './briefing.js'`
 ```typescript
 import type { SupabaseClient } from "../../supabase/client.js";
 
+export interface DailyBriefing {
+  message: string;
+  generatedAt: string;
+}
+
 export async function composeDailyBriefing(
   supabase: SupabaseClient,
-): Promise<string> {
+): Promise<DailyBriefing> {
   const { data: stateRow } = await supabase
     .from("app_state")
     .select("*")
     .eq("key", "last_briefing_at")
     .single();
   const since = stateRow?.value ?? new Date(0).toISOString();
-  const now = new Date().toISOString();
+  const generatedAt = new Date().toISOString();
 
   const { data: summaries, error: summariesError } = await supabase
     .from("document_summaries")
@@ -1958,10 +1987,16 @@ export async function composeDailyBriefing(
     throw new Error(`composeDailyBriefing: ${summariesError.message}`);
   }
 
+  // due_at holds only a date (midnight UTC), so comparing against the
+  // current instant would exclude meetings happening later today. Compare
+  // against the start of today (UTC) instead.
+  const startOfToday = new Date();
+  startOfToday.setUTCHours(0, 0, 0, 0);
+
   const { data: reminders, error: remindersError } = await supabase
     .from("reminders")
     .select("due_at, description")
-    .gt("due_at", now);
+    .gte("due_at", startOfToday.toISOString());
   if (remindersError) {
     throw new Error(`composeDailyBriefing: ${remindersError.message}`);
   }
@@ -1987,19 +2022,27 @@ export async function composeDailyBriefing(
     }
   }
 
-  await supabase
-    .from("app_state")
-    .update({ value: now })
-    .eq("key", "last_briefing_at");
+  return { message: lines.join("\n"), generatedAt };
+}
 
-  return lines.join("\n");
+export async function markBriefingSent(
+  supabase: SupabaseClient,
+  generatedAt: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("app_state")
+    .update({ value: generatedAt })
+    .eq("key", "last_briefing_at");
+  if (error) {
+    throw new Error(`markBriefingSent: ${error.message}`);
+  }
 }
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/skills/politics/briefing.test.ts`
-Expected: PASS (2 tests)
+Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -2652,7 +2695,10 @@ vi.mock("../skills/politics/pipeline.js", () => ({
   runIngestPipeline: vi.fn(),
 }));
 vi.mock("../skills/politics/briefing.js", () => ({
-  composeDailyBriefing: vi.fn(() => Promise.resolve("briiffi")),
+  composeDailyBriefing: vi.fn(() =>
+    Promise.resolve({ message: "briiffi", generatedAt: "2026-08-31T06:00:00.000Z" }),
+  ),
+  markBriefingSent: vi.fn(() => Promise.resolve()),
 }));
 
 describe("scheduleJobs", () => {
@@ -2703,6 +2749,30 @@ describe("scheduleJobs", () => {
       expect.stringContaining("Kokkola RSS fetch failed: HTTP 500"),
     );
   });
+
+  it("marks the briefing as sent only after the message is sent successfully", async () => {
+    const { markBriefingSent } = await import("../skills/politics/briefing.js");
+
+    const supabase = {} as SupabaseClient;
+    const anthropic = {} as Anthropic;
+    const sendMessage = vi.fn();
+    const bot = { api: { sendMessage } } as unknown as Bot;
+
+    scheduleJobs({
+      supabase,
+      anthropic,
+      bot,
+      allowedUserId: 123456,
+      dailyBriefingHour: 7,
+    });
+
+    const briefingJobFn = (cron.schedule as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[1][1] as () => Promise<void>;
+    await briefingJobFn();
+
+    expect(sendMessage).toHaveBeenCalledWith(123456, "briiffi");
+    expect(markBriefingSent).toHaveBeenCalledWith(supabase, "2026-08-31T06:00:00.000Z");
+  });
 });
 ```
 
@@ -2719,7 +2789,7 @@ import type { Bot } from "grammy";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "../supabase/client.js";
 import { runIngestPipeline } from "../skills/politics/pipeline.js";
-import { composeDailyBriefing } from "../skills/politics/briefing.js";
+import { composeDailyBriefing, markBriefingSent } from "../skills/politics/briefing.js";
 
 const URGENT_HOURS = 48;
 
@@ -2759,8 +2829,9 @@ export function scheduleJobs(deps: SchedulerDeps): void {
 
   cron.schedule(`0 ${dailyBriefingHour} * * *`, async () => {
     try {
-      const message = await composeDailyBriefing(supabase);
+      const { message, generatedAt } = await composeDailyBriefing(supabase);
       await bot.api.sendMessage(allowedUserId, message);
+      await markBriefingSent(supabase, generatedAt);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await bot.api.sendMessage(
@@ -2775,7 +2846,7 @@ export function scheduleJobs(deps: SchedulerDeps): void {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/scheduler/index.test.ts`
-Expected: PASS (1 test)
+Expected: PASS (3 tests)
 
 - [ ] **Step 5: Commit**
 
