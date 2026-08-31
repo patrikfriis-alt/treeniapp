@@ -3109,6 +3109,92 @@ describe("scheduleJobs", () => {
     expect(sendMessage).toHaveBeenCalledWith(123456, "briiffi");
     expect(markBriefingSent).toHaveBeenCalledWith(supabase, "2026-08-31T06:00:00.000Z");
   });
+
+  it("throws when dailyBriefingHour is out of range", () => {
+    const supabase = {} as SupabaseClient;
+    const anthropic = {} as Anthropic;
+    const bot = { api: { sendMessage: vi.fn() } } as unknown as Bot;
+
+    expect(() =>
+      scheduleJobs({
+        supabase,
+        anthropic,
+        bot,
+        allowedUserId: 123456,
+        dailyBriefingHour: 24,
+      }),
+    ).toThrow("dailyBriefingHour");
+  });
+
+  it("sends an urgent alert only for matched items within the 0-48 hour window", async () => {
+    const { runIngestPipeline } = await import("../skills/politics/pipeline.js");
+    const now = Date.now();
+    const hoursFromNow = (h: number) => new Date(now + h * 60 * 60 * 1000).toISOString();
+    const makeItem = (id: string, meeting_date: string) => ({
+      doc: {
+        id,
+        board: "Kaupunginhallitus",
+        title: `Asia ${id}`,
+        meeting_date,
+        source_url: `https://example/${id}`,
+      },
+      summary: { summary: `Tiivistelmä ${id}` },
+    });
+    (runIngestPipeline as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      makeItem("passed", hoursFromNow(-1)),
+      makeItem("now", hoursFromNow(0)),
+      makeItem("boundary", hoursFromNow(48)),
+      makeItem("later", hoursFromNow(49)),
+    ]);
+
+    const supabase = {} as SupabaseClient;
+    const anthropic = {} as Anthropic;
+    const sendMessage = vi.fn();
+    const bot = { api: { sendMessage } } as unknown as Bot;
+
+    scheduleJobs({
+      supabase,
+      anthropic,
+      bot,
+      allowedUserId: 123456,
+      dailyBriefingHour: 7,
+    });
+
+    const ingestJobFn = (cron.schedule as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0][1] as () => Promise<void>;
+    await ingestJobFn();
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage).toHaveBeenCalledWith(123456, expect.stringContaining("Asia now"));
+    expect(sendMessage).toHaveBeenCalledWith(123456, expect.stringContaining("Asia boundary"));
+    expect(sendMessage).not.toHaveBeenCalledWith(123456, expect.stringContaining("Asia passed"));
+    expect(sendMessage).not.toHaveBeenCalledWith(123456, expect.stringContaining("Asia later"));
+  });
+
+  it("does not throw when the error-notification itself fails to send", async () => {
+    const { runIngestPipeline } = await import("../skills/politics/pipeline.js");
+    (runIngestPipeline as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Kokkola RSS fetch failed: HTTP 500"),
+    );
+
+    const supabase = {} as SupabaseClient;
+    const anthropic = {} as Anthropic;
+    const sendMessage = vi.fn(() => Promise.reject(new Error("Telegram API down")));
+    const bot = { api: { sendMessage } } as unknown as Bot;
+
+    scheduleJobs({
+      supabase,
+      anthropic,
+      bot,
+      allowedUserId: 123456,
+      dailyBriefingHour: 7,
+    });
+
+    const ingestJobFn = (cron.schedule as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0][1] as () => Promise<void>;
+
+    await expect(ingestJobFn()).resolves.toBeUndefined();
+  });
 });
 ```
 
@@ -3137,8 +3223,29 @@ export interface SchedulerDeps {
   dailyBriefingHour: number;
 }
 
+async function notifyError(bot: Bot, allowedUserId: number, message: string): Promise<void> {
+  try {
+    await bot.api.sendMessage(allowedUserId, message);
+  } catch (notifyErr) {
+    // If even the error notification fails (e.g. Telegram API is down), don't
+    // let that become an unhandled rejection inside a cron callback — it
+    // would otherwise risk crashing the whole scheduler process.
+    console.error(
+      `Failed to notify user about a scheduler error: ${
+        notifyErr instanceof Error ? notifyErr.message : String(notifyErr)
+      }`,
+    );
+  }
+}
+
 export function scheduleJobs(deps: SchedulerDeps): void {
   const { supabase, anthropic, bot, allowedUserId, dailyBriefingHour } = deps;
+
+  if (!Number.isInteger(dailyBriefingHour) || dailyBriefingHour < 0 || dailyBriefingHour > 23) {
+    throw new Error(
+      `scheduleJobs: dailyBriefingHour must be an integer between 0 and 23, got ${dailyBriefingHour}`,
+    );
+  }
 
   cron.schedule("0 * * * *", async () => {
     try {
@@ -3156,10 +3263,7 @@ export function scheduleJobs(deps: SchedulerDeps): void {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await bot.api.sendMessage(
-        allowedUserId,
-        `⚠️ Paikallispolitiikan tiedonhaku epäonnistui: ${message}`,
-      );
+      await notifyError(bot, allowedUserId, `⚠️ Paikallispolitiikan tiedonhaku epäonnistui: ${message}`);
     }
   });
 
@@ -3170,7 +3274,8 @@ export function scheduleJobs(deps: SchedulerDeps): void {
       await markBriefingSent(supabase, generatedAt);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await bot.api.sendMessage(
+      await notifyError(
+        bot,
         allowedUserId,
         `⚠️ Päivittäisen briiffin koostaminen epäonnistui: ${message}`,
       );
@@ -3182,7 +3287,7 @@ export function scheduleJobs(deps: SchedulerDeps): void {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/scheduler/index.test.ts`
-Expected: PASS (3 tests)
+Expected: PASS (6 tests)
 
 - [ ] **Step 5: Commit**
 
