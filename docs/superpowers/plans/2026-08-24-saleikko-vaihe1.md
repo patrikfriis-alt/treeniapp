@@ -2289,12 +2289,23 @@ git commit -m "feat: add archive search and position-statement drafting"
 - Create: `src/telegram/bot.ts`
 - Test: `src/telegram/bot.test.ts`
 
+> **Note (added after Task 15's code-quality review):** Task 15's command handlers
+> (`/opeta`, `/hyvaksy`, `/hylkaa`, `/hae`, `/kannanotto`, free-text fallback) call
+> functions that can throw, and none of those handlers has its own try/catch. Without
+> a bot-level error handler, an uncaught error inside any handler would mean the user
+> gets silence — no reply, no indication anything went wrong. `createBot` below
+> registers `bot.catch(...)`, grammY's global error handler, instead of wrapping every
+> handler individually — this is idiomatic grammY and avoids repeating the same
+> try/catch six times.
+
 - [ ] **Step 1: Write the failing test**
 
 ```typescript
 // src/telegram/bot.test.ts
 import { describe, it, expect, vi } from "vitest";
-import { createAllowlistMiddleware } from "./bot.js";
+import { BotError } from "grammy";
+import { createAllowlistMiddleware, createBot } from "./bot.js";
+import type { Config } from "../config.js";
 
 describe("createAllowlistMiddleware", () => {
   it("calls next() when the sender matches the allowed user id", async () => {
@@ -2330,6 +2341,29 @@ describe("createAllowlistMiddleware", () => {
     expect(ctx.reply).not.toHaveBeenCalled();
   });
 });
+
+describe("createBot error handling", () => {
+  it("registers an error handler that replies with a generic message and logs the error", async () => {
+    const config: Config = {
+      telegramBotToken: "123456:test-token",
+      telegramAllowedUserId: 123456,
+      anthropicApiKey: "test",
+      supabaseUrl: "https://example.supabase.co",
+      supabaseServiceRoleKey: "test",
+      dailyBriefingHour: 7,
+      port: 3000,
+    };
+    const bot = createBot(config);
+
+    const reply = vi.fn(() => Promise.resolve());
+    const ctx = { reply } as any;
+    const err = new BotError(new Error("boom"), ctx);
+
+    await bot.errorHandler(err);
+
+    expect(reply).toHaveBeenCalledWith(expect.stringContaining("Tapahtui virhe"));
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -2340,7 +2374,7 @@ Expected: FAIL — `Cannot find module './bot.js'`
 - [ ] **Step 3: Write `src/telegram/bot.ts`**
 
 ```typescript
-import { Bot, type Context, type NextFunction } from "grammy";
+import { Bot, type BotError, type Context, type NextFunction } from "grammy";
 import type { Config } from "../config.js";
 
 export function createAllowlistMiddleware(allowedUserId: number) {
@@ -2358,6 +2392,15 @@ export function createAllowlistMiddleware(allowedUserId: number) {
 export function createBot(config: Config): Bot {
   const bot = new Bot(config.telegramBotToken);
   bot.use(createAllowlistMiddleware(config.telegramAllowedUserId));
+  bot.catch((err: BotError<Context>) => {
+    const message = err.error instanceof Error ? err.error.message : String(err.error);
+    console.error(`Unhandled error while processing update: ${message}`);
+    err.ctx
+      .reply("Tapahtui virhe komennon käsittelyssä. Yritä myöhemmin uudelleen.")
+      .catch(() => {
+        // Avoid throwing again if even the error-notification reply itself fails.
+      });
+  });
   return bot;
 }
 ```
@@ -2365,7 +2408,7 @@ export function createBot(config: Config): Bot {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/telegram/bot.test.ts`
-Expected: PASS (3 tests)
+Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -2687,6 +2730,154 @@ describe("registerCommands", () => {
 
     expect(reply).toHaveBeenCalledWith(expect.stringContaining("ei ole vielä haettu"));
   });
+
+  it("/hyvaksy approves the pending profile proposal", async () => {
+    const { bot, handlers } = makeFakeBot();
+    const pending = {
+      id: "fb-2",
+      raw_text: "asuntopolitiikka",
+      proposed_profile_text: "Uusi profiiliteksti.",
+      applied: false,
+      created_at: "2026-01-01",
+    };
+    const feedbackSelectLimit = vi.fn(() => Promise.resolve({ data: [pending], error: null }));
+    const feedbackSelectOrder = vi.fn(() => ({ limit: feedbackSelectLimit }));
+    const feedbackSelectEq = vi.fn(() => ({ order: feedbackSelectOrder }));
+    const profileUpdateEq = vi.fn(() => Promise.resolve({ error: null }));
+    const feedbackUpdateEq = vi.fn(() => Promise.resolve({ error: null }));
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === "gatekeeper_feedback") {
+          return {
+            select: vi.fn(() => ({ eq: feedbackSelectEq })),
+            update: vi.fn(() => ({ eq: feedbackUpdateEq })),
+          };
+        }
+        if (table === "gatekeeper_profile") {
+          return { update: vi.fn(() => ({ eq: profileUpdateEq })) };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    } as unknown as SupabaseClient;
+    const anthropic = {} as Anthropic;
+
+    registerCommands(bot, supabase, anthropic);
+
+    const reply = vi.fn();
+    const ctx = { reply } as any;
+    await handlers["hyvaksy"](ctx);
+
+    expect(profileUpdateEq).toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith(expect.stringContaining("päivitetty"));
+  });
+
+  it("/hylkaa rejects the pending profile proposal", async () => {
+    const { bot, handlers } = makeFakeBot();
+    const pending = {
+      id: "fb-3",
+      raw_text: "joukkoliikenne",
+      proposed_profile_text: "Ehdotettu teksti.",
+      applied: false,
+      created_at: "2026-01-01",
+    };
+    const feedbackSelectLimit = vi.fn(() => Promise.resolve({ data: [pending], error: null }));
+    const feedbackSelectOrder = vi.fn(() => ({ limit: feedbackSelectLimit }));
+    const feedbackSelectEq = vi.fn(() => ({ order: feedbackSelectOrder }));
+    const feedbackUpdateEq = vi.fn(() => Promise.resolve({ error: null }));
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === "gatekeeper_feedback") {
+          return {
+            select: vi.fn(() => ({ eq: feedbackSelectEq })),
+            update: vi.fn(() => ({ eq: feedbackUpdateEq })),
+          };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    } as unknown as SupabaseClient;
+    const anthropic = {} as Anthropic;
+
+    registerCommands(bot, supabase, anthropic);
+
+    const reply = vi.fn();
+    const ctx = { reply } as any;
+    await handlers["hylkaa"](ctx);
+
+    expect(feedbackUpdateEq).toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith(expect.stringContaining("hylätty"));
+  });
+
+  it("/hae replies with formatted search results", async () => {
+    const { bot, handlers } = makeFakeBot();
+    const or = vi.fn(() =>
+      Promise.resolve({
+        data: [
+          {
+            id: "1",
+            board: "Kaupunginhallitus",
+            title: "Talousarvio 2027",
+            meeting_date: "2026-10-01",
+            source_url: "https://kokkola10.oncloudos.com/foo",
+          },
+        ],
+        error: null,
+      }),
+    );
+    const select = vi.fn(() => ({ or }));
+    const supabase = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient;
+    const anthropic = {} as Anthropic;
+
+    registerCommands(bot, supabase, anthropic);
+
+    const reply = vi.fn();
+    const ctx = { match: "talous", reply } as any;
+    await handlers["hae"](ctx);
+
+    expect(reply).toHaveBeenCalledWith(expect.stringContaining("Talousarvio 2027"));
+  });
+
+  it("routes non-command text messages through handleFreeTextMessage", async () => {
+    const { bot, handlers } = makeFakeBot();
+    const insert = vi.fn(() => Promise.resolve({ error: null }));
+    const limit = vi.fn(() => Promise.resolve({ data: [], error: null }));
+    const order = vi.fn(() => ({ limit }));
+    const eq = vi.fn(() => ({ order }));
+    const select = vi.fn(() => ({ eq }));
+    const supabase = {
+      from: vi.fn(() => ({ insert, select })),
+    } as unknown as SupabaseClient;
+    const create = vi.fn(() =>
+      Promise.resolve({ content: [{ type: "text", text: "Vastaus." }] }),
+    );
+    const anthropic = { messages: { create } } as unknown as Anthropic;
+
+    registerCommands(bot, supabase, anthropic);
+
+    const reply = vi.fn();
+    const ctx = {
+      message: { text: "Mitä mieltä olet kaavoituksesta?" },
+      from: { id: 123456 },
+      reply,
+    } as any;
+    await handlers["__text__"](ctx);
+
+    expect(reply).toHaveBeenCalledWith("Vastaus.");
+  });
+
+  it("ignores text messages that start with a slash in the free-text handler", async () => {
+    const { bot, handlers } = makeFakeBot();
+    const supabase = { from: vi.fn() } as unknown as SupabaseClient;
+    const anthropic = { messages: { create: vi.fn() } } as unknown as Anthropic;
+
+    registerCommands(bot, supabase, anthropic);
+
+    const reply = vi.fn();
+    const ctx = { message: { text: "/jokin" }, from: { id: 123456 }, reply } as any;
+    await handlers["__text__"](ctx);
+
+    expect(reply).not.toHaveBeenCalled();
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
 });
 ```
 
@@ -2795,7 +2986,7 @@ export function registerCommands(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/telegram/commands.test.ts`
-Expected: PASS (3 tests)
+Expected: PASS (8 tests)
 
 - [ ] **Step 5: Commit**
 
