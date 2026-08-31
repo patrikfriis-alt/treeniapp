@@ -1222,8 +1222,10 @@ import type { MeetingItemLink } from "./kokkolaRss.js";
 
 function makeFakeAnthropic(parsedOutput: unknown) {
   return {
-    messages: {
-      parse: vi.fn(() => Promise.resolve({ parsed_output: parsedOutput })),
+    beta: {
+      messages: {
+        parse: vi.fn(() => Promise.resolve({ parsed_output: parsedOutput })),
+      },
     },
   } as unknown as Anthropic;
 }
@@ -1275,7 +1277,7 @@ Expected: FAIL — `Cannot find module './classify.js'`
 ```typescript
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { HAIKU_MODEL } from "../../claude/client.js";
 import type { GatekeeperDecision } from "../../types.js";
 import type { MeetingItemLink } from "./kokkolaRss.js";
@@ -1295,7 +1297,7 @@ export async function classifyByTitle(
   item: MeetingItemLink,
   profileText: string,
 ): Promise<GatekeeperResult> {
-  const response = await anthropic.messages.parse({
+  const response = await anthropic.beta.messages.parse({
     model: HAIKU_MODEL,
     max_tokens: 512,
     system:
@@ -1316,7 +1318,7 @@ export async function classifyByTitle(
           "Kannattaako tämä asia hakea ja käsitellä kokonaan?",
       },
     ],
-    output_config: { format: zodOutputFormat(GatekeeperSchema) },
+    output_format: betaZodOutputFormat(GatekeeperSchema),
   });
 
   if (!response.parsed_output) {
@@ -1328,6 +1330,8 @@ export async function classifyByTitle(
   return response.parsed_output;
 }
 ```
+
+> **Note (verified against installed SDK):** the plan originally specified `client.messages.parse` + `zodOutputFormat` from `@anthropic-ai/sdk/helpers/zod` + `output_config: { format: ... }`, matching newer Anthropic API docs. The actually-installed `@anthropic-ai/sdk@0.70.1` (pinned by Task 0's `^0.70.0`) only exposes this feature under the beta namespace: `client.beta.messages.parse`, `betaZodOutputFormat` from `@anthropic-ai/sdk/helpers/beta/zod`, and a top-level `output_format` field (not nested under `output_config`). Verified directly against the package's `.d.ts` files rather than guessed. The response field `parsed_output` (used below) is present on both the beta and non-beta result types, so that part was already correct.
 
 - [ ] **Step 4: Run test to verify it passes**
 
