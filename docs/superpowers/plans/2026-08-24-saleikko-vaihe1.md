@@ -56,7 +56,7 @@ cd Unelma
     "dotenv": "^16.4.5",
     "grammy": "^1.30.0",
     "node-cron": "^3.0.3",
-    "zod": "^3.23.8"
+    "zod": "^4.5.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
@@ -67,6 +67,8 @@ cd Unelma
   }
 }
 ```
+
+> **Note (verified during Task 8):** `zod` must be v4, not v3 — `@anthropic-ai/sdk`'s `betaZodOutputFormat` helper (used in Task 8) internally calls `z.toJSONSchema(...)`, which only exists in zod v4. Confirmed directly against the installed packages' source (zod v3.25.76 has no `toJSONSchema` export; `@anthropic-ai/sdk@0.70.1`'s `betaZodOutputFormat` calls it unconditionally). The version above (`^4.5.0`) reflects this; if you're executing this plan against an older snapshot with `zod: "^3.23.8"`, upgrade it before Task 8.
 
 - [ ] **Step 3: Write `tsconfig.json`**
 
