@@ -1649,6 +1649,29 @@ describe("runIngestPipeline", () => {
     expect(fetchMeetingItemDetail).not.toHaveBeenCalled();
     expect(summarizeDocument).not.toHaveBeenCalled();
   });
+
+  it("throws when the existing-source_id lookup fails", async () => {
+    const { classifyByTitle } = await import("./classify.js");
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === "raw_documents") {
+          return {
+            select: vi.fn(() => ({
+              in: vi.fn(() =>
+                Promise.resolve({ data: null, error: { message: "connection reset" } }),
+              ),
+            })),
+          };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    } as unknown as SupabaseClient;
+    const anthropic = {} as Anthropic;
+
+    await expect(runIngestPipeline(supabase, anthropic)).rejects.toThrow("connection reset");
+    expect(classifyByTitle).not.toHaveBeenCalled();
+  });
 });
 ```
 
@@ -1683,13 +1706,16 @@ export async function runIngestPipeline(
   const rssItems = await fetchMeetingItemsRss(50);
   if (rssItems.length === 0) return [];
 
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("raw_documents")
     .select("source_id")
     .in(
       "source_id",
       rssItems.map((item) => item.sourceId),
     );
+  if (existingError) {
+    throw new Error(`runIngestPipeline: ${existingError.message}`);
+  }
   const existingIds = new Set((existing ?? []).map((row: any) => row.source_id));
 
   const newItems = rssItems.filter((item) => !existingIds.has(item.sourceId));
@@ -1792,7 +1818,7 @@ export async function runIngestPipeline(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/skills/politics/pipeline.test.ts`
-Expected: PASS (3 tests)
+Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -2101,6 +2127,18 @@ describe("searchArchive", () => {
     );
   });
 
+  it("strips PostgREST filter-syntax delimiters (, ( )) from the query", async () => {
+    const or = vi.fn(() => Promise.resolve({ data: [], error: null }));
+    const select = vi.fn(() => ({ or }));
+    const supabase = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient;
+
+    await searchArchive(supabase, "asia,id.neq.(0)");
+
+    expect(or).toHaveBeenCalledWith(
+      "title.ilike.%asiaid.neq.0%,body_text.ilike.%asiaid.neq.0%",
+    );
+  });
+
   it("throws when the Supabase query fails", async () => {
     const or = vi.fn(() => Promise.resolve({ data: null, error: { message: "boom" } }));
     const select = vi.fn(() => ({ or }));
@@ -2126,7 +2164,10 @@ export async function searchArchive(
   supabase: SupabaseClient,
   query: string,
 ): Promise<RawDocument[]> {
-  const escaped = query.replace(/[%_]/g, "");
+  // Strip both SQL ILIKE wildcards (%, _) and PostgREST's own filter-syntax
+  // delimiters (, ( )) — the latter would otherwise let a search query inject
+  // additional OR'd filter clauses into the .or() string below.
+  const escaped = query.replace(/[%_,()]/g, "");
   const { data, error } = await supabase
     .from("raw_documents")
     .select("*")
@@ -2139,7 +2180,7 @@ export async function searchArchive(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/skills/politics/search.test.ts`
-Expected: PASS (3 tests)
+Expected: PASS (4 tests)
 
 - [ ] **Step 5: Write the failing test for kannanotto drafting**
 
