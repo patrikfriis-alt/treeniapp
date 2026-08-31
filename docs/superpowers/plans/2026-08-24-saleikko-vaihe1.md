@@ -3129,46 +3129,56 @@ describe("scheduleJobs", () => {
   it("sends an urgent alert only for matched items within the 0-48 hour window", async () => {
     const { runIngestPipeline } = await import("../skills/politics/pipeline.js");
     const now = Date.now();
-    const hoursFromNow = (h: number) => new Date(now + h * 60 * 60 * 1000).toISOString();
-    const makeItem = (id: string, meeting_date: string) => ({
-      doc: {
-        id,
-        board: "Kaupunginhallitus",
-        title: `Asia ${id}`,
-        meeting_date,
-        source_url: `https://example/${id}`,
-      },
-      summary: { summary: `Tiivistelmä ${id}` },
-    });
-    (runIngestPipeline as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-      makeItem("passed", hoursFromNow(-1)),
-      makeItem("now", hoursFromNow(0)),
-      makeItem("boundary", hoursFromNow(48)),
-      makeItem("later", hoursFromNow(49)),
-    ]);
+    // Freeze time for this test: the handler reads Date.now() internally, and
+    // a real (unfrozen) clock can drift a few ms between capturing `now` here
+    // and the handler's own read, tipping the "now" item's hoursUntilMeeting
+    // slightly negative and making the test flaky.
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    try {
+      const hoursFromNow = (h: number) => new Date(now + h * 60 * 60 * 1000).toISOString();
+      const makeItem = (id: string, meeting_date: string) => ({
+        doc: {
+          id,
+          board: "Kaupunginhallitus",
+          title: `Asia ${id}`,
+          meeting_date,
+          source_url: `https://example/${id}`,
+        },
+        summary: { summary: `Tiivistelmä ${id}` },
+      });
+      (runIngestPipeline as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+        makeItem("passed", hoursFromNow(-1)),
+        makeItem("now", hoursFromNow(0)),
+        makeItem("boundary", hoursFromNow(48)),
+        makeItem("later", hoursFromNow(49)),
+      ]);
 
-    const supabase = {} as SupabaseClient;
-    const anthropic = {} as Anthropic;
-    const sendMessage = vi.fn();
-    const bot = { api: { sendMessage } } as unknown as Bot;
+      const supabase = {} as SupabaseClient;
+      const anthropic = {} as Anthropic;
+      const sendMessage = vi.fn();
+      const bot = { api: { sendMessage } } as unknown as Bot;
 
-    scheduleJobs({
-      supabase,
-      anthropic,
-      bot,
-      allowedUserId: 123456,
-      dailyBriefingHour: 7,
-    });
+      scheduleJobs({
+        supabase,
+        anthropic,
+        bot,
+        allowedUserId: 123456,
+        dailyBriefingHour: 7,
+      });
 
-    const ingestJobFn = (cron.schedule as unknown as ReturnType<typeof vi.fn>).mock
-      .calls[0][1] as () => Promise<void>;
-    await ingestJobFn();
+      const ingestJobFn = (cron.schedule as unknown as ReturnType<typeof vi.fn>).mock
+        .calls[0][1] as () => Promise<void>;
+      await ingestJobFn();
 
-    expect(sendMessage).toHaveBeenCalledTimes(2);
-    expect(sendMessage).toHaveBeenCalledWith(123456, expect.stringContaining("Asia now"));
-    expect(sendMessage).toHaveBeenCalledWith(123456, expect.stringContaining("Asia boundary"));
-    expect(sendMessage).not.toHaveBeenCalledWith(123456, expect.stringContaining("Asia passed"));
-    expect(sendMessage).not.toHaveBeenCalledWith(123456, expect.stringContaining("Asia later"));
+      expect(sendMessage).toHaveBeenCalledTimes(2);
+      expect(sendMessage).toHaveBeenCalledWith(123456, expect.stringContaining("Asia now"));
+      expect(sendMessage).toHaveBeenCalledWith(123456, expect.stringContaining("Asia boundary"));
+      expect(sendMessage).not.toHaveBeenCalledWith(123456, expect.stringContaining("Asia passed"));
+      expect(sendMessage).not.toHaveBeenCalledWith(123456, expect.stringContaining("Asia later"));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not throw when the error-notification itself fails to send", async () => {
