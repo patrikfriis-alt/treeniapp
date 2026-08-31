@@ -119,6 +119,7 @@ Kaksivaiheinen suodatus, jotta kalliimpi käsittely (täyden sisällön haku, So
 - Systemd-palvelu käynnistyy automaattisesti uudelleen kaatumisen jälkeen.
 - Claude API -kutsuille tavanomainen retry-logiikka (429/5xx-virheet).
 - **Ulkoinen terveystarkastus:** systemd huomaa vain prosessin oman kaatumisen, ei koko VPS:n tai verkkoyhteyden katkeamista. Säleikkö tarjoaa kevyen `GET /health`-HTTP-päätepisteen, johon osoitetaan ilmainen ulkoinen uptime-tarkistus (esim. UptimeRobot tai Healthchecks.io) muutaman minuutin välein. Jos tarkistus epäonnistuu toistuvasti, palvelu lähettää hälytyksen ulkoisen työkalun kautta (sähköposti/push) — tämä on ainoa tapa huomata täydellinen palvelinkatko, jolloin Säleikkö itse ei voi enää ilmoittaa mitään Telegramissa.
+- **Tunnettu rajoitus — osittainen epäonnistuminen ingest-ajossa:** jos prosessi kaatuu kesken yksittäisen pykälän käsittelyä (Vaiheen 1 rivi on jo tallennettu, mutta Vaihe 2 — sisällön haku ja tiivistys — ei ole vielä valmistunut), kyseinen pykälä jää pysyvästi "kesken" -tilaan, koska idempotenssitarkistus perustuu pelkkään `source_id`:n olemassaoloon, ei valmistumiseen. Tämä on tietoinen, hyväksytty rajoitus Vaihe 1:ssä (yhden käyttäjän hobbyprojekti, ei tuotantoluokan vaatimuksia) — täysi korjaus vaatisi erillisen tila-/valmistumissarakkeen, mikä on ylimitoitettua tähän mittakaavaan. Käytännön korjaus jos näin käy: poista kyseinen rivi manuaalisesti Supabasen Table Editorista, jolloin ingest-ajo käsittelee sen uudelleen seuraavalla kierroksella.
 
 ## Testaus
 
