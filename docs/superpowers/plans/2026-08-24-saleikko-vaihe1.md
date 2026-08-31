@@ -651,18 +651,18 @@ describe("parseMeetingItemDetail", () => {
       "Konserni- ja kaupunkikehitysjaosto päättää",
     );
     expect(result.pdfUrl).toBe(
-      "https://kokkola10.oncloudos.com/cgi/kokous/20261273-7.PDF",
+      "https://kokkola10.oncloudos.com/kokous/20261273-7.PDF",
     );
   });
 
   it("returns null pdfUrl when no PDF link is present", () => {
-    const html = `<html><body><div class='data-part-block-htm'><p>Just text</p></div></body></html>`;
+    const html = `<html><body><div class='data-part-block-htm'><p>Just plain text, no PDF link here</p></div></body></html>`;
     const result = parseMeetingItemDetail(
       html,
       "https://kokkola10.oncloudos.com/cgi/DREQUEST.PHP?page=meetingitem&id=1-1",
     );
     expect(result.pdfUrl).toBeNull();
-    expect(result.bodyText).toBe("Just text");
+    expect(result.bodyText).toBe("Just plain text, no PDF link here");
   });
 
   it("throws if the page structure changed and no body text was found", () => {
@@ -1218,7 +1218,7 @@ vi.mock("./kokkolaDetail.js", () => ({
   fetchMeetingItemDetail: vi.fn(() =>
     Promise.resolve({
       bodyText: "Kunta voi vaikuttaa asuntomarkkinoihin...",
-      pdfUrl: "https://kokkola10.oncloudos.com/cgi/kokous/20261273-7.PDF",
+      pdfUrl: "https://kokkola10.oncloudos.com/kokous/20261273-7.PDF",
     }),
   ),
 }));
