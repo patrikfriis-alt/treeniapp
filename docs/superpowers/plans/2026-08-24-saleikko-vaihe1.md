@@ -3502,6 +3502,8 @@ EnvironmentFile=/opt/saleikko/.env
 ExecStart=/usr/bin/node /opt/saleikko/dist/index.js
 Restart=always
 RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
 
 [Install]
 WantedBy=default.target
@@ -3515,24 +3517,25 @@ WantedBy=default.target
 
 1. Luo VPS (esim. Hetzner CX22, Ubuntu 24.04). Kirjaudu SSH:lla.
 2. Asenna Node.js 20 LTS: `curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs`
-3. Luo palvelukäyttäjä: `sudo useradd -r -m -d /opt/saleikko saleikko`
-4. Kloonaa repo palvelimelle: `sudo -u saleikko git clone <repo-url> /opt/saleikko`
-5. `cd /opt/saleikko && sudo -u saleikko npm install && sudo -u saleikko npm run build`
-6. Kopioi `.env.example` -> `.env` ja täytä oikeat arvot (Telegram-token, Anthropic-avain, Supabase-tunnukset). `sudo chown saleikko:saleikko .env && sudo chmod 600 .env`
-7. Kirjoita portinvartijaprofiilin ensimmäiset ohjeet ensimmäisellä käynnistyksellä Telegramissa `/opeta`-komennolla, ja vahvista ehdotus `/hyvaksy`-komennolla.
-8. Kopioi systemd-yksikkö: `sudo cp deploy/saleikko.service /etc/systemd/system/saleikko.service`
+3. Asenna git (tarvitaan repon kloonaukseen): `sudo apt-get update && sudo apt-get install -y git`
+4. Luo palvelukäyttäjä: `sudo useradd -r -m -d /opt/saleikko saleikko`
+5. Kloonaa repo palvelimelle: `sudo -u saleikko git clone <repo-url> /opt/saleikko`
+6. `cd /opt/saleikko && sudo -u saleikko npm install && sudo -u saleikko npm run build`
+7. Kopioi `.env.example` -> `.env` ja täytä oikeat arvot (Telegram-token, Anthropic-avain, Supabase-tunnukset): `sudo cp /opt/saleikko/.env.example /opt/saleikko/.env && sudo nano /opt/saleikko/.env`. Aseta oikeudet: `sudo chown saleikko:saleikko /opt/saleikko/.env && sudo chmod 600 /opt/saleikko/.env`
+8. Kopioi systemd-yksikkö: `sudo cp /opt/saleikko/deploy/saleikko.service /etc/systemd/system/saleikko.service`
 9. `sudo systemctl daemon-reload && sudo systemctl enable --now saleikko`
 10. Varmista tila: `sudo systemctl status saleikko` ja `sudo journalctl -u saleikko -f`
-11. `linger`-tuki uudelleenkäynnistyksen yli: `sudo loginctl enable-linger saleikko` (varmistaa palvelun käynnistymisen jo ennen käyttäjän kirjautumista rebootin jälkeen — relevantti jos User-tason systemd-yksikköä käytettäisiin; tässä System-tason yksikkö kattaa saman jo `WantedBy=default.target` + `enable`).
+11. Kun palvelu on käynnissä (edellinen vaihe), kirjoita portinvartijaprofiilin ensimmäiset ohjeet Telegramissa `/opeta`-komennolla, ja vahvista ehdotus `/hyvaksy`-komennolla.
+12. `loginctl enable-linger` ei ole tässä tarpeen: se koskee User-tason systemd-yksiköitä, jotka käynnistyvät vasta käyttäjän kirjautuessa sisään. Tämä on System-tason yksikkö (`/etc/systemd/system/...`), joka käynnistyy jo `WantedBy=default.target` + `enable` -asetuksilla myös ennen mitään kirjautumista.
 
 ## Kulukatto (tee ennen tuotantoon vientiä)
 
-12. Kirjaudu [console.anthropic.com](https://console.anthropic.com) → Settings → Limits, ja aseta kuukausittainen käyttökatto (esim. 20-30 € kattamaan Vaihe 1:n arvioitu 5-10 €/kk reilulla marginaalilla). Tämä on riippumaton koodista — pysäyttää kulun API-tasolla vaikka ohjelmassa olisi bugi joka kutsuisi Claudea odottamattoman usein.
+13. Kirjaudu [console.anthropic.com](https://console.anthropic.com) → Settings → Limits, ja aseta kuukausittainen käyttökatto (esim. 20-30 € kattamaan Vaihe 1:n arvioitu 5-10 €/kk reilulla marginaalilla). Tämä on riippumaton koodista — pysäyttää kulun API-tasolla vaikka ohjelmassa olisi bugi joka kutsuisi Claudea odottamattoman usein.
 
 ## Ulkoinen terveystarkastus
 
-13. Avaa palvelimen palomuurista portti (oletus 3000, sama kuin `.env`:n `PORT`) vain terveystarkastuspalvelun tarvitsemille lähdeosoitteille, tai aseta se localhostiin ja käytä käänteisproxyä jos haluat rajoittaa pääsyä tarkemmin — Vaihe 1:n MVP:ssä riittää avata portti suoraan, koska `/health` ei paljasta mitään arkaluontoista.
-14. Rekisteröi ilmainen ulkoinen uptime-tarkistus (esim. [UptimeRobot](https://uptimerobot.com) tai [Healthchecks.io](https://healthchecks.io)) osoittamaan `http://<vps-ip>:3000/health` muutaman minuutin välein, ja liitä siihen sähköposti-/push-hälytys jos tarkistus epäonnistuu useita kertoja peräkkäin.
+14. Avaa palvelimen palomuurista portti (oletus 3000, sama kuin `.env`:n `PORT`) vain terveystarkastuspalvelun tarvitsemille lähdeosoitteille, tai aseta se localhostiin ja käytä käänteisproxyä jos haluat rajoittaa pääsyä tarkemmin — Vaihe 1:n MVP:ssä riittää avata portti suoraan, koska `/health` ei paljasta mitään arkaluontoista.
+15. Rekisteröi ilmainen ulkoinen uptime-tarkistus (esim. [UptimeRobot](https://uptimerobot.com) tai [Healthchecks.io](https://healthchecks.io)) osoittamaan `http://<vps-ip>:3000/health` muutaman minuutin välein, ja liitä siihen sähköposti-/push-hälytys jos tarkistus epäonnistuu useita kertoja peräkkäin.
 ```
 
 - [ ] **Step 3: Commit**
@@ -3584,4 +3587,4 @@ Go to console.anthropic.com → Settings → Limits and verify the monthly cap s
 
 - [ ] **Step 9: Confirm the external health check is live**
 
-`curl http://<vps-ip>:3000/health` from your own machine returns `ok`. Confirm the uptime monitor (Task 18, step 14) shows the check as "up". Then stop the service (`sudo systemctl stop saleikko`) and confirm the monitor flips to "down" and sends its alert within its configured interval — this proves the alert path actually works, not just that it's configured. Restart with `sudo systemctl start saleikko` afterwards.
+`curl http://<vps-ip>:3000/health` from your own machine returns `ok`. Confirm the uptime monitor (Task 18, step 15) shows the check as "up". Then stop the service (`sudo systemctl stop saleikko`) and confirm the monitor flips to "down" and sends its alert within its configured interval — this proves the alert path actually works, not just that it's configured. Restart with `sudo systemctl start saleikko` afterwards.
