@@ -2327,6 +2327,7 @@ describe("createAllowlistMiddleware", () => {
     await middleware(ctx, next);
 
     expect(next).not.toHaveBeenCalled();
+    expect(ctx.reply).not.toHaveBeenCalled();
   });
 });
 ```
@@ -2345,6 +2346,9 @@ import type { Config } from "../config.js";
 export function createAllowlistMiddleware(allowedUserId: number) {
   return async (ctx: Context, next: NextFunction) => {
     if (ctx.from?.id !== allowedUserId) {
+      console.warn(
+        `Ignoring update from unauthorized Telegram user id: ${ctx.from?.id ?? "unknown"}`,
+      );
       return;
     }
     await next();
