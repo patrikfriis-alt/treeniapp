@@ -895,7 +895,7 @@ describe("proposeProfileUpdate", () => {
     }));
     const supabase = makeFakeSupabase({ gatekeeper_feedback: { insert } });
 
-    const create = vi.fn(() =>
+    const create = vi.fn((..._args: unknown[]) =>
       Promise.resolve({
         content: [
           { type: "text", text: "Kaavoitus kiinnostaa aina. Rakennusluvat eivät kiinnosta." },
@@ -2085,7 +2085,7 @@ describe("draftPosition", () => {
     }));
     const supabase = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient;
 
-    const create = vi.fn(() =>
+    const create = vi.fn((..._args: unknown[]) =>
       Promise.resolve({
         content: [{ type: "text", text: "Luonnos kannanotoksi asuntotuotannosta." }],
       }),
