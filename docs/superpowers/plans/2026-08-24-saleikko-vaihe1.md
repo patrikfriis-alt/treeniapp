@@ -3447,7 +3447,9 @@ Expected: no errors.
 - [ ] **Step 8: Run the full test suite**
 
 Run: `npm test`
-Expected: all tests pass (Tasks 1, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 — 41 tests total).
+Expected: all tests pass. (The exact total count has shifted repeatedly across tasks as
+review-driven fixes added coverage — don't hardcode a number here; just confirm zero
+failures across the whole suite.)
 
 - [ ] **Step 9: Commit**
 
