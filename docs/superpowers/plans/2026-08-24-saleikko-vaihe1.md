@@ -1256,6 +1256,17 @@ describe("classifyByTitle", () => {
     expect(result.reasoning).toContain("housing");
   });
 
+  it("returns uncertain when the title is ambiguous relative to the profile", async () => {
+    const anthropic = makeFakeAnthropic({
+      decision: "uncertain",
+      reasoning: "Title is ambiguous relative to the profile.",
+    });
+
+    const result = await classifyByTitle(anthropic, ITEM, PROFILE_TEXT);
+
+    expect(result.decision).toBe("uncertain");
+  });
+
   it("returns no_match when the title is unrelated to the profile", async () => {
     const anthropic = makeFakeAnthropic({
       decision: "no_match",
@@ -1338,7 +1349,7 @@ export async function classifyByTitle(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/skills/politics/classify.test.ts`
-Expected: PASS (2 tests)
+Expected: PASS (3 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -2901,7 +2912,7 @@ Expected: no errors.
 - [ ] **Step 8: Run the full test suite**
 
 Run: `npm test`
-Expected: all tests pass (Tasks 1, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 — 40 tests total).
+Expected: all tests pass (Tasks 1, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 — 41 tests total).
 
 - [ ] **Step 9: Commit**
 
