@@ -207,6 +207,17 @@ describe("loadConfig", () => {
     expect(config.dailyBriefingHour).toBe(9);
     expect(config.port).toBe(8080);
   });
+
+  it("throws a clear error when a numeric variable is not a valid number", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "bot-token";
+    process.env.TELEGRAM_ALLOWED_USER_ID = "not-a-number";
+    process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+
+    const { loadConfig } = await import("./config.js");
+    expect(() => loadConfig()).toThrow(/Invalid number for TELEGRAM_ALLOWED_USER_ID/);
+  });
 });
 ```
 
@@ -238,15 +249,29 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function parseNumber(value: string, varName: string): number {
+  const num = Number(value);
+  if (Number.isNaN(num)) {
+    throw new Error(`Invalid number for ${varName}: ${value}`);
+  }
+  return num;
+}
+
 export function loadConfig(): Config {
   return {
     telegramBotToken: requireEnv("TELEGRAM_BOT_TOKEN"),
-    telegramAllowedUserId: Number(requireEnv("TELEGRAM_ALLOWED_USER_ID")),
+    telegramAllowedUserId: parseNumber(
+      requireEnv("TELEGRAM_ALLOWED_USER_ID"),
+      "TELEGRAM_ALLOWED_USER_ID",
+    ),
     anthropicApiKey: requireEnv("ANTHROPIC_API_KEY"),
     supabaseUrl: requireEnv("SUPABASE_URL"),
     supabaseServiceRoleKey: requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    dailyBriefingHour: Number(process.env.DAILY_BRIEFING_HOUR ?? "7"),
-    port: Number(process.env.PORT ?? "3000"),
+    dailyBriefingHour: parseNumber(
+      process.env.DAILY_BRIEFING_HOUR ?? "7",
+      "DAILY_BRIEFING_HOUR",
+    ),
+    port: parseNumber(process.env.PORT ?? "3000", "PORT"),
   };
 }
 ```
@@ -254,7 +279,7 @@ export function loadConfig(): Config {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/config.test.ts`
-Expected: PASS (3 tests)
+Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -2537,7 +2562,7 @@ Expected: no errors.
 - [ ] **Step 8: Run the full test suite**
 
 Run: `npm test`
-Expected: all tests pass (Tasks 1, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 — 33 tests total).
+Expected: all tests pass (Tasks 1, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 — 34 tests total).
 
 - [ ] **Step 9: Commit**
 
