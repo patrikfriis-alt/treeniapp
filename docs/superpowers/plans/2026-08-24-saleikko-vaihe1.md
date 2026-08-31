@@ -3009,7 +3009,7 @@ Wires the ingest pipeline (hourly), the daily briefing (configurable hour), and 
 
 ```typescript
 // src/scheduler/index.test.ts
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import cron from "node-cron";
 import { scheduleJobs } from "./index.js";
 import type { SupabaseClient } from "../supabase/client.js";
@@ -3031,6 +3031,13 @@ vi.mock("../skills/politics/briefing.js", () => ({
 }));
 
 describe("scheduleJobs", () => {
+  // vi.mock is hoisted and shared across the whole file, so cron.schedule's
+  // mock.calls would otherwise accumulate across tests and calls[0]/calls[1]
+  // in later tests would point at an earlier test's closures.
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("schedules an hourly ingest job and a daily briefing job at the configured hour", () => {
     const supabase = {} as SupabaseClient;
     const anthropic = {} as Anthropic;
