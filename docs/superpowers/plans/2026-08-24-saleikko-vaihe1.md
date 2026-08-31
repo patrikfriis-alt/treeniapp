@@ -14,23 +14,25 @@
 
 ## Before you start
 
-All work happens in a **new, separate repository** at `/Users/patrikfriis/Projects/saleikko` (not inside `treeniapp`). Task 0 creates it. Every file path below is relative to that repo root unless stated otherwise.
+All work happens in a **new, separate repository** at `/Users/patrikfriis/Projects/Unelma` (not inside `treeniapp`). Task 0 creates it. Every file path below is relative to that repo root unless stated otherwise.
 
 ## Task 0: Repo scaffold
 
 **Files:**
-- Create: `/Users/patrikfriis/Projects/saleikko/package.json`
-- Create: `/Users/patrikfriis/Projects/saleikko/tsconfig.json`
-- Create: `/Users/patrikfriis/Projects/saleikko/.gitignore`
-- Create: `/Users/patrikfriis/Projects/saleikko/.env.example`
-- Create: `/Users/patrikfriis/Projects/saleikko/vitest.config.ts`
+- Create: `/Users/patrikfriis/Projects/Unelma/package.json`
+- Create: `/Users/patrikfriis/Projects/Unelma/tsconfig.json`
+- Create: `/Users/patrikfriis/Projects/Unelma/.gitignore`
+- Create: `/Users/patrikfriis/Projects/Unelma/.env.example`
+- Create: `/Users/patrikfriis/Projects/Unelma/vitest.config.ts`
 
-- [ ] **Step 1: Create the repo directory and initialize git**
+- [ ] **Step 1: Clone the existing repo**
+
+The GitHub repo `https://github.com/patrikfriis-alt/Unelma` already exists (created via GitHub, contains only a `README.md`). Clone it locally:
 
 ```bash
-mkdir -p /Users/patrikfriis/Projects/saleikko
-cd /Users/patrikfriis/Projects/saleikko
-git init
+cd /Users/patrikfriis/Projects
+git clone https://github.com/patrikfriis-alt/Unelma.git
+cd Unelma
 ```
 
 - [ ] **Step 2: Write `package.json`**
