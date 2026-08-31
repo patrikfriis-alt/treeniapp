@@ -2394,7 +2394,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 describe("handleFreeTextMessage", () => {
   it("logs the user message, calls Claude with history, logs and returns the reply", async () => {
     const insert = vi.fn(() => Promise.resolve({ error: null }));
-    const order = vi.fn(() =>
+    const limit = vi.fn(() =>
       Promise.resolve({
         data: [
           { role: "user", content: "Aiempi kysymys" },
@@ -2403,8 +2403,8 @@ describe("handleFreeTextMessage", () => {
         error: null,
       }),
     );
-    const limit = vi.fn(() => ({ order }));
-    const eq = vi.fn(() => ({ order: limit }));
+    const order = vi.fn(() => ({ limit }));
+    const eq = vi.fn(() => ({ order }));
     const select = vi.fn(() => ({ eq }));
     const supabase = {
       from: vi.fn(() => ({ insert, select })),
