@@ -2657,6 +2657,36 @@ describe("registerCommands", () => {
       expect.stringContaining("Kaavoitus kiinnostaa aina."),
     );
   });
+
+  it("/kannanotto tells the user when no matching document has body_text yet", async () => {
+    const { bot, handlers } = makeFakeBot();
+    const or = vi.fn(() =>
+      Promise.resolve({
+        data: [
+          {
+            id: "1",
+            title: "Kaavamuutos",
+            board: "Kaupunginhallitus",
+            meeting_date: "2026-09-01",
+            source_url: "https://kokkola10.oncloudos.com/...",
+            body_text: null,
+          },
+        ],
+        error: null,
+      }),
+    );
+    const select = vi.fn(() => ({ or }));
+    const supabase = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient;
+    const anthropic = { messages: { create: vi.fn() } } as unknown as Anthropic;
+
+    registerCommands(bot, supabase, anthropic);
+
+    const reply = vi.fn();
+    const ctx = { match: "kaava", reply } as any;
+    await handlers["kannanotto"](ctx);
+
+    expect(reply).toHaveBeenCalledWith(expect.stringContaining("ei ole vielä haettu"));
+  });
 });
 ```
 
@@ -2738,7 +2768,14 @@ export function registerCommands(
       await ctx.reply(`En löytänyt pykälää haulla "${query}".`);
       return;
     }
-    const draft = await draftPosition(supabase, anthropic, results[0]);
+    const match = results.find((doc) => doc.body_text);
+    if (!match) {
+      await ctx.reply(
+        `Löysin osumia haulla "${query}", mutta niiden sisältöä ei ole vielä haettu — kannanottoa ei voi vielä laatia.`,
+      );
+      return;
+    }
+    const draft = await draftPosition(supabase, anthropic, match);
     await ctx.reply(draft);
   });
 
@@ -2758,7 +2795,7 @@ export function registerCommands(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/telegram/commands.test.ts`
-Expected: PASS (2 tests)
+Expected: PASS (3 tests)
 
 - [ ] **Step 5: Commit**
 
