@@ -147,7 +147,15 @@ git commit -m "chore: scaffold saleikko project"
 
 ```typescript
 // src/config.test.ts
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+// config.ts imports "dotenv/config" for its side effect of reading a real
+// .env file from disk. If one happens to exist in the working directory
+// (normal for local dev), it would repopulate the env vars this suite
+// deletes in beforeEach, making "throws when missing" unable to observe a
+// truly-missing variable. Stub it out so these tests are hermetic regardless
+// of what's on disk.
+vi.mock("dotenv/config", () => ({}));
 
 const REQUIRED_VARS = [
   "TELEGRAM_BOT_TOKEN",
