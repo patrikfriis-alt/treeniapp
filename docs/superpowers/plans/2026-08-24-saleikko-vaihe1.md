@@ -3040,7 +3040,7 @@ git commit -m "feat: register Telegram commands and free-text fallback"
 
 ## Task 16: Scheduler
 
-Wires the ingest pipeline (hourly), the daily briefing (configurable hour), and immediate urgent notification for newly matched items whose meeting is within 48 hours.
+Wires the ingest pipeline (hourly, 8-18 Mon-Fri Europe/Helsinki time — no need to poll outside office hours), the daily briefing (configurable hour, also Europe/Helsinki time), and immediate urgent notification for newly matched items whose meeting is within 48 hours.
 
 **Files:**
 - Create: `src/scheduler/index.ts`
@@ -3094,8 +3094,10 @@ describe("scheduleJobs", () => {
 
     const scheduleCalls = (cron.schedule as unknown as ReturnType<typeof vi.fn>).mock.calls;
     expect(scheduleCalls).toHaveLength(2);
-    expect(scheduleCalls[0][0]).toBe("0 * * * *");
+    expect(scheduleCalls[0][0]).toBe("0 8-18 * * 1-5");
+    expect(scheduleCalls[0][2]).toEqual({ timezone: "Europe/Helsinki" });
     expect(scheduleCalls[1][0]).toBe("0 7 * * *");
+    expect(scheduleCalls[1][2]).toEqual({ timezone: "Europe/Helsinki" });
   });
 
   it("notifies the user on Telegram when the ingest job throws", async () => {
@@ -3265,6 +3267,11 @@ import { runIngestPipeline } from "../skills/politics/pipeline.js";
 import { composeDailyBriefing, markBriefingSent } from "../skills/politics/briefing.js";
 
 const URGENT_HOURS = 48;
+// The VPS runs system time in UTC, but the user is in Finland — pass this
+// explicitly to every cron.schedule() call so job times mean what they say
+// (and so daylight saving transitions are handled automatically, unlike a
+// fixed UTC offset baked into the cron expression).
+const SCHEDULER_TIMEZONE = "Europe/Helsinki";
 
 export interface SchedulerDeps {
   supabase: SupabaseClient;
@@ -3298,40 +3305,48 @@ export function scheduleJobs(deps: SchedulerDeps): void {
     );
   }
 
-  cron.schedule("0 * * * *", async () => {
-    try {
-      const matched = await runIngestPipeline(supabase, anthropic);
-      for (const item of matched) {
-        const hoursUntilMeeting =
-          (new Date(item.doc.meeting_date).getTime() - Date.now()) / (1000 * 60 * 60);
-        if (hoursUntilMeeting >= 0 && hoursUntilMeeting <= URGENT_HOURS) {
-          await bot.api.sendMessage(
-            allowedUserId,
-            `⚠️ Kiireellinen: ${item.doc.board} — ${item.doc.title} ` +
-              `(kokous ${item.doc.meeting_date})\n${item.summary.summary}\n${item.doc.source_url}`,
-          );
+  cron.schedule(
+    "0 8-18 * * 1-5",
+    async () => {
+      try {
+        const matched = await runIngestPipeline(supabase, anthropic);
+        for (const item of matched) {
+          const hoursUntilMeeting =
+            (new Date(item.doc.meeting_date).getTime() - Date.now()) / (1000 * 60 * 60);
+          if (hoursUntilMeeting >= 0 && hoursUntilMeeting <= URGENT_HOURS) {
+            await bot.api.sendMessage(
+              allowedUserId,
+              `⚠️ Kiireellinen: ${item.doc.board} — ${item.doc.title} ` +
+                `(kokous ${item.doc.meeting_date})\n${item.summary.summary}\n${item.doc.source_url}`,
+            );
+          }
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await notifyError(bot, allowedUserId, `⚠️ Paikallispolitiikan tiedonhaku epäonnistui: ${message}`);
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await notifyError(bot, allowedUserId, `⚠️ Paikallispolitiikan tiedonhaku epäonnistui: ${message}`);
-    }
-  });
+    },
+    { timezone: SCHEDULER_TIMEZONE },
+  );
 
-  cron.schedule(`0 ${dailyBriefingHour} * * *`, async () => {
-    try {
-      const { message, generatedAt } = await composeDailyBriefing(supabase);
-      await bot.api.sendMessage(allowedUserId, message);
-      await markBriefingSent(supabase, generatedAt);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await notifyError(
-        bot,
-        allowedUserId,
-        `⚠️ Päivittäisen briiffin koostaminen epäonnistui: ${message}`,
-      );
-    }
-  });
+  cron.schedule(
+    `0 ${dailyBriefingHour} * * *`,
+    async () => {
+      try {
+        const { message, generatedAt } = await composeDailyBriefing(supabase);
+        await bot.api.sendMessage(allowedUserId, message);
+        await markBriefingSent(supabase, generatedAt);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await notifyError(
+          bot,
+          allowedUserId,
+          `⚠️ Päivittäisen briiffin koostaminen epäonnistui: ${message}`,
+        );
+      }
+    },
+    { timezone: SCHEDULER_TIMEZONE },
+  );
 }
 ```
 
