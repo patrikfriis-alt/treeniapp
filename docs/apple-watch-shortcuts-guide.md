@@ -20,9 +20,18 @@ Lisää **Aseta muuttuja**-toiminnot (Set Variable) jokaiselle seuraavalle treen
 - `Duration` ← **Kesto** minuutteina
 - `Calories` ← **Aktiivinen energia** (Total Active Energy), yksikkö kcal
 - `AvgHR` ← **Keskisyke** (Average Heart Rate), pyöristä **Pyöristä numero** (Round Number) -toiminnolla kokonaisluvuksi ennen tallennusta muuttujaan (HealthKitin syke on lähes aina desimaaliluku, esim. 142.37)
-- `Distance` ← **Kokonaismatka** (Total Distance), yksikkö km (voi olla tyhjä salitreeneillä)
+- `Distance` ← **Kokonaismatka** (Total Distance), yksikkö km (voi olla tyhjä salitreeneillä, esim. sisäpyöräily/stepper/crosstrainer)
 - `WorkoutUUID` ← Treenin **UUID**
 - `EndDate` ← **Päättymispäivä**, muotoile **Muotoile päivämäärä** -toiminnolla muotoon `yyyy-MM-dd`
+
+**`Distance`-muuttujan jatkokäsittely (pakollinen ennen kuin arvoa käytetään missään pyynnön rungossa):**
+
+1. **Hae numerot kohteesta** (Get Numbers from) `Distance` — HealthKitin desimaaliluku voi tulla merkkijonona.
+2. **Korvaa teksti** (Replace Text): korvaa `,` merkillä `.` edellisen tuloksessa — HealthKitin desimaaliluku on Suomi-lokaalissa pilkullinen (esim. `5,03`), ja tietokannan `double precision` -sarake hyväksyy vain pisteellisen muodon.
+3. **Jos** edellisen "Korvaa teksti"-tuloksen arvo **ei ole olemassa** (has no value) — tämä osuu kun treenillä ei ollut matkaa (sisätreenit ilman GPS:ää):
+   - **Teksti**-toiminto sisällöllä `0` → **Aseta muuttuja** `DistanceFixed` = tämän Teksti-toiminnon tulos
+   - **Muuten**: **Aseta muuttuja** `DistanceFixed` = edellisen "Korvaa teksti"-toiminnon tulos
+4. Käytä jatkossa kaikissa pyynnön rungoissa `[DistanceFixed]`, **ei koskaan** suoraan `[Distance]` tai raakaa "Korvaa teksti"-tulosta — muuten tyhjä matka lähtee tyhjänä merkkijonona (`""`), jonka Postgres hylkää kokonaisen rivin mukana virheellä `22P02: invalid input syntax for type double precision` (havaittu tuotannossa 2026-09-02: kaikki sisäpyöräily-/stepper-/crosstrainer-treenit katosivat täysin äänettömästi tämän takia, kunnes korjattiin).
 
 ## 4. Reititys treenityypin mukaan (If/Otherwise)
 
@@ -66,7 +75,7 @@ Lisää **Jos**-toiminto (If): `WorkoutType` **sisältää** `Strength`
        "duration_min": [Duration],
        "calories": [Calories],
        "avg_heart_rate": [AvgHR],
-       "distance_km": [Distance],
+       "distance_km": [DistanceFixed],
        "source": "watch",
        "healthkit_uuid": "[WorkoutUUID]"
      }
@@ -81,7 +90,9 @@ Paina Shortcutsin automaation kohdalla **"Kokeile"** (Run) manuaalisesti ilman e
 ## 6. Vianetsintä
 
 - Jos rivi ei ilmesty: tarkista että anon-avain on oikein kopioitu (löytyy `index.html`:n `SB_KEY`-vakiosta), ja että migraatiotiedosto `supabase/migrations/20260708_apple_watch_sync.sql` on ajettu.
-- Jos yksittäiset treenityypit (esim. sisäpyöräily, stepper, crosstrainer) eivät koskaan ilmesty vaikka Juoksu/Kävely toimivat: tämä on merkki siitä että automaatio on rakennettu vanhalla, neljä erillistä POST-kopiota käyttävällä rakenteella eikä sen "muu"-haara (tai Hockey-haara) ole koskaan toiminut — tarkista Supabasen Table Editorista `activity_data`-taulusta onko sinne koskaan tullut `source: watch` -rivi jonka `activity_type` on jokin muu kuin Juoksu/Kävely/Jääkiekko. Jos ei ole, rakenna reititys-vaihe (kohta 4) uudelleen tämän oppaan nykyisen, yhden POST-toiminnon rakenteen mukaan äläkä neljän erillisen kopion mukaan.
+- Jos yksittäiset treenityypit (esim. sisäpyöräily, stepper, crosstrainer) eivät koskaan ilmesty vaikka Juoksu/Kävely toimivat: kaksi mahdollista syytä, tarkista tässä järjestyksessä:
+  1. **Tyhjä matka hylkää koko rivin (todennäköisin syy, havaittu tuotannossa 2026-09-02):** paina Shortcutsin automaation "Kokeile" ja lue mahdollinen virhevastaus — jos se sisältää `"code":"22P02"` ja `invalid input syntax for type double precision`, kyse on kohdan 3 `DistanceFixed`-varakäsittelystä (tyhjä matka lähtee tyhjänä merkkijonona). Varmista että kaikki neljä "Hae sisältö URL:sta" -toimintoa (Run/Walk/Hockey/muu) käyttävät `distance_km`-kentässä `[DistanceFixed]`-muuttujaa, eivät suoraan `[Distance]`:tä tai "Korvaa teksti" -toiminnon raakaa tulosta.
+  2. **Puuttuva tai rikkoutunut haara:** jos rivi ei ilmesty eikä mitään virhettäkään näy, tarkista Supabasen Table Editorista `activity_data`-taulusta onko sinne koskaan tullut `source: watch` -rivi jonka `activity_type` on jokin muu kuin Juoksu/Kävely/Jääkiekko. Jos ei ole, rakenna reititys-vaihe (kohta 4) uudelleen tämän oppaan nykyisen, yhden POST-toiminnon rakenteen mukaan äläkä neljän erillisen kopion mukaan.
 - Jos sali-kalorit eivät päivity: varmista että olet merkinnyt kyseisen päivän session "tehdyksi" Treeniapista ennen tai pian Watch-treenin jälkeen — `workout_sessions`-rivi täytyy olla olemassa jotta `PATCH` löytää sen.
 - Jos tallennus epäonnistuu virheellä joka viittaa `avg_heart_rate`-kenttään: varmista että käytit **Pyöristä numero** -toimintoa `AvgHR`-muuttujalle vaiheessa 3 — HealthKitin desimaaliluku voi hylkääntyä jos tietokannan sarake ei hyväksy desimaaleja.
 - Jos askeleet eivät koskaan ilmesty: tarkista että migraatiotiedosto `supabase/migrations/20260715_step_data.sql` on ajettu, ja että Shortcutsilla on lupa lukea askeleita Health-sovelluksen tietosuoja-asetuksista (Health-sovellus → profiilikuvake → Sovellukset → Shortcuts → Askeleet-lupa päällä).

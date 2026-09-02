@@ -20,9 +20,18 @@ Add **Set Variable** actions for each of the following workout fields (available
 - `Duration` ← **Duration** in minutes
 - `Calories` ← **Total Active Energy**, in kcal
 - `AvgHR` ← **Average Heart Rate** — round it to a whole number with the **Round Number** action before storing it in the variable (HealthKit's heart rate is almost always a decimal, e.g. 142.37)
-- `Distance` ← **Total Distance**, in km (can be empty for gym workouts)
+- `Distance` ← **Total Distance**, in km (can be empty for gym workouts, and for any workout without GPS/location data — e.g. indoor cycling, stair stepper, elliptical)
 - `WorkoutUUID` ← the workout's **UUID**
 - `EndDate` ← **End Date**, formatted with the **Format Date** action as `yyyy-MM-dd`
+
+**Further processing of `Distance` (required before it's used in any request body):**
+
+1. **Get Numbers from** `Distance` — HealthKit's decimal value can come through as a string.
+2. **Replace Text**: replace `,` with `.` in that result — HealthKit's decimal is comma-formatted under a Finnish locale (e.g. `5,03`), and the database's `double precision` column only accepts the dot form.
+3. **If** that Replace Text result **has no value** (this hits whenever the workout had no distance — indoor workouts without GPS):
+   - **Text** action with content `0` → **Set Variable** `DistanceFixed` = that Text action's result
+   - **Otherwise**: **Set Variable** `DistanceFixed` = the Replace Text result
+4. Use `[DistanceFixed]` everywhere downstream in request bodies — **never** `[Distance]` directly or the raw Replace Text output. Otherwise an empty distance goes out as an empty string (`""`), which Postgres rejects — along with the entire row — with `22P02: invalid input syntax for type double precision` (found in production 2026-09-02: every indoor cycling/stair stepper/elliptical workout was silently vanishing because of this, until fixed).
 
 ## 4. Route by workout type (If/Otherwise)
 
@@ -66,7 +75,7 @@ Add an **If** action: `WorkoutType` **contains** `Strength`
        "duration_min": [Duration],
        "calories": [Calories],
        "avg_heart_rate": [AvgHR],
-       "distance_km": [Distance],
+       "distance_km": [DistanceFixed],
        "source": "watch",
        "healthkit_uuid": "[WorkoutUUID]"
      }
@@ -83,7 +92,9 @@ Tap **"Run"** on the automation manually, without doing a real workout — if yo
 ## 6. Troubleshooting
 
 - **No row appears:** check that the anon key was copied correctly (found in `index.html`'s `SB_KEY` constant), and that the migration file `supabase/migrations/20260708_apple_watch_sync.sql` has been run.
-- **Specific workout types (e.g. indoor cycling, stair stepper, elliptical) never appear even though Run/Walk work fine:** this is a sign the automation was built with the old four-separate-POST-copies structure and its "other" (or Hockey) branch never actually worked — check the `activity_data` table in the Supabase Table Editor for any `source: watch` row whose `activity_type` isn't Juoksu/Kävely/Jääkiekko. If there's none, rebuild the routing step (section 4) to match this guide's current single-POST structure instead of four separate copies.
+- **Specific workout types (e.g. indoor cycling, stair stepper, elliptical) never appear even though Run/Walk work fine:** two possible causes, check in this order:
+  1. **Empty distance rejecting the whole row (most likely, found in production 2026-09-02):** tap "Run" on the automation and read any error response — if it contains `"code":"22P02"` and `invalid input syntax for type double precision`, it's the `DistanceFixed` fallback from section 3. Make sure all four Get Contents of URL actions (Run/Walk/Hockey/other) use `[DistanceFixed]` for `distance_km`, not `[Distance]` directly or the raw Replace Text output.
+  2. **A missing or broken branch:** if no row appears and there's no error either, this is a sign the automation was built with the old four-separate-POST-copies structure and its "other" (or Hockey) branch never actually worked — check the `activity_data` table in the Supabase Table Editor for any `source: watch` row whose `activity_type` isn't Juoksu/Kävely/Jääkiekko. If there's none, rebuild the routing step (section 4) to match this guide's current single-POST structure instead of four separate copies.
 - **Gym calories don't update:** make sure you've marked that day's session as "done" in Treeniapp before or shortly after ending the Watch workout — the `workout_sessions` row must already exist for the `PATCH` to find it.
 - **Save fails with an error referencing `avg_heart_rate`:** make sure you used the **Round Number** action on the `AvgHR` variable in step 3 — HealthKit's decimal value can be rejected if the database column doesn't accept decimals.
 - **Steps never appear:** check that the migration file `supabase/migrations/20260715_step_data.sql` has been run, and that Shortcuts has permission to read Steps in the Health app's privacy settings (Health app → profile icon → Apps → Shortcuts → Steps must be enabled).
