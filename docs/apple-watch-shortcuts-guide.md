@@ -46,13 +46,15 @@ Lisää **Jos**-toiminto (If): `WorkoutType` **sisältää** `Strength`
 
 ### Jos EI (kaikki muut treenityypit — tähän yhteen "Otherwise"-haaraan koko loppuosa):
 
-1. Lisää **Aseta muuttuja**-toiminto `ActivityType`-nimiselle muuttujalle: **ei** vielä arvoa, vaan valitse arvo seuraavalla sisäkkäisellä if-ketjulla, joka **ei sisällä yhtäkään verkkokutsua** — pelkkiä "Aseta muuttuja"-toimintoja:
-   - **Jos**: `WorkoutType` **sisältää** `Run` → **Aseta muuttuja** `ActivityType` = `Juoksu`
-   - **Muuten jos** (Otherwise If): `WorkoutType` **sisältää** `Walk` → **Aseta muuttuja** `ActivityType` = `Kävely`
-   - **Muuten jos**: `WorkoutType` **sisältää** `Hockey` → **Aseta muuttuja** `ActivityType` = `Jääkiekko`
-   - **Muuten** (Otherwise): **Aseta muuttuja** `ActivityType` = `WorkoutType` (Watchin oma nimi sellaisenaan Magic Variablena)
-2. Sulje kaikki sisäkkäiset if:t (neljä **Lopeta jos**/End If -riviä siirtyy automaattisesti kun lisäät seuraavan toiminnon oikealle tasolle).
-3. **Yhden ainoan kerran**, sisäkkäisten if:ien *jälkeen* (ei minkään niistä sisällä — tarkista sisennyksestä, että toiminto on samalla tasolla kuin askeleen 1 "Aseta muuttuja", ei sen sisällä), lisää tämä **Hae sisältö URL:sta**:
+1. Rakenna nelitasoinen **sisäkkäinen** Jos-ketju (aivan kuten Run/Walk/Hockey-haarat rakennettiin alunperin — jokainen seuraava "Jos" lisätään edellisen **Otherwise**-haaran sisään, ei sen viereen), ja jokaisen haaran sisällä pelkkä **Aseta muuttuja** `ActivityType` -toiminto — **ei yhtäkään verkkokutsua missään näistä haaroista**:
+   - **Jos**: `WorkoutType` **sisältää** `Run` → sisällä: **Aseta muuttuja** `ActivityType` = `Juoksu`
+   - **Otherwise**-haaran sisään uusi **Jos**: `WorkoutType` **sisältää** `Walk` → sisällä: **Aseta muuttuja** `ActivityType` = `Kävely`
+   - Sen **Otherwise**-haaran sisään taas uusi **Jos**: `WorkoutType` **sisältää** `Hockey` → sisällä: **Aseta muuttuja** `ActivityType` = `Jääkiekko`
+   - Uloimman **Otherwise**-haaran sisällä (kun mikään yllä olevista ei osunut): **Aseta muuttuja** `ActivityType` = `WorkoutType` (Watchin oma nimi sellaisenaan Magic Variablena)
+
+   **Huom kolmesta kiinteästä nimestä (Juoksu/Kävely/Jääkiekko):** "Aseta muuttuja" -toiminnon arvokenttä ei ota kirjoitettua kirjaimellista tekstiä suoraan, vain muuttujan/Magic Variablen. Lisää siis jokaista kolmea kiinteää nimeä varten ensin oma **Teksti**-toiminto (sisältö esim. `Juoksu`) juuri ennen sitä "Aseta muuttuja" -toimintoa, ja valitse "Aseta muuttuja"-kentän arvoksi sen Teksti-toiminnon tulos Magic Variablena. `WorkoutType`-tapauksessa (uloin Otherwise) tätä ei tarvita, koska se on jo valmiiksi muuttuja.
+2. Sulje kaikki neljä sisäkkäistä if:ä (Shortcuts lisää **Lopeta jos**/End If -rivin jokaiselle automaattisesti).
+3. **Yhden ainoan kerran**, kaikkein uloimman if-ketjun *jälkeen* — samalla sisennystasolla kuin koko askel 1:n ensimmäinen "Jos", ei minkään haaran sisällä — lisää tämä **Hae sisältö URL:sta**:
    - Metodi: `POST`
    - URL: `https://yznuzwbbyasgqeqllxic.supabase.co/rest/v1/activity_data?on_conflict=healthkit_uuid`
    - Headerit: sama `apikey`/`Authorization`/`Content-Type` + `Prefer`: `resolution=merge-duplicates`

@@ -46,13 +46,15 @@ Add an **If** action: `WorkoutType` **contains** `Strength`
 
 ### If NO (every other workout type — all of the following lives in this one "Otherwise" branch):
 
-1. Add a **Set Variable** action for `ActivityType`: don't give it a fixed value yet — pick it with the nested If chain below, which contains **no network calls at all**, just **Set Variable** actions:
-   - **If**: `WorkoutType` **contains** `Run` → **Set Variable** `ActivityType` = `Juoksu`
-   - **Otherwise If**: `WorkoutType` **contains** `Walk` → **Set Variable** `ActivityType` = `Kävely`
-   - **Otherwise If**: `WorkoutType` **contains** `Hockey` → **Set Variable** `ActivityType` = `Jääkiekko`
-   - **Otherwise**: **Set Variable** `ActivityType` = `WorkoutType` (the Watch's own type name, passed through as the Magic Variable)
-2. Close all the nested Ifs (the four End If markers appear automatically once you add the next action at the outer level).
-3. **Exactly once**, *after* the nested Ifs close (not inside any of them — check the indentation: it should sit at the same level as step 1's Set Variable, not nested inside it), add this **Get Contents of URL**:
+1. Build a four-level **nested** If chain — exactly like the Run/Walk/Hockey branches were originally built (each next "If" goes *inside* the previous one's **Otherwise** branch, not next to it), with nothing but a **Set Variable** `ActivityType` action inside each branch — **no network calls anywhere in this chain**:
+   - **If**: `WorkoutType` **contains** `Run` → inside: **Set Variable** `ActivityType` = `Juoksu`
+   - Inside that If's **Otherwise**, a new **If**: `WorkoutType` **contains** `Walk` → inside: **Set Variable** `ActivityType` = `Kävely`
+   - Inside that one's **Otherwise**, another **If**: `WorkoutType` **contains** `Hockey` → inside: **Set Variable** `ActivityType` = `Jääkiekko`
+   - Inside the outermost remaining **Otherwise** (nothing above matched): **Set Variable** `ActivityType` = `WorkoutType` (the Watch's own type name, passed through as the Magic Variable)
+
+   **Note on the three fixed names (Juoksu/Kävely/Jääkiekko):** the **Set Variable** action's value field doesn't accept typed literal text directly, only a variable/Magic Variable. So for each of the three fixed names, add a **Text** action (content e.g. `Juoksu`) right before its **Set Variable** action, and set the Set Variable's value to that Text action's result as a Magic Variable. The `WorkoutType` case (outermost Otherwise) doesn't need this — it's already a variable.
+2. Close all four nested Ifs (Shortcuts adds an **End If** marker for each automatically).
+3. **Exactly once**, *after* the outermost If chain closes (not inside any branch — check the indentation: it should sit at the same level as the very first "If" from step 1), add this **Get Contents of URL**:
    - Method: `POST`
    - URL: `https://yznuzwbbyasgqeqllxic.supabase.co/rest/v1/activity_data?on_conflict=healthkit_uuid`
    - Headers: same `apikey`/`Authorization`/`Content-Type` + `Prefer`: `resolution=merge-duplicates`
