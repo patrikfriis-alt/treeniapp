@@ -146,6 +146,16 @@ Expected: FAIL — `Cannot find module './cli.js'`
 
 - [ ] **Step 3: Write `src/cli.ts`**
 
+> **Note (verified during implementation):** the code below already includes a
+> `closed` guard around `rl.prompt()` calls. Without it, if `exit` is
+> processed while a prior message's `handleFreeTextMessage` call is still in
+> flight (piped/pasted multi-line input, or a user typing `exit` quickly),
+> the pending handler's trailing `rl.prompt()` fires after `rl` is already
+> closed and throws `ERR_USE_AFTER_CLOSE` as an unhandled rejection —
+> confirmed live via a real crash and via 3 unhandled-rejection warnings
+> during the test run (the 4 given assertions still passed since none of them
+> checked for this).
+
 ```typescript
 import { createInterface } from "node:readline";
 import { loadConfig } from "./config.js";
@@ -167,6 +177,15 @@ export async function runChatRepl(
   output.write("Säleikkö-terminaali. Kirjoita viesti, tai 'exit'/'quit' lopettaaksesi.\n");
   rl.prompt();
 
+  // If 'exit' is queued right behind an in-flight message (e.g. both already
+  // buffered in the same input chunk, or the user types 'exit' before a
+  // reply lands), the 'line' handler for 'exit' can close rl while the
+  // earlier handler's await is still pending. output.write/stderr.write are
+  // safe either way (they're a separate stream from rl), but calling
+  // rl.prompt() on an already-closed interface throws ERR_USE_AFTER_CLOSE —
+  // so only rl.prompt() needs the guard.
+  let closed = false;
+
   rl.on("line", async (line) => {
     const text = line.trim();
     if (EXIT_COMMANDS.has(text)) {
@@ -174,7 +193,7 @@ export async function runChatRepl(
       return;
     }
     if (!text) {
-      rl.prompt();
+      if (!closed) rl.prompt();
       return;
     }
     try {
@@ -189,11 +208,12 @@ export async function runChatRepl(
       const message = error instanceof Error ? error.message : String(error);
       process.stderr.write(`Virhe: ${message}\n`);
     }
-    rl.prompt();
+    if (!closed) rl.prompt();
   });
 
   return new Promise((resolve) => {
     rl.on("close", () => {
+      closed = true;
       output.write("Näkemiin.\n");
       resolve();
     });
