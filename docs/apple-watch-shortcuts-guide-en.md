@@ -26,13 +26,15 @@ Add **Set Variable** actions for each of the following workout fields (available
 
 ## 4. Route by workout type (If/Otherwise)
 
+**Important about structure:** don't build four separate copies of the "Get Contents of URL" action nested inside four different If branches (one for Run, one for Walk, one for Hockey, one for the "other" branch). If even one of those branches never gets built, gets miscopied, or its Otherwise wiring comes loose during a later edit, that entire workout type silently vanishes — Shortcuts shows no error in "Run Immediately" mode. Instead build a single POST, preceded by a label-only step with no network calls, as below.
+
 Add an **If** action: `WorkoutType` **contains** `Strength`
 
 ### If YES (gym):
 
 **Get Contents of URL:**
 - Method: `PATCH`
-- URL: `https://dodrzzgbdlucjbkmxbjn.supabase.co/rest/v1/workout_sessions?workout_date=eq.[EndDate]`
+- URL: `https://yznuzwbbyasgqeqllxic.supabase.co/rest/v1/workout_sessions?workout_date=eq.[EndDate]`
 - Headers:
   - `apikey`: `<anon key from index.html>`
   - `Authorization`: `Bearer <same anon key>`
@@ -42,37 +44,33 @@ Add an **If** action: `WorkoutType` **contains** `Strength`
   { "calories": [Calories], "avg_heart_rate": [AvgHR] }
   ```
 
-### If NO — nested If: `WorkoutType` **contains** `Run`
+### If NO (every other workout type — all of the following lives in this one "Otherwise" branch):
 
-**Get Contents of URL:**
-- Method: `POST`
-- URL: `https://dodrzzgbdlucjbkmxbjn.supabase.co/rest/v1/activity_data?on_conflict=healthkit_uuid`
-- Headers: same `apikey`/`Authorization`/`Content-Type` + `Prefer`: `resolution=merge-duplicates`
-- Body:
-  ```json
-  {
-    "activity_date": "[EndDate]",
-    "activity_type": "Juoksu",
-    "duration_min": [Duration],
-    "calories": [Calories],
-    "avg_heart_rate": [AvgHR],
-    "distance_km": [Distance],
-    "source": "watch",
-    "healthkit_uuid": "[WorkoutUUID]"
-  }
-  ```
+1. Add a **Set Variable** action for `ActivityType`: don't give it a fixed value yet — pick it with the nested If chain below, which contains **no network calls at all**, just **Set Variable** actions:
+   - **If**: `WorkoutType` **contains** `Run` → **Set Variable** `ActivityType` = `Juoksu`
+   - **Otherwise If**: `WorkoutType` **contains** `Walk` → **Set Variable** `ActivityType` = `Kävely`
+   - **Otherwise If**: `WorkoutType` **contains** `Hockey` → **Set Variable** `ActivityType` = `Jääkiekko`
+   - **Otherwise**: **Set Variable** `ActivityType` = `WorkoutType` (the Watch's own type name, passed through as the Magic Variable)
+2. Close all the nested Ifs (the four End If markers appear automatically once you add the next action at the outer level).
+3. **Exactly once**, *after* the nested Ifs close (not inside any of them — check the indentation: it should sit at the same level as step 1's Set Variable, not nested inside it), add this **Get Contents of URL**:
+   - Method: `POST`
+   - URL: `https://yznuzwbbyasgqeqllxic.supabase.co/rest/v1/activity_data?on_conflict=healthkit_uuid`
+   - Headers: same `apikey`/`Authorization`/`Content-Type` + `Prefer`: `resolution=merge-duplicates`
+   - Body:
+     ```json
+     {
+       "activity_date": "[EndDate]",
+       "activity_type": "[ActivityType]",
+       "duration_min": [Duration],
+       "calories": [Calories],
+       "avg_heart_rate": [AvgHR],
+       "distance_km": [Distance],
+       "source": "watch",
+       "healthkit_uuid": "[WorkoutUUID]"
+     }
+     ```
 
-### If NO — nested If: `WorkoutType` **contains** `Walk`
-
-Same as above, but `"activity_type": "Kävely"`.
-
-### If NO — nested If: `WorkoutType` **contains** `Hockey`
-
-Same as above, but `"activity_type": "Jääkiekko"`.
-
-### Otherwise (any other type)
-
-Same structure, but `"activity_type": "[WorkoutType]"` (the Watch's own type name, passed through as the Magic Variable).
+This way the POST runs exactly once for every non-gym workout no matter which label matched — the only thing that can vary is the `activity_type` value, never whether the row gets sent at all.
 
 **Note:** the `activity_type` values (`Juoksu`, `Kävely`, `Jääkiekko`) are intentionally kept in Finnish — they're the exact strings the Treeniapp web app matches against for icons and its manual-entry dropdown. Don't translate these three literal strings.
 
@@ -83,6 +81,7 @@ Tap **"Run"** on the automation manually, without doing a real workout — if yo
 ## 6. Troubleshooting
 
 - **No row appears:** check that the anon key was copied correctly (found in `index.html`'s `SB_KEY` constant), and that the migration file `supabase/migrations/20260708_apple_watch_sync.sql` has been run.
+- **Specific workout types (e.g. indoor cycling, stair stepper, elliptical) never appear even though Run/Walk work fine:** this is a sign the automation was built with the old four-separate-POST-copies structure and its "other" (or Hockey) branch never actually worked — check the `activity_data` table in the Supabase Table Editor for any `source: watch` row whose `activity_type` isn't Juoksu/Kävely/Jääkiekko. If there's none, rebuild the routing step (section 4) to match this guide's current single-POST structure instead of four separate copies.
 - **Gym calories don't update:** make sure you've marked that day's session as "done" in Treeniapp before or shortly after ending the Watch workout — the `workout_sessions` row must already exist for the `PATCH` to find it.
 - **Save fails with an error referencing `avg_heart_rate`:** make sure you used the **Round Number** action on the `AvgHR` variable in step 3 — HealthKit's decimal value can be rejected if the database column doesn't accept decimals.
 - **Steps never appear:** check that the migration file `supabase/migrations/20260715_step_data.sql` has been run, and that Shortcuts has permission to read Steps in the Health app's privacy settings (Health app → profile icon → Apps → Shortcuts → Steps must be enabled).
@@ -111,7 +110,7 @@ Steps aren't tied to a workout, so this needs a second, separate personal automa
 
 **Get Contents of URL:**
 - Method: `POST`
-- URL: `https://dodrzzgbdlucjbkmxbjn.supabase.co/rest/v1/step_data?on_conflict=step_date`
+- URL: `https://yznuzwbbyasgqeqllxic.supabase.co/rest/v1/step_data?on_conflict=step_date`
 - Headers:
   - `apikey`: `<anon key from index.html>`
   - `Authorization`: `Bearer <same anon key>`

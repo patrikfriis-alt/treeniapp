@@ -26,6 +26,8 @@ Lisää **Aseta muuttuja**-toiminnot (Set Variable) jokaiselle seuraavalle treen
 
 ## 4. Reititys treenityypin mukaan (If/Otherwise)
 
+**Tärkeää rakenteesta:** älä rakenna neljää erillistä "Hae sisältö URL:sta"-kopiota neljän eri if-haaran sisään (yksi Run:lle, yksi Walk:lle, yksi Hockey:lle, yksi "muu"-haaralle). Jos yksikin niistä haaroista jää rakentamatta, kopioituu väärin, tai sen Otherwise-liitos irtoaa myöhemmässä muokkauksessa, kyseisen tyypin treenit katoavat kokonaan äänettömästi — Shortcuts ei näytä mitään virhettä "Suorita heti"-tilassa. Rakenna sen sijaan yksi ainoa POST, jota edeltää pelkkä nimilapun valinta ilman verkkokutsuja, kuten alla.
+
 Lisää **Jos**-toiminto (If): `WorkoutType` **sisältää** `Strength`
 
 ### Jos KYLLÄ (sali):
@@ -42,37 +44,33 @@ Lisää **Jos**-toiminto (If): `WorkoutType` **sisältää** `Strength`
   { "calories": [Calories], "avg_heart_rate": [AvgHR] }
   ```
 
-### Jos EI — toinen sisäkkäinen Jos: `WorkoutType` **sisältää** `Run`
+### Jos EI (kaikki muut treenityypit — tähän yhteen "Otherwise"-haaraan koko loppuosa):
 
-**Get Contents of URL:**
-- Metodi: `POST`
-- URL: `https://yznuzwbbyasgqeqllxic.supabase.co/rest/v1/activity_data?on_conflict=healthkit_uuid`
-- Headerit: sama `apikey`/`Authorization`/`Content-Type` + `Prefer`: `resolution=merge-duplicates`
-- Runko:
-  ```json
-  {
-    "activity_date": "[EndDate]",
-    "activity_type": "Juoksu",
-    "duration_min": [Duration],
-    "calories": [Calories],
-    "avg_heart_rate": [AvgHR],
-    "distance_km": [Distance],
-    "source": "watch",
-    "healthkit_uuid": "[WorkoutUUID]"
-  }
-  ```
+1. Lisää **Aseta muuttuja**-toiminto `ActivityType`-nimiselle muuttujalle: **ei** vielä arvoa, vaan valitse arvo seuraavalla sisäkkäisellä if-ketjulla, joka **ei sisällä yhtäkään verkkokutsua** — pelkkiä "Aseta muuttuja"-toimintoja:
+   - **Jos**: `WorkoutType` **sisältää** `Run` → **Aseta muuttuja** `ActivityType` = `Juoksu`
+   - **Muuten jos** (Otherwise If): `WorkoutType` **sisältää** `Walk` → **Aseta muuttuja** `ActivityType` = `Kävely`
+   - **Muuten jos**: `WorkoutType` **sisältää** `Hockey` → **Aseta muuttuja** `ActivityType` = `Jääkiekko`
+   - **Muuten** (Otherwise): **Aseta muuttuja** `ActivityType` = `WorkoutType` (Watchin oma nimi sellaisenaan Magic Variablena)
+2. Sulje kaikki sisäkkäiset if:t (neljä **Lopeta jos**/End If -riviä siirtyy automaattisesti kun lisäät seuraavan toiminnon oikealle tasolle).
+3. **Yhden ainoan kerran**, sisäkkäisten if:ien *jälkeen* (ei minkään niistä sisällä — tarkista sisennyksestä, että toiminto on samalla tasolla kuin askeleen 1 "Aseta muuttuja", ei sen sisällä), lisää tämä **Hae sisältö URL:sta**:
+   - Metodi: `POST`
+   - URL: `https://yznuzwbbyasgqeqllxic.supabase.co/rest/v1/activity_data?on_conflict=healthkit_uuid`
+   - Headerit: sama `apikey`/`Authorization`/`Content-Type` + `Prefer`: `resolution=merge-duplicates`
+   - Runko:
+     ```json
+     {
+       "activity_date": "[EndDate]",
+       "activity_type": "[ActivityType]",
+       "duration_min": [Duration],
+       "calories": [Calories],
+       "avg_heart_rate": [AvgHR],
+       "distance_km": [Distance],
+       "source": "watch",
+       "healthkit_uuid": "[WorkoutUUID]"
+     }
+     ```
 
-### Jos EI — toinen sisäkkäinen Jos: `WorkoutType` **sisältää** `Walk`
-
-Sama kuin yllä, mutta `"activity_type": "Kävely"`.
-
-### Jos EI — toinen sisäkkäinen Jos: `WorkoutType` **sisältää** `Hockey`
-
-Sama kuin yllä, mutta `"activity_type": "Jääkiekko"`.
-
-### Muuten (kaikki muut tyypit)
-
-Sama rakenne, mutta `"activity_type": "[WorkoutType]"` (Watchin oma nimi sellaisenaan Magic Variablena).
+Näin tämä POST suoritetaan aina täsmälleen kerran jokaiselle ei-sali-treenille riippumatta siitä, mikä nimilappu valikoitui — ainoa asia joka voi vaihdella on `activity_type`-arvo, ei se lähteekö rivi ollenkaan matkaan.
 
 ## 5. Testaa
 
@@ -81,6 +79,7 @@ Paina Shortcutsin automaation kohdalla **"Kokeile"** (Run) manuaalisesti ilman e
 ## 6. Vianetsintä
 
 - Jos rivi ei ilmesty: tarkista että anon-avain on oikein kopioitu (löytyy `index.html`:n `SB_KEY`-vakiosta), ja että migraatiotiedosto `supabase/migrations/20260708_apple_watch_sync.sql` on ajettu.
+- Jos yksittäiset treenityypit (esim. sisäpyöräily, stepper, crosstrainer) eivät koskaan ilmesty vaikka Juoksu/Kävely toimivat: tämä on merkki siitä että automaatio on rakennettu vanhalla, neljä erillistä POST-kopiota käyttävällä rakenteella eikä sen "muu"-haara (tai Hockey-haara) ole koskaan toiminut — tarkista Supabasen Table Editorista `activity_data`-taulusta onko sinne koskaan tullut `source: watch` -rivi jonka `activity_type` on jokin muu kuin Juoksu/Kävely/Jääkiekko. Jos ei ole, rakenna reititys-vaihe (kohta 4) uudelleen tämän oppaan nykyisen, yhden POST-toiminnon rakenteen mukaan äläkä neljän erillisen kopion mukaan.
 - Jos sali-kalorit eivät päivity: varmista että olet merkinnyt kyseisen päivän session "tehdyksi" Treeniapista ennen tai pian Watch-treenin jälkeen — `workout_sessions`-rivi täytyy olla olemassa jotta `PATCH` löytää sen.
 - Jos tallennus epäonnistuu virheellä joka viittaa `avg_heart_rate`-kenttään: varmista että käytit **Pyöristä numero** -toimintoa `AvgHR`-muuttujalle vaiheessa 3 — HealthKitin desimaaliluku voi hylkääntyä jos tietokannan sarake ei hyväksy desimaaleja.
 - Jos askeleet eivät koskaan ilmesty: tarkista että migraatiotiedosto `supabase/migrations/20260715_step_data.sql` on ajettu, ja että Shortcutsilla on lupa lukea askeleita Health-sovelluksen tietosuoja-asetuksista (Health-sovellus → profiilikuvake → Sovellukset → Shortcuts → Askeleet-lupa päällä).
