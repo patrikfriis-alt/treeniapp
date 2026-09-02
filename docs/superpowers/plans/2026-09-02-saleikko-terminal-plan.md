@@ -71,6 +71,10 @@ describe("runChatRepl", () => {
     const mockFn = handleFreeTextMessage as unknown as ReturnType<typeof vi.fn>;
 
     const { input, output, chunks } = makeStreams();
+    // Pushing "exit" from inside the mock (rather than up front) means it
+    // arrives while this handler's await is still in flight — this is a
+    // regression test for a race where 'exit' closed rl mid-await and the
+    // pending handler's rl.prompt() then threw ERR_USE_AFTER_CLOSE.
     mockFn.mockImplementationOnce(async () => {
       input.push("exit\n");
       return "Vastaus käyttäjälle.";
