@@ -3481,7 +3481,7 @@ async function renderForecastCard() {
   const { startIso, endIso, label } = forecastMonthBounds(forecastMonthOffset);
 
   let statsHtml;
-  if (!forecast || forecast.weeksToTarget >= 150) {
+  if (!forecast || forecast.weeksToTarget >= 150 || !forecast.rows.length) {
     statsHtml = `<div class="kc-week-budget-sub">Nykyisellä syömistahdilla tavoitetta ei saavuteta ennustejaksolla</div>`;
   } else {
     const etaDate = new Date();
@@ -3567,10 +3567,10 @@ async function renderForecastChart(startIso, endIso, profile, forecast) {
     { label: 'Toteuma', data: actualData, borderColor: '#1D9E75', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#1D9E75', tension: .3, fill: false, spanGaps: true },
   ];
   if (hasLive) {
-    datasets.push({ label: 'Ennuste', data: liveData, borderColor: 'rgba(29,158,117,0.5)', borderDash: [5, 5], borderWidth: 2, pointRadius: 0, tension: .3, fill: false });
+    datasets.push({ label: 'Ennuste', data: liveData, borderColor: 'rgba(29,158,117,0.5)', borderDash: [5, 5], borderWidth: 2, pointRadius: 0, tension: .3, fill: false, spanGaps: true });
   }
   if (hasHistorical) {
-    datasets.push({ label: 'Mennyt ennuste', data: historicalData, borderColor: 'rgba(150,150,150,0.6)', borderDash: [2, 3], borderWidth: 1.5, pointRadius: 0, tension: .3, fill: false });
+    datasets.push({ label: 'Mennyt ennuste', data: historicalData, borderColor: 'rgba(150,150,150,0.6)', borderDash: [2, 3], borderWidth: 1.5, pointRadius: 0, tension: .3, fill: false, spanGaps: true });
   }
 
   charts.forecast = new Chart(document.getElementById('forecast-chart'), {
