@@ -30,7 +30,7 @@ No new files. This is a small enough, single-surface change that splitting into 
 - Modify: `index.html:3054-3066` (JS, add `catchUpToday()` near `setActiveSession`)
 - Modify: `index.html:3038-3040` (JS, populate banner at end of `renderTreeni()`)
 
-- [ ] **Step 1: Add the banner container to the HTML**
+- [x] **Step 1: Add the banner container to the HTML**
 
 In `index.html`, find:
 ```html
@@ -42,7 +42,7 @@ In `index.html`, find:
   <div id="day-nudge"></div>
 ```
 
-- [ ] **Step 2: Add the banner CSS**
+- [x] **Step 2: Add the banner CSS**
 
 Find (around line 566):
 ```css
@@ -76,7 +76,7 @@ Add immediately after it:
 }
 ```
 
-- [ ] **Step 3: Add `catchUpToday()`**
+- [x] **Step 3: Add `catchUpToday()`**
 
 Find in `index.html` (around line 3054):
 ```js
@@ -105,7 +105,7 @@ async function catchUpToday() {
 ```
 (`setActiveSession` already calls `renderTreeni()` on success, so no extra render call is needed here. Setting `aDay` before the `await` means that re-render already shows today's tab as active.)
 
-- [ ] **Step 4: Populate the banner in `renderTreeni()`**
+- [x] **Step 4: Populate the banner in `renderTreeni()`**
 
 Find (around line 3038-3040):
 ```js
@@ -137,7 +137,7 @@ Change to:
 
 This relies on `sess`, `done`, `isToday`, `dayNames`, `dayDate` already being declared earlier in the same `renderTreeni()` function (lines ~2921-2931) — they are `const`s in the same function scope, so no changes needed there.
 
-- [ ] **Step 5: Manual verification**
+- [x] **Step 5: Manual verification**
 
 Start a local static server from the repo root and open the app:
 ```bash
@@ -155,7 +155,7 @@ Check:
 7. Use the week-nav arrows to go to a previous week (`wOff !== 0`): confirm no banner appears on any tab there, regardless of done state.
 8. Check the browser console for errors throughout.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add index.html
@@ -181,7 +181,7 @@ EOF
 - Modify: `index.html:622-626` (CSS, insert after `.set-tnum` color rules)
 - Modify: `index.html:3191-3192` (JS template literal in `renderSession()`)
 
-- [ ] **Step 1: Add the checkmark CSS**
+- [x] **Step 1: Add the checkmark CSS**
 
 Find (around line 626):
 ```css
@@ -192,7 +192,7 @@ Add immediately after it:
 .set-check { color: var(--green); font-size: 11px; margin-left: 2px; }
 ```
 
-- [ ] **Step 2: Render the checkmark**
+- [x] **Step 2: Render the checkmark**
 
 Find in `renderSession()` (around line 3191-3192):
 ```js
@@ -208,7 +208,7 @@ Change the `set-tnum` line to:
 
 `status` is already computed a few lines above (`const status = setStatus(sd, prevSet);`, around line 3186) and already returns `'undone'` when both `kg` and `reps` are empty — this is the existing definition of "not done", no new logic needed.
 
-- [ ] **Step 3: Manual verification**
+- [x] **Step 3: Manual verification**
 
 With the local server still running, open a session that has been started (tap "Aloita treeni" if needed):
 
@@ -218,7 +218,7 @@ With the local server still running, open a session that has been started (tap "
 4. Confirm the existing ▼/●/▲ previous-performance indicator in the right-hand column is unaffected and still shows correctly.
 5. Check the browser console for errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add index.html
@@ -244,7 +244,7 @@ EOF
 - Modify: `index.html:683-693` (CSS, insert after `.pr-badge`)
 - Modify: `index.html:3164-3177` (JS template literal in `renderSession()`)
 
-- [ ] **Step 1: Add the CSS**
+- [x] **Step 1: Add the CSS**
 
 Find (around line 585):
 ```css
@@ -273,7 +273,7 @@ Add immediately after it:
 .ex-check { color: var(--green); font-size: 13px; margin-left: 4px; }
 ```
 
-- [ ] **Step 2: Compute and render the exercise-done state**
+- [x] **Step 2: Compute and render the exercise-done state**
 
 Find in `renderSession()` (around line 3157, right after `progPct` is computed):
 ```js
@@ -319,7 +319,7 @@ Change the title line and the prog-fill line to:
       </div>
 ```
 
-- [ ] **Step 3: Manual verification**
+- [x] **Step 3: Manual verification**
 
 With the local server still running, open a session that has been started, on an exercise with more than one set:
 
@@ -329,7 +329,7 @@ With the local server still running, open a session that has been started, on an
 4. Confirm the existing PR badge (if present on a personal-record set) still renders correctly alongside the new ✓.
 5. Check the browser console for errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add index.html
