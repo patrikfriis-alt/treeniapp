@@ -1355,6 +1355,10 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
       <div class="card-title">Kehitys</div>
       <div class="chart-wrap"><canvas id="body-chart"></canvas></div>
     </div>
+    <div class="card" id="forecast-card">
+      <div class="card-title">Painonpudotusennuste</div>
+      <div id="forecast-body"></div>
+    </div>
 </div>
 
 <!-- ── UNI ────────────────────────────────────────────────────── -->
@@ -3418,11 +3422,47 @@ function simulateToTarget({ fatKg, muscleKg, otherKg, targetWeightKg, weeklyInta
   return { weeksToTarget: week, rows };
 }
 
-async function getRecentAvgWeeklyIntake() {
-  const to = localIso(new Date());
-  const from = localIso(addDays(new Date(), -20));
+async function getRecentAvgWeeklyIntake(asOfIso = localIso(new Date())) {
+  const to = asOfIso;
+  const from = localIso(addDays(asOfIso, -20));
   const totalKcal = await getFoodCalories(from, to);
   return totalKcal / 3;
+}
+
+function forecastMonthBounds(offset) {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0);
+  return {
+    startIso: localIso(start),
+    endIso: localIso(end),
+    label: start.toLocaleDateString('fi-FI', { month: 'long', year: 'numeric' }),
+  };
+}
+
+function changeForecastMonth(dir) {
+  forecastMonthOffset += dir;
+  renderForecastCard();
+}
+
+async function computeHistoricalForecast(cutoffIso, targetWeightKg) {
+  const [{ data: priorMetrics }, { data: priorCal }] = await Promise.all([
+    sb.from('body_metrics').select('*').lt('measured_at', cutoffIso).order('measured_at', { ascending: false }).limit(1),
+    sb.from('model_calibration').select('*').lte('calibrated_at', cutoffIso).order('calibrated_at', { ascending: false }).limit(1),
+  ]);
+  const metric = priorMetrics && priorMetrics[0];
+  if (!metric || metric.fat_pct == null || metric.muscle_pct == null) return null;
+
+  const cal = priorCal && priorCal[0];
+  const otherTissueCoeff = cal ? cal.other_tissue_kcal_per_kg : DEFAULT_OTHER_TISSUE_COEFF;
+  const activityMult = cal ? cal.activity_multiplier : DEFAULT_ACTIVITY_MULT;
+  const weeklyIntakeKcal = await getRecentAvgWeeklyIntake(cutoffIso);
+  const comp = getBodyComposition(metric.weight_kg, metric.fat_pct, metric.muscle_pct);
+  const { rows } = simulateToTarget({
+    fatKg: comp.fatKg, muscleKg: comp.muscleKg, otherKg: comp.otherKg,
+    targetWeightKg, weeklyIntakeKcal, otherTissueCoeff, activityMult,
+  });
+  return { startDate: metric.measured_at, rows };
 }
 
 async function calibrateModelIfDue() {
