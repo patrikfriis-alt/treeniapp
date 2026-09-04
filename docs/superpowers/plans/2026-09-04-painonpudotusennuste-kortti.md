@@ -33,7 +33,7 @@ No new files — this is a small, single-surface addition to an existing page, m
 
 Note: line numbers are current as of this plan being written — verify by grepping for the quoted text before editing, since earlier tasks in this same plan will shift later line numbers.
 
-- [ ] **Step 1: Remove the `#m-forecast` element**
+- [x] **Step 1: Remove the `#m-forecast` element**
 
 Find in `index.html` (around line 1354-1358):
 ```html
@@ -51,7 +51,7 @@ Change to:
     </div>
 ```
 
-- [ ] **Step 2: Add module-level state**
+- [x] **Step 2: Add module-level state**
 
 Find:
 ```js
@@ -63,7 +63,7 @@ let forecastState = null;        // { latest, profile, forecast } tai null
 let forecastMonthOffset = 0;     // 0 = kuluva kuukausi, negatiivinen = mennyt, positiivinen = tuleva
 ```
 
-- [ ] **Step 3: Simplify `loadBodyMetrics()` — remove old forecast text + chart-overlay, keep computing `forecast`**
+- [x] **Step 3: Simplify `loadBodyMetrics()` — remove old forecast text + chart-overlay, keep computing `forecast`**
 
 Find this whole block (from the `forecastEl` declaration through the end of the `if (hist && hist.length > 1)` block's dataset-building, right before `charts.body = new Chart(...)`):
 ```js
@@ -182,7 +182,7 @@ Replace with:
 
 `renderForecastCard` does not exist yet — it's added in Task 3. This task will leave a temporary `ReferenceError` if you try to load the page now; that's expected and fixed by Task 3. Don't add a stub function here — Task 3 owns that.
 
-- [ ] **Step 4: Verify (partial — full flow not testable until Task 3)**
+- [x] **Step 4: Verify (partial — full flow not testable until Task 3)**
 
 ```bash
 grep -n "m-forecast\|forecastState\|forecastMonthOffset" index.html
@@ -194,7 +194,7 @@ awk '/<script>/{flag=1; next} /<\/script>/{flag=0} flag' index.html > /tmp/task1
 ```
 This is expected to **pass** (a missing function is a runtime `ReferenceError`, not a syntax error — `node --check` only validates syntax). Confirming no syntax errors is the correct bar for this intermediate step.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add index.html
@@ -221,7 +221,7 @@ EOF
 - Modify: `index.html` (JS, `getRecentAvgWeeklyIntake()`)
 - Modify: `index.html` (JS, new functions near `loadBodyMetrics()`)
 
-- [ ] **Step 1: Add the new card container**
+- [x] **Step 1: Add the new card container**
 
 Find (this is now right after Task 1's edit, so it should look exactly like this):
 ```html
@@ -248,7 +248,7 @@ Change to:
 <!-- ── UNI ────────────────────────────────────────────────────── -->
 ```
 
-- [ ] **Step 2: Generalize `getRecentAvgWeeklyIntake()`**
+- [x] **Step 2: Generalize `getRecentAvgWeeklyIntake()`**
 
 Find:
 ```js
@@ -270,7 +270,7 @@ async function getRecentAvgWeeklyIntake(asOfIso = localIso(new Date())) {
 ```
 (`addDays` already accepts a string or a `Date` — confirmed by reading its definition, `new Date(base)` inside — so passing `asOfIso` directly works.)
 
-- [ ] **Step 3: Add `forecastMonthBounds()`, `changeForecastMonth()`, `computeHistoricalForecast()`**
+- [x] **Step 3: Add `forecastMonthBounds()`, `changeForecastMonth()`, `computeHistoricalForecast()`**
 
 Find the `getRecentAvgWeeklyIntake` function you just edited, and add these three new functions immediately after it:
 ```js
@@ -311,7 +311,7 @@ async function computeHistoricalForecast(cutoffIso, targetWeightKg) {
 }
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```bash
 grep -n "forecastMonthBounds\|changeForecastMonth\|computeHistoricalForecast\|forecast-card\|forecast-body" index.html
@@ -323,7 +323,7 @@ awk '/<script>/{flag=1; next} /<\/script>/{flag=0} flag' index.html > /tmp/task2
 ```
 Confirm no syntax errors (still expected to pass — `renderForecastCard` still doesn't exist yet, but that's a runtime concern, not a syntax one, exactly like Task 1).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add index.html
@@ -347,7 +347,7 @@ EOF
 **Files:**
 - Modify: `index.html` (JS, new function near `computeHistoricalForecast()`)
 
-- [ ] **Step 1: Add `renderForecastCard()` (without the chart yet — chart is Task 4)**
+- [x] **Step 1: Add `renderForecastCard()` (without the chart yet — chart is Task 4)**
 
 Add this new function immediately after `computeHistoricalForecast()`:
 ```js
@@ -399,7 +399,7 @@ async function renderForecastCard() {
 
 `loadUserProfile()` is the existing function already used elsewhere in `loadBodyMetrics()` (via `Promise.all`) — confirm this by grepping for its definition before using it here; this step just calls it a second time, which is cheap and keeps `renderForecastCard()` self-contained (callable on its own, e.g. from `changeForecastMonth()`, without needing the caller to pass profile data through).
 
-- [ ] **Step 2: Add a temporary stub for `renderForecastChart()`**
+- [x] **Step 2: Add a temporary stub for `renderForecastChart()`**
 
 `renderForecastCard()` now calls `renderForecastChart(startIso, endIso, profile, forecast)`, which doesn't exist until Task 4. Add a temporary stub immediately after `renderForecastCard()` so this task is independently testable:
 ```js
@@ -408,7 +408,7 @@ async function renderForecastChart(startIso, endIso, profile, forecast) {
 }
 ```
 
-- [ ] **Step 3: Manual verification**
+- [x] **Step 3: Manual verification**
 
 ```bash
 awk '/<script>/{flag=1; next} /<\/script>/{flag=0} flag' index.html > /tmp/task3.js && node --check /tmp/task3.js
@@ -419,7 +419,7 @@ There is no automated test suite for this project. A human will verify in-browse
 - `grep -n "renderForecastCard\|renderForecastChart" index.html` shows the two new functions defined once each, plus `renderForecastCard`'s two existing call sites from Task 1 (`loadBodyMetrics()`).
 - The stat-tile math (`weeklyPaceKg`) matches the spec: `-(forecast.rows[0].weeklyDeficit / KCAL_PER_KG_FAT_LOSS)`, negated so a calorie deficit (positive `weeklyDeficit`) shows as a negative (weight-loss) pace.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add index.html
@@ -444,7 +444,7 @@ EOF
 **Files:**
 - Modify: `index.html` (JS — replace the `renderForecastChart()` stub from Task 3)
 
-- [ ] **Step 1: Implement the chart**
+- [x] **Step 1: Implement the chart**
 
 Find:
 ```js
@@ -537,7 +537,7 @@ Notes for the implementer:
 - The empty-chart-with-no-labels branch (`if (!labels.length)`) avoids constructing a `Chart` with zero data points, matching the spec's "kuukausi jolta ei löydy dataa näyttää vain tyhjän kaavion, ei virhettä" requirement — clearing the canvas is enough since there's nothing to plot.
 - `forecastState.latest` (used for the live-forecast date anchor) is safe to read here because `renderForecastChart()` is only ever called from `renderForecastCard()` after confirming `forecastState` is non-null.
 
-- [ ] **Step 2: Manual verification**
+- [x] **Step 2: Manual verification**
 
 ```bash
 awk '/<script>/{flag=1; next} /<\/script>/{flag=0} flag' index.html > /tmp/task4.js && node --check /tmp/task4.js
@@ -559,7 +559,7 @@ This task completes the full feature — a human should now verify it end-to-end
 6. Set an impossible target (higher than current weight) — stat tiles are replaced by the "ei saavuteta" message; no dashed future line appears on any month, but past-month solid/dotted comparison still renders.
 7. Check the browser console for errors throughout, especially on each month-nav click (each one fires a new Supabase query).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add index.html
