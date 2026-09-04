@@ -3511,7 +3511,80 @@ async function renderForecastCard() {
 }
 
 async function renderForecastChart(startIso, endIso, profile, forecast) {
-  // TODO(Task 4): build labels/datasets and render charts.forecast
+  const todayIso = localIso(new Date());
+
+  const { data: monthActual } = await sb.from('body_metrics')
+    .select('measured_at,weight_kg')
+    .gte('measured_at', startIso).lte('measured_at', endIso)
+    .order('measured_at');
+  const actualByDate = {};
+  (monthActual || []).forEach(r => { if (r.weight_kg != null) actualByDate[r.measured_at] = r.weight_kg; });
+
+  const liveForecastByDate = {};
+  if (forecast && forecast.rows.length && forecast.weeksToTarget < 150 && endIso >= todayIso) {
+    const lastDate = new Date(forecastState.latest.measured_at);
+    forecast.rows.forEach(r => {
+      const d = new Date(lastDate);
+      d.setDate(lastDate.getDate() + r.week * 7);
+      const iso = localIso(d);
+      if (iso >= startIso && iso <= endIso) liveForecastByDate[iso] = r.totalWeight;
+    });
+  }
+
+  const historicalByDate = {};
+  if (endIso < todayIso) {
+    const historical = await computeHistoricalForecast(startIso, profile.target_weight_kg);
+    if (historical) {
+      const startDate = new Date(historical.startDate);
+      historical.rows.forEach(r => {
+        const d = new Date(startDate);
+        d.setDate(startDate.getDate() + r.week * 7);
+        const iso = localIso(d);
+        if (iso >= startIso && iso <= endIso) historicalByDate[iso] = r.totalWeight;
+      });
+    }
+  }
+
+  const labels = [...new Set([
+    ...Object.keys(actualByDate),
+    ...Object.keys(liveForecastByDate),
+    ...Object.keys(historicalByDate),
+  ])].sort();
+
+  if (charts.forecast) charts.forecast.destroy();
+  if (!labels.length) {
+    document.getElementById('forecast-chart').getContext('2d').clearRect(0, 0, 9999, 9999);
+    return;
+  }
+
+  const actualData = labels.map(d => actualByDate[d] ?? null);
+  const liveData = labels.map(d => liveForecastByDate[d] ?? null);
+  const historicalData = labels.map(d => historicalByDate[d] ?? null);
+  const hasLive = liveData.some(v => v != null);
+  const hasHistorical = historicalData.some(v => v != null);
+
+  const datasets = [
+    { label: 'Toteuma', data: actualData, borderColor: '#1D9E75', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#1D9E75', tension: .3, fill: false },
+  ];
+  if (hasLive) {
+    datasets.push({ label: 'Ennuste', data: liveData, borderColor: 'rgba(29,158,117,0.5)', borderDash: [5, 5], borderWidth: 2, pointRadius: 0, tension: .3, fill: false });
+  }
+  if (hasHistorical) {
+    datasets.push({ label: 'Mennyt ennuste', data: historicalData, borderColor: 'rgba(150,150,150,0.6)', borderDash: [2, 3], borderWidth: 1.5, pointRadius: 0, tension: .3, fill: false });
+  }
+
+  charts.forecast = new Chart(document.getElementById('forecast-chart'), {
+    type: 'line',
+    data: { labels: labels.map(d => d.slice(5)), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { boxWidth: 10, font: { size: 10 } } } },
+      scales: {
+        y: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#222' } },
+        x: { ticks: { color: '#555', font: { size: 10 } }, grid: { display: false } },
+      },
+    },
+  });
 }
 
 async function calibrateModelIfDue() {
