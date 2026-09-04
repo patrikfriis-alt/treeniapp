@@ -3446,9 +3446,10 @@ function changeForecastMonth(dir) {
 }
 
 async function computeHistoricalForecast(cutoffIso, targetWeightKg) {
-  const [{ data: priorMetrics }, { data: priorCal }] = await Promise.all([
+  const [{ data: priorMetrics }, { data: priorCal }, weeklyIntakeKcal] = await Promise.all([
     sb.from('body_metrics').select('*').lt('measured_at', cutoffIso).order('measured_at', { ascending: false }).limit(1),
     sb.from('model_calibration').select('*').lte('calibrated_at', cutoffIso).order('calibrated_at', { ascending: false }).limit(1),
+    getRecentAvgWeeklyIntake(cutoffIso),
   ]);
   const metric = priorMetrics && priorMetrics[0];
   if (!metric || metric.fat_pct == null || metric.muscle_pct == null) return null;
@@ -3456,7 +3457,6 @@ async function computeHistoricalForecast(cutoffIso, targetWeightKg) {
   const cal = priorCal && priorCal[0];
   const otherTissueCoeff = cal ? cal.other_tissue_kcal_per_kg : DEFAULT_OTHER_TISSUE_COEFF;
   const activityMult = cal ? cal.activity_multiplier : DEFAULT_ACTIVITY_MULT;
-  const weeklyIntakeKcal = await getRecentAvgWeeklyIntake(cutoffIso);
   const comp = getBodyComposition(metric.weight_kg, metric.fat_pct, metric.muscle_pct);
   const { rows } = simulateToTarget({
     fatKg: comp.fatKg, muscleKg: comp.muscleKg, otherKg: comp.otherKg,
