@@ -1354,7 +1354,6 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <div class="card">
       <div class="card-title">Kehitys</div>
       <div class="chart-wrap"><canvas id="body-chart"></canvas></div>
-      <div id="m-forecast" class="kc-week-budget-sub" style="margin-top:10px;"></div>
     </div>
 </div>
 
@@ -1727,6 +1726,8 @@ const getED      = (o, d, st, e) => LD[eKey(o, d, st, e)] || { sets: [] };
 
 const syncTimers = {};
 const charts = {};
+let forecastState = null;        // { latest, profile, forecast } tai null
+let forecastMonthOffset = 0;     // 0 = kuluva kuukausi, negatiivinen = mennyt, positiivinen = tuleva
 
 /* ─── Rest timer ────────────────────────────────────────────── */
 let _restInterval = null;
@@ -3244,43 +3245,28 @@ async function loadBodyMetrics() {
     document.getElementById('m-muscle').textContent = latest.muscle_pct ? `${latest.muscle_pct}%`  : '—';
   }
 
-  const forecastEl = document.getElementById('m-forecast');
   let forecast = null;
-  if (forecastEl) {
-    if (!profile || profile.target_weight_kg == null) {
-      forecastEl.innerHTML = `Aseta tavoitepaino <a href="#" onclick="openProfileModal();return false;" style="color:var(--accent)">profiilissa</a> nähdäksesi ennusteen`;
-    } else if (!latest || latest.fat_pct == null || latest.muscle_pct == null) {
-      forecastEl.textContent = 'Kirjaa paino, rasva% ja lihas% nähdäksesi ennusteen';
-    } else {
-      const comp = getBodyComposition(latest.weight_kg, latest.fat_pct, latest.muscle_pct);
-      const [{ data: calRows }, weeklyIntakeKcal] = await Promise.all([
-        sb.from('model_calibration').select('*').order('calibrated_at', { ascending: false }).limit(1),
-        getRecentAvgWeeklyIntake(),
-      ]);
-      const cal = calRows && calRows[0];
-      const otherTissueCoeff = cal ? cal.other_tissue_kcal_per_kg : DEFAULT_OTHER_TISSUE_COEFF;
-      const activityMult = cal ? cal.activity_multiplier : DEFAULT_ACTIVITY_MULT;
-
-      forecast = simulateToTarget({
-        fatKg: comp.fatKg, muscleKg: comp.muscleKg, otherKg: comp.otherKg,
-        targetWeightKg: profile.target_weight_kg,
-        weeklyIntakeKcal, otherTissueCoeff, activityMult,
-      });
-
-      const calStr = cal
-        ? `Malli kalibroitu ${new Date(cal.calibrated_at).toLocaleDateString('fi-FI')}`
-        : 'Ei vielä kalibroitu — käytetään oletusarvoja';
-
-      if (forecast.weeksToTarget >= 150) {
-        forecastEl.textContent = `Nykyisellä syömistahdilla tavoitetta ei saavuteta ennustejaksolla · ${calStr}`;
-      } else {
-        const etaDate = new Date();
-        etaDate.setDate(etaDate.getDate() + forecast.weeksToTarget * 7);
-        const etaStr = etaDate.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric', year: 'numeric' });
-        forecastEl.textContent = `Ennuste: ${forecast.weeksToTarget} viikkoa (${etaStr}) · ${calStr}`;
-      }
-    }
+  const hasTarget = profile && profile.target_weight_kg != null;
+  const hasComposition = latest && latest.fat_pct != null && latest.muscle_pct != null;
+  if (hasTarget && hasComposition) {
+    const comp = getBodyComposition(latest.weight_kg, latest.fat_pct, latest.muscle_pct);
+    const [{ data: calRows }, weeklyIntakeKcal] = await Promise.all([
+      sb.from('model_calibration').select('*').order('calibrated_at', { ascending: false }).limit(1),
+      getRecentAvgWeeklyIntake(),
+    ]);
+    const cal = calRows && calRows[0];
+    const otherTissueCoeff = cal ? cal.other_tissue_kcal_per_kg : DEFAULT_OTHER_TISSUE_COEFF;
+    const activityMult = cal ? cal.activity_multiplier : DEFAULT_ACTIVITY_MULT;
+    forecast = simulateToTarget({
+      fatKg: comp.fatKg, muscleKg: comp.muscleKg, otherKg: comp.otherKg,
+      targetWeightKg: profile.target_weight_kg,
+      weeklyIntakeKcal, otherTissueCoeff, activityMult,
+    });
   }
+
+  forecastState = (hasTarget && hasComposition) ? { latest, profile, forecast } : null;
+  forecastMonthOffset = 0;
+  renderForecastCard();
 
   if (hist && hist.length > 1) {
     if (charts.body) charts.body.destroy();
@@ -3289,37 +3275,15 @@ async function loadBodyMetrics() {
     const histFat = [...hist].reverse().map(d => d.fat_pct);
     const histMuscle = [...hist].reverse().map(d => d.muscle_pct);
 
-    let labels = histLabels, weightData = histWeights, fatData = histFat, muscleData = histMuscle, forecastData = null;
-    if (forecast && forecast.rows.length && forecast.weeksToTarget < 150) {
-      const lastDate = new Date(latest.measured_at);
-      const forecastLabels = forecast.rows.map(r => {
-        const d = new Date(lastDate);
-        d.setDate(lastDate.getDate() + r.week * 7);
-        return localIso(d).slice(5);
-      });
-      labels = [...histLabels, ...forecastLabels];
-      weightData = [...histWeights, ...forecastLabels.map(() => null)];
-      fatData = [...histFat, ...forecastLabels.map(() => null)];
-      muscleData = [...histMuscle, ...forecastLabels.map(() => null)];
-      forecastData = [
-        ...histWeights.slice(0, -1).map(() => null),
-        histWeights[histWeights.length - 1],
-        ...forecast.rows.map(r => r.totalWeight),
-      ];
-    }
-
     const datasets = [
-      { label:'Paino',  data: weightData, borderColor:'#1D9E75', borderWidth:2, pointRadius:3, pointBackgroundColor:'#1D9E75', tension:.3, fill:false, yAxisID:'y1' },
-      { label:'Rasva%', data: fatData,    borderColor:'#378ADD', borderWidth:2, pointRadius:3, pointBackgroundColor:'#378ADD', tension:.3, fill:false, yAxisID:'y2' },
-      { label:'Lihas%', data: muscleData, borderColor:'#EF9F27', borderWidth:2, pointRadius:3, pointBackgroundColor:'#EF9F27', tension:.3, fill:false, yAxisID:'y2' },
+      { label:'Paino',  data: histWeights, borderColor:'#1D9E75', borderWidth:2, pointRadius:3, pointBackgroundColor:'#1D9E75', tension:.3, fill:false, yAxisID:'y1' },
+      { label:'Rasva%', data: histFat,    borderColor:'#378ADD', borderWidth:2, pointRadius:3, pointBackgroundColor:'#378ADD', tension:.3, fill:false, yAxisID:'y2' },
+      { label:'Lihas%', data: histMuscle, borderColor:'#EF9F27', borderWidth:2, pointRadius:3, pointBackgroundColor:'#EF9F27', tension:.3, fill:false, yAxisID:'y2' },
     ];
-    if (forecastData) {
-      datasets.push({ label:'Ennuste', data: forecastData, borderColor:'rgba(29,158,117,0.5)', borderDash:[5,5], borderWidth:2, pointRadius:0, tension:.3, fill:false, yAxisID:'y1' });
-    }
 
     charts.body = new Chart(document.getElementById('body-chart'), {
       type: 'line',
-      data: { labels, datasets },
+      data: { labels: histLabels, datasets },
       options: {
         responsive:true, maintainAspectRatio:false,
         plugins:{ legend:{ display:false } },
