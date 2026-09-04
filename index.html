@@ -3465,6 +3465,55 @@ async function computeHistoricalForecast(cutoffIso, targetWeightKg) {
   return { startDate: metric.measured_at, rows };
 }
 
+async function renderForecastCard() {
+  const el = document.getElementById('forecast-body');
+  if (!el) return;
+
+  if (!forecastState) {
+    const profile = await loadUserProfile();
+    el.innerHTML = (!profile || profile.target_weight_kg == null)
+      ? `Aseta tavoitepaino <a href="#" onclick="openProfileModal();return false;" style="color:var(--accent)">profiilissa</a> nähdäksesi ennusteen`
+      : 'Kirjaa paino, rasva% ja lihas% nähdäksesi ennusteen';
+    return;
+  }
+
+  const { profile, forecast } = forecastState;
+  const { startIso, endIso, label } = forecastMonthBounds(forecastMonthOffset);
+
+  let statsHtml;
+  if (!forecast || forecast.weeksToTarget >= 150) {
+    statsHtml = `<div class="kc-week-budget-sub">Nykyisellä syömistahdilla tavoitetta ei saavuteta ennustejaksolla</div>`;
+  } else {
+    const etaDate = new Date();
+    etaDate.setDate(etaDate.getDate() + forecast.weeksToTarget * 7);
+    const etaStr = etaDate.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' });
+    const weeklyPaceKg = (-(forecast.rows[0].weeklyDeficit / KCAL_PER_KG_FAT_LOSS)).toFixed(1);
+    statsHtml = `
+      <div class="seuranta-hero-stats">
+        <div><div class="seuranta-hero-stat-val">${etaStr}</div><div class="seuranta-hero-stat-label">arvioitu pvm</div></div>
+        <div class="seuranta-hero-divider"></div>
+        <div><div class="seuranta-hero-stat-val">${weeklyPaceKg}kg</div><div class="seuranta-hero-stat-label">/ viikko</div></div>
+        <div class="seuranta-hero-divider"></div>
+        <div><div class="seuranta-hero-stat-val">${forecast.weeksToTarget}</div><div class="seuranta-hero-stat-label">viikkoa jäljellä</div></div>
+      </div>`;
+  }
+
+  el.innerHTML = `
+    <div class="week-nav">
+      <button class="week-btn" onclick="changeForecastMonth(-1)">←</button>
+      <span class="week-label">${label}</span>
+      <button class="week-btn" onclick="changeForecastMonth(1)">→</button>
+    </div>
+    <div class="chart-wrap"><canvas id="forecast-chart"></canvas></div>
+    ${statsHtml}`;
+
+  await renderForecastChart(startIso, endIso, profile, forecast);
+}
+
+async function renderForecastChart(startIso, endIso, profile, forecast) {
+  // TODO(Task 4): build labels/datasets and render charts.forecast
+}
+
 async function calibrateModelIfDue() {
   const { data: measurements, error: measErr } = await sb.from('body_metrics').select('*')
     .order('measured_at', { ascending: true });
