@@ -3564,7 +3564,7 @@ async function renderForecastChart(startIso, endIso, profile, forecast) {
   const hasHistorical = historicalData.some(v => v != null);
 
   const datasets = [
-    { label: 'Toteuma', data: actualData, borderColor: '#1D9E75', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#1D9E75', tension: .3, fill: false },
+    { label: 'Toteuma', data: actualData, borderColor: '#1D9E75', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#1D9E75', tension: .3, fill: false, spanGaps: true },
   ];
   if (hasLive) {
     datasets.push({ label: 'Ennuste', data: liveData, borderColor: 'rgba(29,158,117,0.5)', borderDash: [5, 5], borderWidth: 2, pointRadius: 0, tension: .3, fill: false });
