@@ -2124,6 +2124,9 @@ function updateSetBox(o, d, e, s) {
   const status = setStatus(sd, prev);
   box.className = `set-table-row s-${status}`;
 
+  const checkEl = document.getElementById(`set-check-${o}-${d}-${e}-${s}`);
+  if (checkEl) checkEl.style.display = status !== 'undone' ? '' : 'none';
+
   const prevTextEl = document.getElementById(`set-prevtext-${o}-${d}-${e}-${s}`);
   if (prevTextEl) {
     const prevStr = prev ? `${prev.weight_kg ?? '?'}×${prev.reps ?? '?'}` : '—';
@@ -2149,10 +2152,13 @@ function updateSetBox(o, d, e, s) {
       return numOrNull(parseFloat(rd.kg)) !== null || numOrNull(parseInt(rd.reps)) !== null;
     }).length;
     const progPct = exTarget.s > 0 ? Math.round(doneCount / exTarget.s * 100) : 0;
-    const labelEl = document.getElementById(`ex-prog-label-${o}-${d}-${e}`);
-    const fillEl  = document.getElementById(`ex-prog-fill-${o}-${d}-${e}`);
+    const exDone  = exTarget.s > 0 && doneCount === exTarget.s;
+    const labelEl   = document.getElementById(`ex-prog-label-${o}-${d}-${e}`);
+    const fillEl    = document.getElementById(`ex-prog-fill-${o}-${d}-${e}`);
+    const exCheckEl = document.getElementById(`ex-check-${o}-${d}-${e}`);
     if (labelEl) labelEl.textContent = `${doneCount}/${exTarget.s} sarjaa`;
-    if (fillEl)  fillEl.style.width  = `${progPct}%`;
+    if (fillEl)  { fillEl.style.width = `${progPct}%`; fillEl.classList.toggle('done', exDone); }
+    if (exCheckEl) exCheckEl.style.display = exDone ? '' : 'none';
   }
 }
 
@@ -3212,7 +3218,7 @@ async function renderSession(requestId) {
     html += `<div class="ex-block">
       <div class="ex-block-header">
         <div>
-          <div class="ex-block-title" data-ex="${ex.n.replace(/"/g,'&quot;')}" onclick="openExerciseModal(this.dataset.ex)" style="cursor:pointer">${escapeHtml(ex.n)}${exDone ? ' <span class="ex-check">✓</span>' : ''}${isPR ? '<span class="pr-badge">PR</span>' : ''}</div>
+          <div class="ex-block-title" data-ex="${ex.n.replace(/"/g,'&quot;')}" onclick="openExerciseModal(this.dataset.ex)" style="cursor:pointer">${escapeHtml(ex.n)}<span class="ex-check" id="ex-check-${wOff}-${aDay}-${ei}"${exDone ? '' : ' style="display:none"'}>✓</span>${isPR ? '<span class="pr-badge">PR</span>' : ''}</div>
           <div class="ex-block-sub">${escapeHtml(ex.t)}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
@@ -3236,9 +3242,8 @@ async function renderSession(requestId) {
       const statusIcon = { worse: '▼ ', same: '● ', better: '▲ ' }[status] || '';
 
       const orm = calc1RM(parseFloat(sd.kg), parseInt(sd.reps));
-      const setDoneMark = status !== 'undone' ? ' <span class="set-check">✓</span>' : '';
       html += `<div class="set-table-row s-${status}" id="set-${wOff}-${aDay}-${ei}-${s}">
-        <span class="set-tnum">${s + 1}${setDoneMark}</span>
+        <span class="set-tnum">${s + 1}<span class="set-check" id="set-check-${wOff}-${aDay}-${ei}-${s}"${status !== 'undone' ? '' : ' style="display:none"'}>✓</span></span>
         <input class="set-tinput" type="text" inputmode="decimal" placeholder="kg"
           value="${sd.kg || ''}" ${locked ? 'disabled' : ''}
           onchange="saveSet(${wOff},${aDay},${ei},${s},'kg',this.value.replace(',','.'))">
