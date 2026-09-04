@@ -615,7 +615,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 }
 .set-table-hdr {
   display: grid;
-  grid-template-columns: 28px 1fr 1fr 60px;
+  grid-template-columns: 34px 1fr 1fr 60px;
   padding: 7px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--surface2);
@@ -631,7 +631,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 
 .set-table-row {
   display: grid;
-  grid-template-columns: 28px 1fr 1fr 60px;
+  grid-template-columns: 34px 1fr 1fr 60px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   align-items: center;
@@ -643,7 +643,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .set-table-row.s-same   { background: rgba(10,132,255,0.08); }
 .set-table-row.s-better { background: rgba(48,209,88,0.06); }
 
-.set-tnum { font-size:13px; font-weight:700; }
+.set-tnum { font-size:13px; font-weight:700; white-space:nowrap; }
 .set-table-row.s-undone .set-tnum { color: var(--red); }
 .set-table-row.s-worse  .set-tnum { color: #ff9f0a; }
 .set-table-row.s-same   .set-tnum { color: var(--accent); }
