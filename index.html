@@ -648,6 +648,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .set-table-row.s-worse  .set-tnum { color: #ff9f0a; }
 .set-table-row.s-same   .set-tnum { color: var(--accent); }
 .set-table-row.s-better .set-tnum { color: var(--green); }
+.set-check { color: var(--green); font-size: 11px; margin-left: 2px; }
 
 .set-tinput {
   width: 58px;
@@ -3232,8 +3233,9 @@ async function renderSession(requestId) {
       const statusIcon = { worse: '▼ ', same: '● ', better: '▲ ' }[status] || '';
 
       const orm = calc1RM(parseFloat(sd.kg), parseInt(sd.reps));
+      const setDoneMark = status !== 'undone' ? ' <span class="set-check">✓</span>' : '';
       html += `<div class="set-table-row s-${status}" id="set-${wOff}-${aDay}-${ei}-${s}">
-        <span class="set-tnum">${s + 1}</span>
+        <span class="set-tnum">${s + 1}${setDoneMark}</span>
         <input class="set-tinput" type="text" inputmode="decimal" placeholder="kg"
           value="${sd.kg || ''}" ${locked ? 'disabled' : ''}
           onchange="saveSet(${wOff},${aDay},${ei},${s},'kg',this.value.replace(',','.'))">
