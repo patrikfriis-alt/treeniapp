@@ -3189,10 +3189,10 @@ async function renderSession(requestId) {
       const orm = calc1RM(parseFloat(sd.kg), parseInt(sd.reps));
       html += `<div class="set-table-row s-${status}" id="set-${wOff}-${aDay}-${ei}-${s}">
         <span class="set-tnum">${s + 1}<span class="set-check" id="set-check-${wOff}-${aDay}-${ei}-${s}"${status !== 'undone' ? '' : ' style="display:none"'}>✓</span></span>
-        <input class="set-tinput" type="text" inputmode="decimal" placeholder="kg"
+        <input class="set-tinput" type="text" inputmode="decimal" placeholder="kg" autocomplete="off" name="set-kg-${wOff}-${aDay}-${ei}-${s}"
           value="${sd.kg || ''}" ${locked ? 'disabled' : ''}
           onchange="saveSet(${wOff},${aDay},${ei},${s},'kg',this.value.replace(',','.'))">
-        <input class="set-tinput" type="text" inputmode="numeric" placeholder="tr"
+        <input class="set-tinput" type="text" inputmode="numeric" placeholder="tr" autocomplete="off" name="set-reps-${wOff}-${aDay}-${ei}-${s}"
           value="${sd.reps || ''}" ${locked ? 'disabled' : ''}
           onchange="saveSet(${wOff},${aDay},${ei},${s},'reps',this.value)">
         <span class="set-tprev">
