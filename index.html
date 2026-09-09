@@ -2552,10 +2552,14 @@ function detectBodyTrendInsights(weightRows) {
 }
 
 function detectStepsInsight(stepsThisVals, stepsLastVals) {
-  if (stepsThisVals.length < 3 || stepsLastVals.length < 3) return null;
+  // Require at least 5 of 7 days logged in both weeks — a partial week's average isn't representative
+  // (e.g. 4 days averaging 2957 steps/day vs a full 7-day week at 14004 reads as "+374%").
+  if (stepsThisVals.length < 5 || stepsLastVals.length < 5) return null;
   const avgThis = stepsThisVals.reduce((s, v) => s + v, 0) / stepsThisVals.length;
   const avgLast = stepsLastVals.reduce((s, v) => s + v, 0) / stepsLastVals.length;
-  const pctChange = avgLast > 0 ? (avgThis - avgLast) / avgLast : 0;
+  // Below this, percentage math is noise (e.g. 50 -> 235 steps/day reads as "+370%") — skip the insight entirely.
+  if (avgLast < 1000) return null;
+  const pctChange = (avgThis - avgLast) / avgLast;
   if (Math.abs(pctChange) < 0.15) return null;
   const dir = pctChange < 0 ? 'laskenut' : 'noussut';
   return { text: `Askelmäärä ${dir} keskimäärin ${Math.round(Math.abs(pctChange) * 100)}% viime viikolla`, magnitude: Math.abs(pctChange) };
@@ -2713,7 +2717,7 @@ async function renderForecastAccuracyChart() {
     return;
   }
 
-  const intakes = await Promise.all(pairs.map(p => getFoodCalories(p.m1.measured_at, p.m2.measured_at)));
+  const coverage = await Promise.all(pairs.map(p => getFoodLogCoverage(p.m1.measured_at, p.m2.measured_at)));
 
   const coeffAt = (dateIso) => {
     const boundary = new Date(dateIso + 'T00:00:00');
@@ -2725,6 +2729,12 @@ async function renderForecastAccuracyChart() {
   const predicted = [], actual = [];
   pairs.forEach((p, i) => {
     const { m1, m2, days } = p;
+    const { totalKcal, loggedDays } = coverage[i];
+    // Predicted expenditure scales with the full interval, but intake only reflects logged days —
+    // with sparse logging over a long gap that mismatch inflates the predicted deficit wildly
+    // (e.g. a 139-day gap with food logged on only 6 of those days). Skip pairs too sparse to trust.
+    if (loggedDays / days < 0.5) return;
+
     const comp1 = getBodyComposition(m1.weight_kg, m1.fat_pct, m1.muscle_pct);
     const comp2 = getBodyComposition(m2.weight_kg, m2.fat_pct, m2.muscle_pct);
     const actualFatLossKg = comp1.fatKg - comp2.fatKg;
@@ -2734,11 +2744,16 @@ async function renderForecastAccuracyChart() {
     const avgMuscle = (comp1.muscleKg + comp2.muscleKg) / 2;
     const avgOther = (comp1.otherKg + comp2.otherKg) / 2;
     const predictedDailyExpenditure = calculateMaintenance(avgFat, avgMuscle, avgOther, coeff, DEFAULT_ACTIVITY_MULT);
-    const predictedFatLossKg = (predictedDailyExpenditure * days - intakes[i]) / KCAL_PER_KG_FAT_LOSS;
+    const predictedFatLossKg = (predictedDailyExpenditure * days - totalKcal) / KCAL_PER_KG_FAT_LOSS;
 
     predicted.push({ x: m2.measured_at, y: Math.round(predictedFatLossKg * 10) / 10 });
     actual.push({ x: m2.measured_at, y: Math.round(actualFatLossKg * 10) / 10 });
   });
+
+  if (predicted.length < 2) {
+    wrap.innerHTML = emptyState('scale', 'Ei tarpeeksi kattavasti kirjattua ruokalokia ennustevertailuun mittausten välillä');
+    return;
+  }
 
   wrap.innerHTML = `<div class="chart-wrap" style="margin-top:12px"><canvas id="forecast-accuracy-chart"></canvas></div>`;
   if (charts.forecastAccuracy) charts.forecastAccuracy.destroy();
@@ -3592,7 +3607,10 @@ async function renderForecastCard() {
   } else {
     const etaDate = new Date();
     etaDate.setDate(etaDate.getDate() + forecast.weeksToTarget * 7);
-    const etaStr = etaDate.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' });
+    const etaFormat = etaDate.getFullYear() === new Date().getFullYear()
+      ? { day: 'numeric', month: 'numeric' }
+      : { day: 'numeric', month: 'numeric', year: 'numeric' };
+    const etaStr = etaDate.toLocaleDateString('fi-FI', etaFormat);
     const weeklyPaceKg = (-(forecast.rows[0].weeklyDeficit / KCAL_PER_KG_FAT_LOSS)).toFixed(1);
     statsHtml = `
       <div class="seuranta-hero-stats">
@@ -3753,6 +3771,15 @@ async function getFoodCalories(fromIso, toIso) {
     .gte('logged_at', fromIso).lte('logged_at', toIso);
   if (error) { console.error('getFoodCalories failed:', error.message); return 0; }
   return (data || []).reduce((s, r) => s + (r.kcal || 0), 0);
+}
+
+async function getFoodLogCoverage(fromIso, toIso) {
+  const { data, error } = await sb.from('food_log_entries').select('logged_at,kcal')
+    .gte('logged_at', fromIso).lte('logged_at', toIso);
+  if (error) { console.error('getFoodLogCoverage failed:', error.message); return { totalKcal: 0, loggedDays: 0 }; }
+  const totalKcal = (data || []).reduce((s, r) => s + (r.kcal || 0), 0);
+  const loggedDays = new Set((data || []).map(r => r.logged_at)).size;
+  return { totalKcal, loggedDays };
 }
 
 async function getDailyExerciseCalories(fromIso, toIso) {
@@ -5448,6 +5475,10 @@ function renderFavoritesSection(templates) {
       </div>`).join('');
 }
 
+function toSentenceCase(str) {
+  return str.charAt(0) + str.slice(1).toLowerCase();
+}
+
 async function loadRecentFoods() {
   const from = new Date();
   from.setDate(from.getDate() - 30);
@@ -5470,7 +5501,7 @@ async function loadRecentFoods() {
     const key = (isCache ? 'cache:' : 'custom:') + food.id;
     if (!counts.has(key)) {
       counts.set(key, {
-        name: isCache ? food.name_fi : food.name,
+        name: isCache ? toSentenceCase(food.name_fi) : food.name,
         kcalPer100g: food.kcal_per_100g,
         proteinPer100g: food.protein_per_100g,
         carbsPer100g: food.carbs_per_100g,
