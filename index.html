@@ -3059,31 +3059,19 @@ async function renderTreeni() {
       </div>`;
   }
 
+  const pillHtml = done    ? `<div class="state-pill done">Treeni tehty ✓</div>`
+                  : started ? `<div class="state-pill active">Käynnissä</div>`
+                  : '';
+
   document.getElementById('hero-section').innerHTML = `
     <div class="hero-card">
       <div class="hero-glow"></div>
       <div class="hero-day">${dayLabel}</div>
       <div class="hero-name">${sess ? escapeHtml(sess.name) : '—'}</div>
       <div class="hero-focus">${sess ? escapeHtml(sess.focus) : ''}</div>
+      ${pillHtml}
       ${heroStatsHtml}
       ${ctaLabel ? `<button class="${ctaClass}" onclick="${ctaOnclick}">${ctaLabel}</button>` : ''}
-    </div>
-    <div class="hero-metrics">
-      <div class="hero-metric">
-        <div class="hero-metric-icon" data-icon="flame" data-icon-color="var(--amber)" data-icon-bg="var(--amber-bg)"></div>
-        <div class="hero-metric-val" style="color:#ff9f0a" id="ms-streak">—</div>
-        <div class="hero-metric-label">streak</div>
-      </div>
-      <div class="hero-metric">
-        <div class="hero-metric-icon" data-icon="dumbbell" data-icon-color="var(--accent)" data-icon-bg="var(--accent-bg)"></div>
-        <div class="hero-metric-val" style="color:#0a84ff" id="ws-gym">—</div>
-        <div class="hero-metric-label">viikon sali</div>
-      </div>
-      <div class="hero-metric">
-        <div class="hero-metric-icon" data-icon="moon" data-icon-color="var(--green)" data-icon-bg="var(--green-bg)"></div>
-        <div class="hero-metric-val" style="color:#30d158" id="ws-sleep">—</div>
-        <div class="hero-metric-label">uni ka</div>
-      </div>
     </div>`;
   renderIcons();
 
@@ -3216,15 +3204,6 @@ async function renderSession(requestId) {
   const done    = isDone(wOff, aDay, st);
   const started = isStarted(wOff, aDay, st);
   const locked  = !started || done;
-
-  const pillHtml = done    ? `<div class="state-pill done">Treeni tehty ✓</div>`
-                 : started ? `<div class="state-pill active">Käynnissä</div>`
-                 : '';
-  html += `<div class="card" style="margin-bottom:8px">
-    <div class="sess-name">${escapeHtml(sess.name)}</div>
-    <div class="sess-focus">${escapeHtml(sess.focus)}</div>
-    ${pillHtml}
-  </div>`;
 
   sess.ex.forEach((ex, ei) => {
     let ed     = getED(wOff, aDay, st, ei);
