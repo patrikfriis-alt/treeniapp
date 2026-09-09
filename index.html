@@ -1961,6 +1961,64 @@ async function loadPrevSession(o, d, requestId) {
   });
 }
 
+async function reconcileSessionWithServer(o, d, st, sess, requestId) {
+  const mon = wStart(o), dt = new Date(mon.date);
+  dt.setDate(mon.date.getDate() + d);
+  const dateIso = localIso(dt);
+  const names = sess.ex.map(e => e.n);
+
+  const [{ data: setRows }, { data: sessionRows }] = await Promise.all([
+    sb.from('workout_sets').select('exercise_name,set_number,weight_kg,reps')
+      .eq('workout_date', dateIso).in('exercise_name', names),
+    sb.from('workout_sessions').select('is_done')
+      .eq('workout_date', dateIso).eq('session_type', st).limit(1),
+  ]);
+  if (requestId !== treeniRequestId) return;
+
+  const queue = loadQueue();
+  const isPendingSet = (exName, setNum) => queue.some(q =>
+    q.table === 'workout_sets' && q.payload &&
+    q.payload.workout_date === dateIso && q.payload.exercise_name === exName && q.payload.set_number === setNum);
+  const isPendingDone = queue.some(q =>
+    q.table === 'workout_sessions' && q.payload && q.payload.workout_date === dateIso);
+
+  const serverByExercise = {};
+  (setRows || []).forEach(r => {
+    if (!serverByExercise[r.exercise_name]) serverByExercise[r.exercise_name] = {};
+    serverByExercise[r.exercise_name][r.set_number] = r;
+  });
+
+  let changed = false;
+  sess.ex.forEach((ex, ei) => {
+    const k = eKey(o, d, st, ei);
+    const ed = LD[k] || { sets: [] };
+    for (let s = 0; s < ex.s; s++) {
+      const timerKey = `${o}-${d}-${ei}-${s}`;
+      if (syncTimers[timerKey]) continue;
+      if (isPendingSet(ex.n, s + 1)) continue;
+
+      const serverSet = serverByExercise[ex.n] && serverByExercise[ex.n][s + 1];
+      const newVal = serverSet
+        ? { kg: serverSet.weight_kg != null ? String(serverSet.weight_kg) : '', reps: serverSet.reps != null ? String(serverSet.reps) : '' }
+        : {};
+      const oldVal = ed.sets[s] || {};
+      if ((oldVal.kg || '') !== (newVal.kg || '') || (oldVal.reps || '') !== (newVal.reps || '')) {
+        ed.sets[s] = newVal;
+        changed = true;
+      }
+    }
+    LD[k] = ed;
+  });
+
+  const doneKey = `${dKey(o, d, st)}_done`;
+  if (!isPendingDone) {
+    const serverDone = !!(sessionRows && sessionRows[0] && sessionRows[0].is_done);
+    if (LD[doneKey] !== serverDone) { LD[doneKey] = serverDone; changed = true; }
+  }
+
+  if (changed) saveLD();
+}
+
 /* ═══════════════════════════════════════════════════════════════
    WEEK ACTIVITY CACHE
 ═══════════════════════════════════════════════════════════════ */
@@ -3090,6 +3148,8 @@ async function renderSession(requestId) {
 
   // Fetch previous session data
   await loadPrevSession(wOff, aDay, requestId);
+  if (requestId !== treeniRequestId) return;
+  await reconcileSessionWithServer(wOff, aDay, st, sess, requestId);
   if (requestId !== treeniRequestId) return;
 
   const done    = isDone(wOff, aDay, st);
