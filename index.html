@@ -4502,13 +4502,14 @@ function closeExerciseModal() {
 ═══════════════════════════════════════════════════════════════ */
 async function loadRunChart() {
   const type = document.getElementById('run-chart-type')?.value || 'distance';
-  const { data, error } = await sb
+  const { data: rawData, error } = await sb
     .from('activity_data')
     .select('activity_date, duration_min, distance_km')
     .in('activity_type', ['Juoksu', 'Kävely'])
     .not('distance_km', 'is', null)
-    .order('activity_date', { ascending: true })
+    .order('activity_date', { ascending: false })
     .limit(30);
+  const data = rawData ? [...rawData].reverse() : rawData;
 
   const statusEl = document.getElementById('run-chart-status');
   if (error || !data || !data.length) {
