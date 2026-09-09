@@ -83,6 +83,12 @@ nav {
   display: flex;
   padding: 6px 8px 10px;
   gap: 4px;
+  /* Forces its own GPU compositing layer — without this, iOS WKWebView (standalone
+     PWA mode) can lose track of position:fixed + backdrop-filter during momentum
+     scroll and the nav visually detaches from the viewport bottom mid-scroll. */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
 }
 nav button {
   flex: 1;
