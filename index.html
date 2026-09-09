@@ -1705,7 +1705,14 @@ function getISOWeekKey(o) {
 const dKey  = (o, d, st) => `${getISOWeekKey(o)}_d${d}_${st}`;
 const eKey  = (o, d, st, e) => `${dKey(o,d,st)}_e${e}`;
 const isDone  = (o, d, st) => LD[`${dKey(o,d,st)}_done`] === true;
-const setDone = (o, d, st, v) => { LD[`${dKey(o,d,st)}_done`] = v; saveLD(); syncDone(o, d, st, v); };
+const doneSyncPending = {};
+const setDone = (o, d, st, v) => {
+  LD[`${dKey(o,d,st)}_done`] = v;
+  saveLD();
+  const key = dKey(o, d, st);
+  doneSyncPending[key] = true;
+  syncDone(o, d, st, v).finally(() => { delete doneSyncPending[key]; });
+};
 
 async function syncDone(o, d, st, value) {
   const mon = wStart(o), dt = new Date(mon.date);
@@ -1836,8 +1843,8 @@ function saveSet(o, d, e, s, field, value) {
 
   const timerKey = `${o}-${d}-${e}-${s}`;
   clearTimeout(syncTimers[timerKey]);
-  syncTimers[timerKey] = setTimeout(() => {
-    syncSet(o, d, e, s);
+  syncTimers[timerKey] = setTimeout(async () => {
+    await syncSet(o, d, e, s);
     delete syncTimers[timerKey];
   }, 500);
 }
@@ -1845,8 +1852,8 @@ function saveSet(o, d, e, s, field, value) {
 function scheduleSyncSet(o, d, e, s) {
   const timerKey = `${o}-${d}-${e}-${s}`;
   clearTimeout(syncTimers[timerKey]);
-  syncTimers[timerKey] = setTimeout(() => {
-    syncSet(o, d, e, s);
+  syncTimers[timerKey] = setTimeout(async () => {
+    await syncSet(o, d, e, s);
     delete syncTimers[timerKey];
   }, 500);
 }
@@ -2011,7 +2018,7 @@ async function reconcileSessionWithServer(o, d, st, sess, requestId) {
   });
 
   const doneKey = `${dKey(o, d, st)}_done`;
-  if (!isPendingDone) {
+  if (!isPendingDone && !doneSyncPending[dKey(o, d, st)]) {
     const serverDone = !!(sessionRows && sessionRows[0] && sessionRows[0].is_done);
     if (LD[doneKey] !== serverDone) { LD[doneKey] = serverDone; changed = true; }
   }
