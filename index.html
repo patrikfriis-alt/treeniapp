@@ -9,11 +9,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Valkku">
 <link rel="manifest" href="manifest.json">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230a84ff' rx='22'/><path d='M10 54h16l8-28 12 56 12-40 8 12h24' fill='none' stroke='%23fff' stroke-width='9' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%2300f2ff' rx='22'/><path d='M10 54h16l8-28 12 56 12-40 8 12h24' fill='none' stroke='%23000' stroke-width='9' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 <title>Valkku</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://api.fontshare.com">
+<link href="https://api.fontshare.com/v2/css?f[]=tanker@400&f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
@@ -21,34 +20,34 @@
 /* ─── Design tokens ─────────────────────────────────────────── */
 :root {
   --bg:        #000000;
-  --surface:   #1c1c1e;
-  --surface2:  #2c2c2e;
-  --surface3:  #3a3a3c;
-  --border:    #38383a;
+  --surface:   #121214;
+  --surface2:  #1c1c21;
+  --surface3:  #2a2a32;
+  --border:    #2d2d35;
 
   --text:      #ffffff;
-  --text2:     rgba(235,235,245,0.6);
-  --text3:     rgba(235,235,245,0.3);
+  --text2:     rgba(255,255,255,0.7);
+  --text3:     rgba(255,255,255,0.4);
 
-  --accent:    #0a84ff;
-  --accent-bg: rgba(10,132,255,0.15);
-  --green:     #30d158;
-  --green-bg:  rgba(48,209,88,0.15);
-  --red:       #ff453a;
-  --red-bg:    rgba(255,69,58,0.15);
+  --accent:    #00f2ff;
+  --accent-bg: rgba(0,242,255,0.12);
+  --green:     #2fff7e;
+  --green-bg:  rgba(47,255,126,0.12);
+  --red:       #ff3e3e;
+  --red-bg:    rgba(255,62,62,0.12);
 
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 22px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
 
   /* Aliases used in JS-rendered HTML */
   --teal:      var(--accent);
   --blue:      #378ADD;
-  --amber:     #EF9F27;
-  --amber-bg:  rgba(239,159,39,0.15);
+  --amber:     #ffbb00;
+  --amber-bg:  rgba(255,187,0,0.12);
   --border2:   var(--surface3);
   --rs:        var(--radius-sm);
-  --t:         .15s ease;
+  --t:         .2s cubic-bezier(0.4,0,0.2,1);
 }
 
 /* ─── Reset & base ──────────────────────────────────────────── */
@@ -57,11 +56,16 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+  font-family: 'Satoshi', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
   font-size: 17px;
   letter-spacing: -0.2px;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Display font (headlines, big numbers) ─────────────────── */
+.koonti-greeting, .hero-metric-val, .hero-name, .hero-stat-val, .ex-block-title, .set-tnum, .set-tinput {
+  font-family: 'Tanker', sans-serif;
 }
 
 /* ─── Navigation ────────────────────────────────────────────── */
@@ -110,7 +114,7 @@ nav button:not(.active):hover { color: var(--text); background: var(--surface2);
   font-weight: 600;
   color: var(--accent);
   background: var(--accent-bg);
-  border: 1px solid rgba(10,132,255,0.4);
+  border: 1px solid rgba(0,242,255,0.4);
   border-radius: 20px;
   padding: 3px 10px;
   margin: 0 8px;
@@ -160,16 +164,18 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .hero-card {
   margin: 12px;
   border-radius: 20px;
-  background: linear-gradient(145deg, #0d1b4b 0%, #0a2a6e 40%, #0a84ff 100%);
+  background: linear-gradient(165deg, #0a0a0a 0%, #001a2e 100%);
+  border: 1px solid rgba(0,242,255,0.2);
   padding: 20px;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
 }
 .hero-glow {
   position: absolute;
   top: -30px; right: -30px;
   width: 160px; height: 160px;
-  background: radial-gradient(circle, rgba(10,132,255,0.4) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(0,242,255,0.25) 0%, transparent 70%);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -196,7 +202,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   transition:all var(--t);
 }
 .hero-cta:hover { background:rgba(255,255,255,0.25); }
-.hero-cta.done  { background:rgba(48,209,88,0.2); border-color:rgba(48,209,88,0.4); color:#30d158; }
+.hero-cta.done  { background:rgba(47,255,126,0.2); border-color:rgba(47,255,126,0.4); color:#2fff7e; }
 
 /* ─── Hero metrics (streak/sali/uni) ────────────────────────── */
 .hero-metrics {
@@ -299,7 +305,11 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 }
 .page-title { font-size: 20px; font-weight: 700; }
 
-.koonti-greeting { font-size: 28px; font-weight: 700; margin: 4px 12px 2px; letter-spacing: -0.02em; }
+.koonti-greeting {
+  font-size: 28px; font-weight: 700; margin: 4px 12px 2px; letter-spacing: -0.02em;
+  background: linear-gradient(to bottom right, #fff, rgba(255,255,255,0.6));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
 .koonti-date      { font-size: 13px; color: var(--text2); margin: 0 12px 14px; }
 .koonti-navbar {
   position: fixed;
@@ -360,10 +370,10 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .koonti-card-icon  { font-size: 24px; margin-bottom: 8px; display: block; }
 .koonti-card-label { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
 .koonti-card-sub   { font-size: 12px; color: var(--text3); }
-.koonti-card--done { background: var(--green-bg); border: 1px solid rgba(48,209,88,0.3); }
+.koonti-card--done { background: var(--green-bg); border: 1px solid rgba(47,255,126,0.3); }
 .koonti-card--done .koonti-card-sub { color: var(--green); }
 .koonti-card--done::after { content: "✓"; position: absolute; top: 12px; right: 14px; color: var(--green); font-weight: 700; font-size: 13px; }
-.koonti-card--inprogress { background: var(--accent-bg); border: 1px solid rgba(10,132,255,0.35); }
+.koonti-card--inprogress { background: var(--accent-bg); border: 1px solid rgba(0,242,255,0.35); }
 .koonti-card--inprogress .koonti-card-sub { color: var(--accent); }
 .koonti-card--inprogress::after { content: "●"; position: absolute; top: 16px; right: 16px; color: var(--accent); font-size: 8px; }
 .koonti-card-goal  { font-size: 11px; color: var(--accent); margin-top: 2px; }
@@ -403,7 +413,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   left: 16px;
   right: 16px;
   z-index: 300;
-  background: linear-gradient(135deg, #ff9f0a, #ff453a);
+  background: linear-gradient(135deg, #ffbb00, #ff3e3e);
   border-radius: 14px;
   padding: 14px 16px;
   display: flex;
@@ -413,7 +423,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   transition: top 0.3s ease;
 }
 .celebration-toast.visible { top: 16px; }
-.celebration-toast--pr { background: linear-gradient(135deg, #0a84ff, #5e5ce6); }
+.celebration-toast--pr { background: linear-gradient(135deg, #00f2ff, #5e5ce6); }
 .celebration-toast-icon { font-size: 28px; }
 .celebration-toast-title { color: #fff; font-weight: 700; font-size: 15px; }
 .celebration-toast-sub { color: #fff; font-size: 12px; opacity: 0.9; }
@@ -468,7 +478,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 
 .sess-add-ex-btn {
   width:100%; padding:11px; border-radius:12px; background:var(--accent-bg);
-  border:1px dashed rgba(10,132,255,0.4); color:var(--accent); font-size:13.5px; font-weight:600;
+  border:1px dashed rgba(0,242,255,0.4); color:var(--accent); font-size:13.5px; font-weight:600;
   text-align:center; cursor:pointer; margin-top:4px;
 }
 .sess-delete-btn {
@@ -593,7 +603,9 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .ex-block { margin-bottom: 10px; }
 
 .ex-block-header {
-  background: linear-gradient(135deg, #0d1b4b, #0a2a6e);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-bottom: none;
   border-radius: 16px 16px 0 0;
   padding: 12px 14px;
   display: flex;
@@ -605,8 +617,8 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .ex-block-sub   { font-size:12px; color:rgba(255,255,255,0.5); margin-top:2px; }
 .ex-block-progress { text-align:right; flex-shrink:0; }
 .ex-block-prog-label { font-size:11px; color:rgba(255,255,255,0.4); margin-bottom:4px; }
-.ex-block-prog-bar  { width:50px; height:3px; background:#1c3a7a; border-radius:3px; }
-.ex-block-prog-fill { height:3px; background:#0a84ff; border-radius:3px; }
+.ex-block-prog-bar  { width:50px; height:3px; background:var(--surface3); border-radius:3px; }
+.ex-block-prog-fill { height:3px; background:var(--accent); border-radius:3px; }
 .ex-block-prog-fill.done { background: var(--green); }
 
 .ex-set-table {
@@ -639,14 +651,14 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   transition: background .2s;
 }
 .set-table-row:last-child { border-bottom: none; }
-.set-table-row.s-undone { background: rgba(255,69,58,0.06); }
-.set-table-row.s-worse  { background: rgba(255,159,10,0.08); }
-.set-table-row.s-same   { background: rgba(10,132,255,0.08); }
-.set-table-row.s-better { background: rgba(48,209,88,0.06); }
+.set-table-row.s-undone { background: rgba(255,62,62,0.04); }
+.set-table-row.s-worse  { background: rgba(255,187,0,0.06); }
+.set-table-row.s-same   { background: rgba(0,242,255,0.06); border-left: 2px solid var(--accent); }
+.set-table-row.s-better { background: rgba(47,255,126,0.04); border-left: 2px solid var(--green); }
 
 .set-tnum { font-size:13px; font-weight:700; white-space:nowrap; }
 .set-table-row.s-undone .set-tnum { color: var(--red); }
-.set-table-row.s-worse  .set-tnum { color: #ff9f0a; }
+.set-table-row.s-worse  .set-tnum { color: var(--amber); }
 .set-table-row.s-same   .set-tnum { color: var(--accent); }
 .set-table-row.s-better .set-tnum { color: var(--green); }
 .set-check { color: var(--green); font-size: 11px; margin-left: 2px; }
@@ -939,11 +951,13 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 /* ─── Ruokapäiväkirja ────────────────────────────────────────── */
 .food-hero {
   position: relative; border-radius: 20px; padding: 18px; margin: 12px 12px 10px; overflow: hidden;
-  background: linear-gradient(145deg,#0d1b4b 0%,#0a2a6e 40%,#0a84ff 100%);
+  background: linear-gradient(165deg, #0a0a0a 0%, #001a2e 100%);
+  border: 1px solid rgba(0,242,255,0.2);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
 }
 .food-hero-glow {
   position: absolute; top: -20px; right: -20px; width: 140px; height: 140px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(10,132,255,0.4) 0%, transparent 70%); pointer-events: none;
+  background: radial-gradient(circle, rgba(0,242,255,0.25) 0%, transparent 70%); pointer-events: none;
 }
 .food-hero-label { font-size:10px; font-weight:700; letter-spacing:.12em; color:rgba(255,255,255,0.5); text-transform:uppercase; margin-bottom:6px; }
 .food-hero-main  { font-size:28px; font-weight:800; color:#fff; letter-spacing:-0.03em; position:relative; }
@@ -1022,7 +1036,8 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   display: flex; flex-direction: column;
 }
 .ex-modal-header {
-  background: linear-gradient(145deg,#0d1b4b 0%,#0a2a6e 40%,#0a84ff 100%);
+  background: linear-gradient(165deg, #0a0a0a 0%, #001a2e 100%);
+  border-bottom: 1px solid rgba(0,242,255,0.2);
   padding: 16px 16px 24px; flex-shrink: 0;
 }
 .ex-modal-nav {
@@ -2684,7 +2699,7 @@ async function renderSleepTonnageChart() {
   charts.sleepTonnage = new Chart(document.getElementById('sleep-tonnage-chart'), {
     type: 'scatter',
     data: {
-      datasets: [{ label: 'Unipisteet vs. tonnimäärä', data: points, backgroundColor: '#30d158' }],
+      datasets: [{ label: 'Unipisteet vs. tonnimäärä', data: points, backgroundColor: '#2fff7e' }],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -2762,8 +2777,8 @@ async function renderForecastAccuracyChart() {
     data: {
       labels: predicted.map(p => p.x),
       datasets: [
-        { label: 'Ennustettu rasvanpudotus (kg)', data: predicted.map(p => p.y), borderColor: '#0a84ff', borderWidth: 2, pointRadius: 2, pointBackgroundColor: '#0a84ff', tension: .3, fill: false },
-        { label: 'Toteutunut rasvanpudotus (kg)', data: actual.map(p => p.y), borderColor: '#30d158', borderWidth: 2, pointRadius: 2, pointBackgroundColor: '#30d158', tension: .3, fill: false },
+        { label: 'Ennustettu rasvanpudotus (kg)', data: predicted.map(p => p.y), borderColor: '#00f2ff', borderWidth: 2, pointRadius: 2, pointBackgroundColor: '#00f2ff', tension: .3, fill: false },
+        { label: 'Toteutunut rasvanpudotus (kg)', data: actual.map(p => p.y), borderColor: '#2fff7e', borderWidth: 2, pointRadius: 2, pointBackgroundColor: '#2fff7e', tension: .3, fill: false },
       ],
     },
     options: {
@@ -4292,7 +4307,7 @@ async function loadSleep() {
       data: {
         labels: [...chartData].reverse().map(d => d.sleep_date.slice(5)),
         datasets: [
-          { label:'Unipisteet', data:[...chartData].reverse().map(d=>d.sleep_score), borderColor:'#0a84ff', borderWidth:2, pointRadius:3, pointBackgroundColor:'#0a84ff', tension:.3, fill:false },
+          { label:'Unipisteet', data:[...chartData].reverse().map(d=>d.sleep_score), borderColor:'#00f2ff', borderWidth:2, pointRadius:3, pointBackgroundColor:'#00f2ff', tension:.3, fill:false },
         ],
       },
       options: {
@@ -4551,10 +4566,10 @@ async function loadModalChart(months) {
         datasets: [{
           label: _modalExName,
           data: sortedDates.map(d => byDate[d]),
-          borderColor: '#0a84ff',
+          borderColor: '#00f2ff',
           borderWidth: 2,
           pointRadius: 3,
-          pointBackgroundColor: '#0a84ff',
+          pointBackgroundColor: '#00f2ff',
           tension: .3,
           fill: false,
         }],
@@ -7050,7 +7065,7 @@ async function openStepsModal() {
       data: {
         labels: [...rows].reverse().map(r => r.step_date.slice(5)),
         datasets: [
-          { label:'Askeleet', data:[...rows].reverse().map(r=>r.steps), borderColor:'#30d158', borderWidth:2, pointRadius:2, pointBackgroundColor:'#30d158', tension:.3, fill:false },
+          { label:'Askeleet', data:[...rows].reverse().map(r=>r.steps), borderColor:'#2fff7e', borderWidth:2, pointRadius:2, pointBackgroundColor:'#2fff7e', tension:.3, fill:false },
         ],
       },
       options: {
