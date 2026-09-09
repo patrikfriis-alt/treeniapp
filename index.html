@@ -64,7 +64,8 @@ body {
 }
 
 /* ─── Display font (headlines, big numbers) ─────────────────── */
-.koonti-greeting, .hero-metric-val, .hero-name, .hero-stat-val, .ex-block-title, .set-tnum, .set-tinput {
+.koonti-greeting, .hero-metric-val, .hero-name, .hero-stat-val, .ex-block-title, .set-tnum, .set-tinput,
+.seuranta-hero-main, .seuranta-hero-stat-val, .food-hero-main, .food-hero-stat-val, .tilastot-card-kcal {
   font-family: 'Tanker', sans-serif;
 }
 
@@ -920,10 +921,12 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   padding: 18px;
   margin: 12px 12px 10px;
   overflow: hidden;
+  background: linear-gradient(165deg, #0a0a0a 0%, #001a2e 100%);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
 }
-.seuranta-hero--keho  { background: linear-gradient(145deg,#1a0d4b 0%,#2a0a6e 40%,#8a2be2 100%); }
-.seuranta-hero--akt   { background: linear-gradient(145deg,#3b0d00 0%,#5a1a00 40%,#ff6b00 100%); }
-.seuranta-hero--uni   { background: linear-gradient(145deg,#0a1a3b 0%,#0a2060 40%,#005c9e 100%); }
+.seuranta-hero--keho  { border: 1px solid rgba(138,43,226,0.25); }
+.seuranta-hero--akt   { border: 1px solid rgba(255,107,0,0.25); }
+.seuranta-hero--uni   { border: 1px solid rgba(0,92,158,0.35); }
 .seuranta-hero-glow {
   position: absolute; top: -20px; right: -20px;
   width: 140px; height: 140px; border-radius: 50%;
@@ -1297,7 +1300,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 
   <div id="aerobia-treeni">
     <div class="seuranta-hero seuranta-hero--akt">
-      <div class="seuranta-hero-glow" style="background:radial-gradient(circle,rgba(255,107,0,0.5) 0%,transparent 70%)"></div>
+      <div class="seuranta-hero-glow" style="background:radial-gradient(circle,rgba(255,107,0,0.25) 0%,transparent 70%)"></div>
       <div class="seuranta-hero-label">VIIMEISIN · AKTIVITEETTI</div>
       <div class="seuranta-hero-main" id="hero-act-type">—</div>
       <div class="seuranta-hero-sub" id="hero-act-sub"></div>
@@ -1366,7 +1369,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="page-title">Keho</span>
   </div>
     <div class="seuranta-hero seuranta-hero--keho">
-      <div class="seuranta-hero-glow" style="background:radial-gradient(circle,rgba(138,43,226,0.5) 0%,transparent 70%)"></div>
+      <div class="seuranta-hero-glow" style="background:radial-gradient(circle,rgba(138,43,226,0.25) 0%,transparent 70%)"></div>
       <div class="seuranta-hero-label">TÄNÄÄN · KEHO</div>
       <div class="seuranta-hero-main" id="m-weight">—</div>
       <div class="seuranta-hero-sub" id="m-weight-delta"></div>
@@ -1402,7 +1405,7 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span class="page-title">Uni</span>
   </div>
     <div class="seuranta-hero seuranta-hero--uni">
-      <div class="seuranta-hero-glow" style="background:radial-gradient(circle,rgba(0,92,158,0.5) 0%,transparent 70%)"></div>
+      <div class="seuranta-hero-glow" style="background:radial-gradient(circle,rgba(0,92,158,0.35) 0%,transparent 70%)"></div>
       <div class="seuranta-hero-label">VIIME YÖ · UNI</div>
       <div class="seuranta-hero-main" id="sleep-last">—</div>
       <div class="seuranta-hero-stats">
@@ -3397,7 +3400,7 @@ async function loadBodyMetrics() {
     const datasets = [
       { label:'Paino',  data: histWeights, borderColor:'#1D9E75', borderWidth:2, pointRadius:3, pointBackgroundColor:'#1D9E75', tension:.3, fill:false, yAxisID:'y1' },
       { label:'Rasva%', data: histFat,    borderColor:'#378ADD', borderWidth:2, pointRadius:3, pointBackgroundColor:'#378ADD', tension:.3, fill:false, yAxisID:'y2' },
-      { label:'Lihas%', data: histMuscle, borderColor:'#EF9F27', borderWidth:2, pointRadius:3, pointBackgroundColor:'#EF9F27', tension:.3, fill:false, yAxisID:'y2' },
+      { label:'Lihas%', data: histMuscle, borderColor:'#ffbb00', borderWidth:2, pointRadius:3, pointBackgroundColor:'#ffbb00', tension:.3, fill:false, yAxisID:'y2' },
     ];
 
     charts.body = new Chart(document.getElementById('body-chart'), {
