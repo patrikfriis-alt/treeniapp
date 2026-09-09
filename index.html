@@ -1844,8 +1844,7 @@ function saveSet(o, d, e, s, field, value) {
   const timerKey = `${o}-${d}-${e}-${s}`;
   clearTimeout(syncTimers[timerKey]);
   syncTimers[timerKey] = setTimeout(async () => {
-    await syncSet(o, d, e, s);
-    delete syncTimers[timerKey];
+    try { await syncSet(o, d, e, s); } finally { delete syncTimers[timerKey]; }
   }, 500);
 }
 
@@ -1853,8 +1852,7 @@ function scheduleSyncSet(o, d, e, s) {
   const timerKey = `${o}-${d}-${e}-${s}`;
   clearTimeout(syncTimers[timerKey]);
   syncTimers[timerKey] = setTimeout(async () => {
-    await syncSet(o, d, e, s);
-    delete syncTimers[timerKey];
+    try { await syncSet(o, d, e, s); } finally { delete syncTimers[timerKey]; }
   }, 500);
 }
 
