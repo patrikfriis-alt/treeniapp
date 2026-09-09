@@ -790,6 +790,25 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .tilastot-table th { color: var(--text2); font-weight: 600; cursor: pointer; user-select: none; }
 .tilastot-table th.sorted { color: var(--accent); }
 
+.tilastot-sort-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.tilastot-sort-select {
+  flex: 1; padding: 8px 10px; background: var(--surface2); border: none; border-radius: var(--radius-sm);
+  color: var(--text); font-size: 13px; font-weight: 500;
+}
+.tilastot-sort-dir-btn {
+  padding: 8px 14px; background: var(--surface2); border: none; border-radius: var(--radius-sm);
+  color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.tilastot-card { background: var(--surface); border-radius: var(--radius-lg); padding: 12px; margin-bottom: 10px; }
+.tilastot-card-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tilastot-card-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.tilastot-card-sub { font-size: 12px; color: var(--text3); text-align: right; white-space: nowrap; }
+.tilastot-card-kcal { font-size: 20px; font-weight: 800; color: var(--text); letter-spacing: -0.02em; margin-top: 6px; }
+.tilastot-card-macros { display: flex; gap: 16px; margin-top: 10px; }
+.tilastot-card-macro-val { font-size: 14px; font-weight: 700; color: var(--text); }
+.tilastot-card-macro-label { font-size: 10px; color: var(--text3); margin-top: 1px; }
+.tilastot-card-amount { font-size: 12px; color: var(--text3); margin-top: 8px; }
+
 /* ─── Session components ─────────────────────────────────────── */
 .sess-btn { font-size:11px; font-weight:400; padding:7px 3px; flex:1; min-width:64px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text2); cursor:pointer; white-space:normal; }
 .sess-btn.active { background:var(--accent-bg); border-color:var(--accent); color:var(--accent); font-weight:600; }
@@ -1438,10 +1457,24 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   <div class="form-row"><label>Loppupäivä</label><input type="date" id="tilastot-to"></div>
   <button class="btn" onclick="loadAndRenderTilastot()" style="margin-bottom:14px;">Näytä</button>
   <div class="stab-bar">
-    <button class="stab active" id="tilastot-gran-entry" onclick="setTilastotGranularity('entry', this)">Per kirjaus</button>
-    <button class="stab" id="tilastot-gran-day" onclick="setTilastotGranularity('day', this)">Per päivä</button>
+    <button class="stab active" id="tilastot-view-cards" onclick="setTilastotView('cards', this)">Kortit</button>
+    <button class="stab" id="tilastot-view-table" onclick="setTilastotView('table', this)">Taulukko</button>
+  </div>
+  <div class="stab-bar">
+    <button class="stab" id="tilastot-gran-entry" onclick="setTilastotGranularity('entry', this)">Per kirjaus</button>
+    <button class="stab active" id="tilastot-gran-day" onclick="setTilastotGranularity('day', this)">Per päivä</button>
     <button class="stab" id="tilastot-gran-week" onclick="setTilastotGranularity('week', this)">Per viikko</button>
     <button class="stab" id="tilastot-gran-month" onclick="setTilastotGranularity('month', this)">Per kuukausi</button>
+  </div>
+  <div class="tilastot-sort-row" id="tilastot-sort-row">
+    <select class="tilastot-sort-select" id="tilastot-sort-select" onchange="sortTilastotBy(this.value)">
+      <option value="label">Päivämäärä</option>
+      <option value="kcal">Kcal</option>
+      <option value="protein_g">Proteiini</option>
+      <option value="carbs">Hiilarit</option>
+      <option value="fat">Rasva</option>
+    </select>
+    <button class="tilastot-sort-dir-btn" id="tilastot-sort-dir-btn" onclick="sortTilastotBy(tilastotSortKey)">▼</button>
   </div>
   <div id="tilastot-table-wrap" class="tilastot-table-wrap"></div>
 </div>
@@ -4882,25 +4915,28 @@ const TILASTOT_COLUMNS = [
   { key: 'protein_g',    label: 'Proteiini',                  decimals: 1, value: e => e.protein_g },
   { key: 'carbs',        label: 'Hiilarit',                   decimals: 1, value: entryCarbs },
   { key: 'fat',          label: 'Rasva',                      decimals: 1, value: entryFat },
-  { key: 'fiber',        label: 'Kuitu',                      decimals: 1, value: entryFiber },
-  { key: 'sugar',        label: 'Sokeri',                     decimals: 1, value: entrySugar },
-  { key: 'fatSaturated', label: 'Tyydyttynyt rasva',          decimals: 1, value: entryFatSaturated },
-  { key: 'fatMono',      label: 'Kertatyydyttymätön rasva',   decimals: 1, value: entryFatMono },
-  { key: 'fatPoly',      label: 'Monityydyttymätön rasva',    decimals: 1, value: entryFatPoly },
-  { key: 'fatTrans',     label: 'Transrasva',                 decimals: 1, value: entryFatTrans },
-  { key: 'salt',         label: 'Suola',                      decimals: 2, value: entrySalt },
-  { key: 'sodium',       label: 'Natrium',                    decimals: 0, value: entrySodium },
-  { key: 'calcium',      label: 'Kalsium',                    decimals: 0, value: entryCalcium },
-  { key: 'potassium',    label: 'Kalium',                     decimals: 0, value: entryPotassium },
-  { key: 'magnesium',    label: 'Magnesium',                  decimals: 0, value: entryMagnesium },
-  { key: 'iron',         label: 'Rauta',                      decimals: 1, value: entryIron },
-  { key: 'zinc',         label: 'Sinkki',                     decimals: 1, value: entryZinc },
-  { key: 'vitaminC',     label: 'C-vitamiini',                decimals: 0, value: entryVitaminC },
-  { key: 'vitaminD',     label: 'D-vitamiini',                decimals: 1, value: entryVitaminD },
+  { key: 'fiber',        label: 'Kuitu',                      decimals: 1, value: entryFiber,         unit: 'g',  section: 'Hiilihydraatit' },
+  { key: 'sugar',        label: 'Sokeri',                     decimals: 1, value: entrySugar,         unit: 'g',  section: 'Hiilihydraatit' },
+  { key: 'fatSaturated', label: 'Tyydyttynyt rasva',          decimals: 1, value: entryFatSaturated,  unit: 'g',  section: 'Rasvat' },
+  { key: 'fatMono',      label: 'Kertatyydyttymätön rasva',   decimals: 1, value: entryFatMono,       unit: 'g',  section: 'Rasvat' },
+  { key: 'fatPoly',      label: 'Monityydyttymätön rasva',    decimals: 1, value: entryFatPoly,       unit: 'g',  section: 'Rasvat' },
+  { key: 'fatTrans',     label: 'Transrasva',                 decimals: 1, value: entryFatTrans,      unit: 'g',  section: 'Rasvat' },
+  { key: 'salt',         label: 'Suola',                      decimals: 2, value: entrySalt,          unit: 'g',  section: 'Kivennäisaineet' },
+  { key: 'sodium',       label: 'Natrium',                    decimals: 0, value: entrySodium,        unit: 'mg', section: 'Kivennäisaineet' },
+  { key: 'calcium',      label: 'Kalsium',                    decimals: 0, value: entryCalcium,       unit: 'mg', section: 'Kivennäisaineet' },
+  { key: 'potassium',    label: 'Kalium',                     decimals: 0, value: entryPotassium,     unit: 'mg', section: 'Kivennäisaineet' },
+  { key: 'magnesium',    label: 'Magnesium',                  decimals: 0, value: entryMagnesium,     unit: 'mg', section: 'Kivennäisaineet' },
+  { key: 'iron',         label: 'Rauta',                      decimals: 1, value: entryIron,          unit: 'mg', section: 'Kivennäisaineet' },
+  { key: 'zinc',         label: 'Sinkki',                     decimals: 1, value: entryZinc,          unit: 'mg', section: 'Kivennäisaineet' },
+  { key: 'vitaminC',     label: 'C-vitamiini',                decimals: 0, value: entryVitaminC,      unit: 'mg', section: 'Vitamiinit' },
+  { key: 'vitaminD',     label: 'D-vitamiini',                decimals: 1, value: entryVitaminD,      unit: 'µg', section: 'Vitamiinit' },
 ];
 
+const TILASTOT_LISATIEDOT_SECTION_ORDER = ['Hiilihydraatit', 'Rasvat', 'Kivennäisaineet', 'Vitamiinit'];
+
 let tilastotEntries = [];
-let tilastotGranularity = 'entry';
+let tilastotGranularity = 'day';
+let tilastotView = 'cards';
 let tilastotSortKey = 'label';
 let tilastotSortDir = 'desc';
 
@@ -5014,13 +5050,75 @@ function setTilastotGranularity(granularity, btn) {
   renderTilastotTable();
 }
 
-function renderTilastotTable() {
-  const wrap = document.getElementById('tilastot-table-wrap');
-  if (!tilastotEntries.length) {
-    wrap.innerHTML = '<div class="food-search-empty">Ei kirjauksia tällä aikavälillä</div>';
-    return;
+const TILASTOT_CARD_SORT_KEYS = ['label', 'kcal', 'protein_g', 'carbs', 'fat'];
+
+function setTilastotView(view, btn) {
+  tilastotView = view;
+  ['cards', 'table'].forEach(v => document.getElementById(`tilastot-view-${v}`).classList.remove('active'));
+  btn.classList.add('active');
+  if (view === 'cards' && !TILASTOT_CARD_SORT_KEYS.includes(tilastotSortKey)) {
+    tilastotSortKey = 'label';
+    tilastotSortDir = 'desc';
   }
-  const rows = tilastotSortRows(tilastotBuildRows());
+  renderTilastotTable();
+}
+
+function tilastotFormatValue(row, key) {
+  const col = TILASTOT_COLUMNS.find(c => c.key === key);
+  const factor = Math.pow(10, col.decimals);
+  return Math.round(tilastotSortValue(row, key) * factor) / factor;
+}
+
+function toggleTilastotLisatiedot(el) {
+  const panel = el.nextElementSibling;
+  const opening = panel.style.display === 'none' || !panel.style.display;
+  panel.style.display = opening ? 'block' : 'none';
+  el.textContent = (opening ? '▾ ' : '▸ ') + 'Lisätiedot';
+}
+
+function renderTilastotCardLisatiedot(row) {
+  const bySection = new Map();
+  TILASTOT_LISATIEDOT_SECTION_ORDER.forEach(s => bySection.set(s, []));
+  TILASTOT_COLUMNS.forEach(col => {
+    if (!col.section) return;
+    const value = tilastotFormatValue(row, col.key);
+    bySection.get(col.section).push(`<div class="lisatiedot-row"><span>${col.label}</span><span>${value}${col.unit}</span></div>`);
+  });
+  return TILASTOT_LISATIEDOT_SECTION_ORDER
+    .filter(s => bySection.get(s).length)
+    .map(s => `<div class="lisatiedot-section"><div class="lisatiedot-section-title">${s}</div>${bySection.get(s).join('')}</div>`)
+    .join('');
+}
+
+function renderTilastotCardsView(rows) {
+  const isEntry = tilastotGranularity === 'entry';
+  return rows.map(row => {
+    const title = isEntry ? row.name : escapeHtml(row.label);
+    const sub = isEntry ? `${escapeHtml(row.meal)} · ${escapeHtml(row.label)}` : `${row.count} kirjausta`;
+    const kcal = tilastotFormatValue(row, 'kcal');
+    const protein = tilastotFormatValue(row, 'protein_g');
+    const carbs = tilastotFormatValue(row, 'carbs');
+    const fat = tilastotFormatValue(row, 'fat');
+    const amount = tilastotFormatValue(row, 'amount_g');
+    return `<div class="tilastot-card">
+      <div class="tilastot-card-header">
+        <span class="tilastot-card-title">${title}</span>
+        <span class="tilastot-card-sub">${sub}</span>
+      </div>
+      <div class="tilastot-card-kcal">${kcal} kcal</div>
+      <div class="tilastot-card-macros">
+        <div><div class="tilastot-card-macro-val">${protein}g</div><div class="tilastot-card-macro-label">Proteiini</div></div>
+        <div><div class="tilastot-card-macro-val">${carbs}g</div><div class="tilastot-card-macro-label">Hiilarit</div></div>
+        <div><div class="tilastot-card-macro-val">${fat}g</div><div class="tilastot-card-macro-label">Rasva</div></div>
+      </div>
+      <div class="tilastot-card-amount">Määrä: ${amount} g</div>
+      <div class="lisatiedot-toggle" onclick="toggleTilastotLisatiedot(this)">▸ Lisätiedot</div>
+      <div class="lisatiedot-panel" style="display:none">${renderTilastotCardLisatiedot(row)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderTilastotTableView(rows) {
   const isEntry = tilastotGranularity === 'entry';
 
   const identityHeaders = isEntry
@@ -5045,7 +5143,23 @@ function renderTilastotTable() {
     return `<tr>${identityCells}${valueCells}</tr>`;
   }).join('');
 
-  wrap.innerHTML = `<table class="tilastot-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+  return `<table class="tilastot-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+}
+
+function renderTilastotTable() {
+  const wrap = document.getElementById('tilastot-table-wrap');
+  const sortRow = document.getElementById('tilastot-sort-row');
+  sortRow.style.display = tilastotView === 'cards' ? 'flex' : 'none';
+  if (tilastotView === 'cards') {
+    document.getElementById('tilastot-sort-select').value = tilastotSortKey;
+    document.getElementById('tilastot-sort-dir-btn').textContent = tilastotSortDir === 'asc' ? '▲' : '▼';
+  }
+  if (!tilastotEntries.length) {
+    wrap.innerHTML = '<div class="food-search-empty">Ei kirjauksia tällä aikavälillä</div>';
+    return;
+  }
+  const rows = tilastotSortRows(tilastotBuildRows());
+  wrap.innerHTML = tilastotView === 'cards' ? renderTilastotCardsView(rows) : renderTilastotTableView(rows);
 }
 
 async function loadNutritionGoals() {
