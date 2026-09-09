@@ -1843,17 +1843,21 @@ function saveSet(o, d, e, s, field, value) {
 
   const timerKey = `${o}-${d}-${e}-${s}`;
   clearTimeout(syncTimers[timerKey]);
-  syncTimers[timerKey] = setTimeout(async () => {
-    try { await syncSet(o, d, e, s); } finally { delete syncTimers[timerKey]; }
+  const myTimer = setTimeout(async () => {
+    try { await syncSet(o, d, e, s); }
+    finally { if (syncTimers[timerKey] === myTimer) delete syncTimers[timerKey]; }
   }, 500);
+  syncTimers[timerKey] = myTimer;
 }
 
 function scheduleSyncSet(o, d, e, s) {
   const timerKey = `${o}-${d}-${e}-${s}`;
   clearTimeout(syncTimers[timerKey]);
-  syncTimers[timerKey] = setTimeout(async () => {
-    try { await syncSet(o, d, e, s); } finally { delete syncTimers[timerKey]; }
+  const myTimer = setTimeout(async () => {
+    try { await syncSet(o, d, e, s); }
+    finally { if (syncTimers[timerKey] === myTimer) delete syncTimers[timerKey]; }
   }, 500);
+  syncTimers[timerKey] = myTimer;
 }
 
 async function syncSet(o, d, e, s) {
@@ -1983,9 +1987,11 @@ async function reconcileSessionWithServer(o, d, st, sess, requestId) {
   const queue = loadQueue();
   const isPendingSet = (exName, setNum) => queue.some(q =>
     q.table === 'workout_sets' && q.payload &&
-    q.payload.workout_date === dateIso && q.payload.exercise_name === exName && q.payload.set_number === setNum);
+    q.payload.workout_date === dateIso && q.payload.session_type === st &&
+    q.payload.exercise_name === exName && q.payload.set_number === setNum);
   const isPendingDone = queue.some(q =>
-    q.table === 'workout_sessions' && q.payload && q.payload.workout_date === dateIso);
+    q.table === 'workout_sessions' && q.payload &&
+    q.payload.workout_date === dateIso && q.payload.session_type === st);
 
   const serverByExercise = {};
   (setRows || []).forEach(r => {
