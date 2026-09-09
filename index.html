@@ -3212,9 +3212,10 @@ async function renderSession(requestId) {
   const st = getActiveSession(wOff, aDay), sess = SESS[st];
   const el = document.getElementById('session-content');
 
-  // Session type picker
-  let html = `<div class="card" style="margin-bottom:8px">
-    <div class="card-title">Päivän tyyppi</div>
+  // Session type picker (collapsed by default — rarely changed once the week's schedule is set)
+  const sessLabel = `Päivän tyyppi: ${sess ? escapeHtml(sess.name) : '—'}`;
+  let html = `<div class="lisatiedot-toggle" data-label="${sessLabel}" onclick="toggleSessPicker(this)" style="margin-bottom:10px">▸ ${sessLabel}</div>
+  <div class="lisatiedot-panel" style="display:none">
     <div class="sess-picker">`;
   Object.entries(SESS).forEach(([key, s]) => {
     const active = key === st;
@@ -5120,6 +5121,13 @@ function toggleTilastotLisatiedot(el) {
   const opening = panel.style.display === 'none' || !panel.style.display;
   panel.style.display = opening ? 'block' : 'none';
   el.textContent = (opening ? '▾ ' : '▸ ') + 'Lisätiedot';
+}
+
+function toggleSessPicker(el) {
+  const panel = el.nextElementSibling;
+  const opening = panel.style.display === 'none' || !panel.style.display;
+  panel.style.display = opening ? 'block' : 'none';
+  el.textContent = (opening ? '▾ ' : '▸ ') + el.dataset.label;
 }
 
 function renderTilastotCardLisatiedot(row) {
