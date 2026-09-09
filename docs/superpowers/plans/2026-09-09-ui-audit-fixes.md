@@ -27,7 +27,7 @@ No new files.
 **Files:**
 - Modify: `index.html:4503-4511` (`loadRunChart()`)
 
-- [ ] **Step 1: Fix the query direction**
+- [x] **Step 1: Fix the query direction**
 
 Find in `index.html`:
 ```js
@@ -56,7 +56,7 @@ async function loadRunChart() {
 ```
 Everything after this (the `if (error || !data || !data.length)` check and the rest of the function) stays exactly as-is — it already reads from `data`, which now holds the 30 most recent activities in ascending chronological order (correct for a left-to-right time-series chart).
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 There is no automated test suite for this project. Verify by:
 ```bash
@@ -71,7 +71,7 @@ Won't match directly since the pattern spans lines — instead confirm by readin
 
 A human will verify the actual chart behavior in-browser (query direction can't be tested without live Supabase data in this environment) — note in your report that this needs live verification against an account with more than 30 logged runs/walks.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add index.html
@@ -97,7 +97,7 @@ EOF
 **Files:**
 - Modify: `index.html:4453-4456` (inside `loadModalChart()`'s `_modalChart = new Chart(...)`)
 
-- [ ] **Step 1: Add `maxTicksLimit` to the y-scale**
+- [x] **Step 1: Add `maxTicksLimit` to the y-scale**
 
 Find in `index.html`:
 ```js
@@ -117,7 +117,7 @@ Replace with:
 ```
 This matches the existing `maxTicksLimit: 8` pattern already used on x-axes elsewhere in this file (lines ~2655, ~6863) — fewer auto-generated ticks means Chart.js spaces them further apart, which stops the post-rounding duplicate-label problem on narrow weight ranges (e.g. 72-73kg).
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 ```bash
 awk '/<script>/{flag=1; next} /<\/script>/{flag=0} flag' index.html > /tmp/task2.js && node --check /tmp/task2.js
@@ -131,7 +131,7 @@ Confirm there are now 3 matches total (the 2 pre-existing x-axis ones, plus this
 
 A human should verify visually in-browser: open an exercise with a narrow recent weight range (e.g. 1-2kg spread across sessions) and confirm the Y-axis no longer repeats the same rounded number multiple times in a row.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add index.html
@@ -161,7 +161,7 @@ EOF
 
 **Context for the implementer:** This app tracks in-progress workout data two ways: `LD` (a `localStorage`-backed object, keyed by `` `${isoWeekYear}-${isoWeek}_d${dayIndex}_${sessionType}_e${exerciseIndex}` ``, holding `{sets: [{kg, reps}, ...]}` per exercise) and the real database tables `workout_sets` (one row per set, keyed by the literal calendar date) and `workout_sessions` (one row per date+session_type, with an `is_done` flag). Until now, nothing ever reads `workout_sets`/`workout_sessions` back into `LD` to verify it — the UI trusts whatever is sitting in `localStorage` forever, which was confirmed (during a UI audit) to be able to show fully-"done" sets with real-looking numbers that were never actually saved to the server (e.g. leftover local data from an earlier session, or from testing on a shared/reused browser). This task adds a read-only reconciliation step: fetch what the server actually has for the exact calendar date being viewed, and overwrite `LD` to match — except for a set that was just typed into (still inside its 500ms debounce window, tracked in the existing `syncTimers` object) or is sitting in the existing offline-write retry queue (`loadQueue()`), since those are genuinely newer than what the server currently knows.
 
-- [ ] **Step 1: Add `reconcileSessionWithServer()`**
+- [x] **Step 1: Add `reconcileSessionWithServer()`**
 
 Find in `index.html` (the end of the existing `loadPrevSession()` function):
 ```js
@@ -234,7 +234,7 @@ async function reconcileSessionWithServer(o, d, st, sess, requestId) {
 }
 ```
 
-- [ ] **Step 2: Call it from `renderSession()`**
+- [x] **Step 2: Call it from `renderSession()`**
 
 Find in `index.html`:
 ```js
@@ -256,7 +256,7 @@ Replace with:
 ```
 This runs after `loadPrevSession()` and before `done`/`started` are read from `LD` (via `isDone`/`isStarted`) and before `sess.ex.forEach(...)` reads set data via `getED()` — so the reconciled values are what the rest of this render pass actually uses.
 
-- [ ] **Step 3: Manual verification**
+- [x] **Step 3: Manual verification**
 
 There is no automated test suite for this project. Verify by:
 ```bash
@@ -281,7 +281,7 @@ A human should verify interactively in-browser (this can't be fully exercised wi
 4. If practical: simulate an offline write (e.g. DevTools "Offline" mode while typing a value so it lands in the retry queue), then switch tabs away and back before reconnecting — confirm the queued value is not cleared by reconciliation.
 5. Check the browser console for errors throughout, especially on day-tab switches (each one now fires two extra Supabase queries).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add index.html
