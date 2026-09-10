@@ -167,7 +167,7 @@ async function stopFast() {
 }
 ```
 
-Note: `loadFastingTimer()`, `loadRecentFasts()`, and `refreshKoontiFastingRow()` don't exist yet (built in Tasks 3, 4, 5). This task will not be browser-testable through the UI yet — Step 3 below tests it via the console directly. `index.html` will not throw a `ReferenceError` from having these calls present but undefined until they're actually *invoked*; since nothing calls `startFast`/`stopFast` yet (no button wired), this is safe to commit mid-sequence.
+Note on what exists at this point in the sequence: `loadFastingTimer()` already exists in `index.html` (it's the *old* automatic-calculation version, not yet rewritten — that happens in Task 3) — calling it from `startFast()`/`stopFast()` right now silently runs the old, soon-to-be-replaced logic; it does not throw. `loadRecentFasts()` and `refreshKoontiFastingRow()` do NOT exist yet anywhere (built in Tasks 4 and 5) — calling either would throw `ReferenceError`. This is harmless for this task because nothing wires a button to `startFast`/`stopFast` yet, and Step 3 below deliberately tests the lower-level Supabase calls directly rather than through `startFast()`/`stopFast()`, so the not-yet-defined functions are never actually invoked during this task's test.
 
 - [ ] **Step 3: Verify via the browser console against the real Supabase table**
 
