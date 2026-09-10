@@ -1553,6 +1553,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
       </div>
       <button class="btn btn-primary" id="food-fasting-btn" style="width:auto;padding:10px 18px;">Aloita paasto</button>
     </div>
+    <div class="status" id="food-fasting-status"></div>
     <div id="food-fasting-recent"></div>
   </div>
 
@@ -5309,7 +5310,8 @@ async function startFast() {
   if (error) {
     console.error('startFast failed:', error.message);
     // 23505 = unique_violation -> an active fast already exists (e.g. a second tab beat this one)
-    if (error.code === '23505') await loadFastingTimer();
+    if (error.code === '23505') { await loadFastingTimer(); return; }
+    showStatus('food-fasting-status', 'Paaston tallennus epäonnistui', true);
     return;
   }
   await loadFastingTimer();
@@ -5321,7 +5323,7 @@ async function stopFast() {
   const { error } = await sb.from('fasting_sessions')
     .update({ ended_at: new Date().toISOString() })
     .eq('id', activeFastSession.id);
-  if (error) { console.error('stopFast failed:', error.message); return; }
+  if (error) { console.error('stopFast failed:', error.message); showStatus('food-fasting-status', 'Paaston tallennus epäonnistui', true); return; }
   await loadFastingTimer();
   await loadRecentFasts();
   refreshKoontiFastingRow();
@@ -5366,7 +5368,6 @@ function formatFoodDayLabel(offset) {
 }
 
 let _fastingInterval = null;
-let _lastRealFoodAt = null;
 
 async function loadFastingTimer() {
   activeFastSession = await loadActiveFastSession();
@@ -5447,6 +5448,7 @@ async function saveFastEdit(id) {
 }
 
 async function deleteFast(id) {
+  if (!confirm('Poistetaanko paasto pysyvästi?')) return;
   const { error } = await sb.from('fasting_sessions').delete().eq('id', id);
   if (error) { console.error('deleteFast failed:', error.message); return; }
   document.getElementById('metric-info-overlay').remove();
