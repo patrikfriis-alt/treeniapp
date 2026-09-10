@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
     try {
       await webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        JSON.stringify({ title, body }),
+        JSON.stringify({ title, body, type }),
       );
     } catch (err: any) {
       if (err.statusCode === 404 || err.statusCode === 410) {

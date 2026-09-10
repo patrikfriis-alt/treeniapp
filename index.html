@@ -4237,6 +4237,7 @@ function openEditActivityDialog(activityId) {
   };
 
   document.getElementById('edit-act-delete-btn').onclick = async () => {
+    if (!confirm('Poistetaanko aktiviteetti pysyvästi?')) return;
     const deleteBtn = document.getElementById('edit-act-delete-btn');
     deleteBtn.disabled = true;
     try {
@@ -5487,7 +5488,7 @@ async function saveFastEdit(id) {
 
 async function deleteFast(id) {
   if (!confirm('Poistetaanko paasto pysyvästi?')) return;
-  const { error } = await sb.from('fasting_sessions').delete().eq('id', id);
+  const { error } = await sbWrite({ table: 'fasting_sessions', op: 'delete', eq: { column: 'id', value: id } });
   if (error) { console.error('deleteFast failed:', error.message); return; }
   document.getElementById('metric-info-overlay').remove();
   await loadRecentFasts();
@@ -5885,7 +5886,7 @@ async function addFavoriteMealToLog(templateId) {
 
 async function deleteFavoriteMeal(templateId) {
   if (!confirm('Poistetaanko suosikki pysyvästi?')) return;
-  const { error } = await sb.from('meal_templates').delete().eq('id', templateId);
+  const { error } = await sbWrite({ table: 'meal_templates', op: 'delete', eq: { column: 'id', value: templateId } });
   if (error) { console.error('deleteFavoriteMeal failed:', error.message); return; }
   foodSearchFavorites = foodSearchFavorites.filter(t => t.id !== templateId);
   renderFavoritesSection(foodSearchFavorites);
@@ -6877,6 +6878,7 @@ function openEditEntryDialog(entryId) {
   };
 
   document.getElementById('edit-entry-delete-btn').onclick = async () => {
+    if (!confirm('Poistetaanko ruokailukirjaus pysyvästi?')) return;
     const deleteBtn = document.getElementById('edit-entry-delete-btn');
     deleteBtn.disabled = true;
     try {
