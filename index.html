@@ -2383,10 +2383,12 @@ async function getWeekStats(offset) {
 }
 
 async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
-  const [thisWeek, lastWeek] = await Promise.all([
+  const [thisWeek, lastWeek, activeFast] = await Promise.all([
     getWeekStats(offset),
     getWeekStats(offset - 1),
+    loadActiveFastSession(),
   ]);
+  activeFastSession = activeFast;
 
   const fmtDelta = (cur, prev, unit) => {
     if (prev == null || cur == null) return '';
@@ -2475,7 +2477,8 @@ async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
     for (let i = 0; i < 7; i++) {
       dayMinutes.push(Math.round((fastingByDay[localIso(addDays(mon.date, i))] || 0) / 60000));
     }
-    rows.push(weekRow('timer', 'var(--accent)', 'Paastoaika', formatFastingDuration(weeklyFastingMs), '',
+    const fastingSuffix = activeFastSession ? ' (käynnissä)' : '';
+    rows.push(weekRow('timer', 'var(--accent)', 'Paastoaika', formatFastingDuration(weeklyFastingMs) + fastingSuffix, '',
       `openFastingBreakdownModal('${mon.iso}', [${dayMinutes.join(', ')}])`));
   }
 
@@ -8057,13 +8060,18 @@ function openWeeklyCaloriesModal(foodKcal, bmrWeekly, exerciseKcal) {
 }
 
 function openFastingBreakdownModal(mondayIso, minutes) {
+  const controlHtml = activeFastSession
+    ? `<div class="food-fasting-status" style="margin-bottom:4px;">${formatFastingDuration(Date.now() - new Date(activeFastSession.started_at).getTime())}</div>
+       <button class="btn btn-primary" style="width:100%;margin-bottom:16px;" onclick="stopFast();document.getElementById('metric-info-overlay').remove();">Lopeta paasto</button>`
+    : `<button class="btn btn-primary" style="width:100%;margin-bottom:16px;" onclick="startFast();document.getElementById('metric-info-overlay').remove();">Aloita paasto</button>`;
+
   const rowsHtml = minutes.map((min, i) => {
     const d = addDays(new Date(mondayIso), i);
     const label = `${DAYS[i]} ${d.getDate()}.${d.getMonth() + 1}.`;
     const h = Math.floor(min / 60), m = min % 60;
     return `<div class="metric-modal-row"><span>${label}</span><span class="val">${h}h ${m}min</span></div>`;
   }).join('');
-  openMetricModal('Paastoaika', rowsHtml);
+  openMetricModal('Paastoaika', controlHtml + rowsHtml);
 }
 
 
