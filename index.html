@@ -5349,27 +5349,24 @@ function formatFastingDuration(ms) {
 // todellista syömisaikaa. Tunnettu, hyväksytty rajoitus — ei uutta ajastussaraketta.
 async function computeWeeklyFastingByDay(mondayIso, sundayIso) {
   const lookbackFrom = localIso(addDays(new Date(mondayIso), -14));
-  const { data, error } = await sb.from('food_log_entries')
-    .select('created_at')
-    .gte('logged_at', lookbackFrom)
-    .lte('logged_at', sundayIso)
-    .gte('kcal', 10)
-    .order('created_at', { ascending: true });
+  const { data, error } = await sb.from('fasting_sessions')
+    .select('started_at,ended_at')
+    .gte('started_at', lookbackFrom)
+    .lte('started_at', sundayIso + 'T23:59:59');
   if (error) { console.error('computeWeeklyFastingByDay failed:', error.message); return {}; }
-  const entries = data || [];
+  const sessions = data || [];
 
   const byDay = {};
   for (let i = 0; i < 7; i++) {
     byDay[localIso(addDays(new Date(mondayIso), i))] = 0;
   }
-  for (let i = 1; i < entries.length; i++) {
-    const prev = new Date(entries[i - 1].created_at);
-    const curr = new Date(entries[i].created_at);
-    const endDayIso = localIso(curr);
-    if (byDay[endDayIso] !== undefined) {
-      byDay[endDayIso] += (curr - prev);
-    }
-  }
+  const now = new Date();
+  sessions.forEach(s => {
+    const start = new Date(s.started_at);
+    const end = s.ended_at ? new Date(s.ended_at) : now; // in-progress fast -> elapsed time so far
+    const endDayIso = localIso(end);
+    if (byDay[endDayIso] !== undefined) byDay[endDayIso] += (end - start);
+  });
   return byDay;
 }
 
