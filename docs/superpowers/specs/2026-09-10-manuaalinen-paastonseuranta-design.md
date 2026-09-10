@@ -58,7 +58,7 @@ Kokonaan pois index.html:stä:
 - `getLastRealFoodEntryAt()` (5279-5287) — ei enää tarvita, paasto ei riipu ruokakirjauksista.
 - `_lastRealFoodAt`-muuttuja ja sen käyttö `renderFastingTimer()`:ssa.
 - Rivit 5295-5298: kommentti `created_at` vs. `logged_at` -rajoituksesta — ei enää relevantti.
-- `computeWeeklyFastingByDay()`:n nykyinen runko (5299-5323) — korvataan kokonaan uudella (ks. 4.2), joka lukee `fasting_sessions`-taulua `food_log_entries`:n sijaan.
+- `computeWeeklyFastingByDay()`:n nykyinen runko (5299-5323) — korvataan kokonaan uudella (ks. kohta 6), joka lukee `fasting_sessions`-taulua `food_log_entries`:n sijaan.
 
 Säilyy sellaisenaan:
 - `formatFastingDuration(ms)` (5289-5293) — muotoilufunktio, käytetään edelleen.
