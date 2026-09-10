@@ -992,6 +992,9 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
   font-size:var(--fs-sm); color:var(--text2);
 }
 .food-week-row .food-week-val { color: var(--green); font-weight:600; }
+.food-fasting-row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.food-fasting-label { font-size:var(--fs-sm); color:var(--text3); }
+.food-fasting-status { font-size:var(--fs-lg); font-weight:700; color:var(--text); margin-top:2px; }
 
 .meal-card { background: var(--surface); border-radius: var(--radius-lg); padding:12px; margin-bottom:10px; }
 .meal-card-header { display:flex; justify-content:space-between; font-size:var(--fs-sm); font-weight:600; color:var(--text); }
@@ -1539,8 +1542,15 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
     <span>Viikko</span><span class="food-week-val"></span>
   </div>
 
-  <div class="food-week-row">
-    <span>Paasto</span><span class="food-week-val" id="food-fasting-val">—</span>
+  <div class="meal-card" style="margin-bottom:14px">
+    <div class="food-fasting-row">
+      <div>
+        <div class="food-fasting-label">Paasto</div>
+        <div class="food-fasting-status" id="food-fasting-val">—</div>
+      </div>
+      <button class="btn btn-primary" id="food-fasting-btn" style="width:auto;padding:10px 18px;">Aloita paasto</button>
+    </div>
+    <div id="food-fasting-recent"></div>
   </div>
 
   <div class="meal-card">
@@ -5370,17 +5380,25 @@ let _fastingInterval = null;
 let _lastRealFoodAt = null;
 
 async function loadFastingTimer() {
-  _lastRealFoodAt = await getLastRealFoodEntryAt();
+  activeFastSession = await loadActiveFastSession();
   renderFastingTimer();
   if (_fastingInterval) clearInterval(_fastingInterval);
-  _fastingInterval = setInterval(renderFastingTimer, 60000);
+  if (activeFastSession) _fastingInterval = setInterval(renderFastingTimer, 60000);
 }
 
 function renderFastingTimer() {
-  const el = document.getElementById('food-fasting-val');
-  if (!el) return;
-  if (!_lastRealFoodAt) { el.textContent = '—'; return; }
-  el.textContent = formatFastingDuration(Math.max(0, Date.now() - _lastRealFoodAt.getTime()));
+  const statusEl = document.getElementById('food-fasting-val');
+  const btnEl = document.getElementById('food-fasting-btn');
+  if (!statusEl || !btnEl) return;
+  if (activeFastSession) {
+    statusEl.textContent = formatFastingDuration(Date.now() - new Date(activeFastSession.started_at).getTime());
+    btnEl.textContent = 'Lopeta paasto';
+    btnEl.onclick = stopFast;
+  } else {
+    statusEl.textContent = 'Ei aktiivista paastoa';
+    btnEl.textContent = 'Aloita paasto';
+    btnEl.onclick = startFast;
+  }
 }
 
 async function renderRuoka() {
