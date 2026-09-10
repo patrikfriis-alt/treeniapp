@@ -5276,6 +5276,41 @@ async function repeatMealFromPreviousDay(mealType) {
   renderRuoka();
 }
 
+let activeFastSession = null;   // { id, started_at } or null
+let recentFasts = [];           // most recent 5 completed fasts, edit-modal data source
+
+async function loadActiveFastSession() {
+  const { data, error } = await sb.from('fasting_sessions')
+    .select('id,started_at')
+    .is('ended_at', null)
+    .maybeSingle();
+  if (error) { console.error('loadActiveFastSession failed:', error.message); return null; }
+  return data;
+}
+
+async function startFast() {
+  const { error } = await sb.from('fasting_sessions').insert({ started_at: new Date().toISOString() });
+  if (error) {
+    console.error('startFast failed:', error.message);
+    // 23505 = unique_violation -> an active fast already exists (e.g. a second tab beat this one)
+    if (error.code === '23505') await loadFastingTimer();
+    return;
+  }
+  await loadFastingTimer();
+  refreshKoontiFastingRow();
+}
+
+async function stopFast() {
+  if (!activeFastSession) return;
+  const { error } = await sb.from('fasting_sessions')
+    .update({ ended_at: new Date().toISOString() })
+    .eq('id', activeFastSession.id);
+  if (error) { console.error('stopFast failed:', error.message); return; }
+  await loadFastingTimer();
+  await loadRecentFasts();
+  refreshKoontiFastingRow();
+}
+
 async function getLastRealFoodEntryAt() {
   const { data, error } = await sb.from('food_log_entries')
     .select('created_at')
