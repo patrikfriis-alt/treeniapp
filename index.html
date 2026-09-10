@@ -1527,6 +1527,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
     <span class="week-label" id="food-day-label">Tänään</span>
     <button class="week-btn" onclick="changeFoodDay(1)">→</button>
   </div>
+  <div id="food-day-nudge"></div>
 
   <div class="food-hero">
     <div class="food-hero-glow"></div>
@@ -1793,13 +1794,25 @@ const dKey  = (o, d, st) => `${getISOWeekKey(o)}_d${d}_${st}`;
 const eKey  = (o, d, st, e) => `${dKey(o,d,st)}_e${e}`;
 const isDone  = (o, d, st) => LD[`${dKey(o,d,st)}_done`] === true;
 const doneSyncPending = {};
+const doneSyncQueued = {};
 const setDone = (o, d, st, v) => {
   LD[`${dKey(o,d,st)}_done`] = v;
   saveLD();
   const key = dKey(o, d, st);
-  doneSyncPending[key] = true;
-  syncDone(o, d, st, v).finally(() => { delete doneSyncPending[key]; });
+  if (doneSyncPending[key]) { doneSyncQueued[key] = v; return; }
+  runDoneSync(o, d, st, key, v);
 };
+function runDoneSync(o, d, st, key, v) {
+  doneSyncPending[key] = true;
+  syncDone(o, d, st, v).finally(() => {
+    delete doneSyncPending[key];
+    if (key in doneSyncQueued) {
+      const nextV = doneSyncQueued[key];
+      delete doneSyncQueued[key];
+      runDoneSync(o, d, st, key, nextV);
+    }
+  });
+}
 
 async function syncDone(o, d, st, value) {
   const mon = wStart(o), dt = new Date(mon.date);
@@ -1928,27 +1941,27 @@ function saveSet(o, d, e, s, field, value) {
 
   checkForPR(o, d, st, e);
 
-  const timerKey = `${o}-${d}-${e}-${s}`;
+  const timerKey = `${st}-${o}-${d}-${e}-${s}`;
   clearTimeout(syncTimers[timerKey]);
   const myTimer = setTimeout(async () => {
-    try { await syncSet(o, d, e, s); }
+    try { await syncSet(o, d, st, e, s); }
     finally { if (syncTimers[timerKey] === myTimer) delete syncTimers[timerKey]; }
   }, 500);
   syncTimers[timerKey] = myTimer;
 }
 
-function scheduleSyncSet(o, d, e, s) {
-  const timerKey = `${o}-${d}-${e}-${s}`;
+function scheduleSyncSet(o, d, st, e, s) {
+  const timerKey = `${st}-${o}-${d}-${e}-${s}`;
   clearTimeout(syncTimers[timerKey]);
   const myTimer = setTimeout(async () => {
-    try { await syncSet(o, d, e, s); }
+    try { await syncSet(o, d, st, e, s); }
     finally { if (syncTimers[timerKey] === myTimer) delete syncTimers[timerKey]; }
   }, 500);
   syncTimers[timerKey] = myTimer;
 }
 
-async function syncSet(o, d, e, s) {
-  const st = getActiveSession(o, d), sess = SESS[st];
+async function syncSet(o, d, st, e, s) {
+  const sess = SESS[st];
   if (!sess || !sess.ex[e]) return;
   const ex = sess.ex[e], ed = getED(o, d, st, e), sd = ed.sets[s] || {};
   if (!sd.kg && !sd.reps) return;
@@ -2002,7 +2015,7 @@ function prefillExercise(o, d, ei, btnEl) {
     }
 
     updateSetBox(o, d, ei, s);
-    scheduleSyncSet(o, d, ei, s);
+    scheduleSyncSet(o, d, st, ei, s);
   }
 
   saveLD();
@@ -2091,7 +2104,7 @@ async function reconcileSessionWithServer(o, d, st, sess, requestId) {
     const k = eKey(o, d, st, ei);
     const ed = LD[k] || { sets: [] };
     for (let s = 0; s < ex.s; s++) {
-      const timerKey = `${o}-${d}-${ei}-${s}`;
+      const timerKey = `${st}-${o}-${d}-${ei}-${s}`;
       if (syncTimers[timerKey]) continue;
       if (isPendingSet(ex.n, s + 1)) continue;
 
@@ -2644,22 +2657,28 @@ function detectDeloadInsight(tonnageThis, tonnageLast, sleepScoresThis, sleepSco
   };
 }
 
+function logQueryErrors(label, results) {
+  results.forEach(r => { if (r && r.error) console.error(`${label} query failed:`, r.error.message); });
+}
+
 async function computeHuomiotHistory(numWeeks = 12) {
   const bufferWeeks = 6; // puskuri vanhimman tarkasteltavan viikon from42-ikkunalle
   const earliestMonday = wStart(-(numWeeks + bufferWeeks));
   const todayIso = localIso(new Date());
 
-  const [
-    { data: setsRows },
-    { data: weightRows },
-    { data: sleepRows },
-    { data: stepsRows },
-  ] = await Promise.all([
+  const huomiotHistoryResults = await Promise.all([
     sb.from('workout_sets').select('workout_date,exercise_name,weight_kg,reps').gte('workout_date', earliestMonday.iso).lte('workout_date', todayIso),
     sb.from('body_metrics').select('weight_kg,fat_pct,muscle_pct,measured_at').gte('measured_at', earliestMonday.iso).lte('measured_at', todayIso).order('measured_at', { ascending: true }),
     sb.from('sleep_data').select('sleep_date,sleep_score').gte('sleep_date', earliestMonday.iso).lte('sleep_date', todayIso),
     sb.from('step_data').select('step_date,steps').gte('step_date', earliestMonday.iso).lte('step_date', todayIso),
   ]);
+  logQueryErrors('computeHuomiotHistory', huomiotHistoryResults);
+  const [
+    { data: setsRows },
+    { data: weightRows },
+    { data: sleepRows },
+    { data: stepsRows },
+  ] = huomiotHistoryResults;
 
   const tonnageForRange = (from, to) => (setsRows || [])
     .filter(r => r.workout_date >= from && r.workout_date <= to && r.weight_kg != null && r.reps != null)
@@ -2711,10 +2730,12 @@ async function renderSleepTonnageChart() {
   if (!wrap) return;
   const fromIso = localIso(addDays(new Date(), -90));
   const todayIso = localIso(new Date());
-  const [{ data: sleepRows }, { data: setsRows }] = await Promise.all([
+  const sleepTonnageResults = await Promise.all([
     sb.from('sleep_data').select('sleep_date,sleep_score').gte('sleep_date', fromIso).lte('sleep_date', todayIso),
     sb.from('workout_sets').select('workout_date,weight_kg,reps').gte('workout_date', fromIso).lte('workout_date', todayIso),
   ]);
+  logQueryErrors('renderSleepTonnageChart', sleepTonnageResults);
+  const [{ data: sleepRows }, { data: setsRows }] = sleepTonnageResults;
   const sleepByDate = {};
   (sleepRows || []).forEach(r => { const s = calcSleepScore(r); if (s != null) sleepByDate[r.sleep_date] = s; });
   const tonnageByDate = {};
@@ -2755,10 +2776,12 @@ async function renderSleepTonnageChart() {
 async function renderForecastAccuracyChart() {
   const wrap = document.getElementById('nakemykset-forecast-chart-wrap');
   if (!wrap) return;
-  const [{ data: measurements }, { data: calibrations }] = await Promise.all([
+  const forecastAccuracyResults = await Promise.all([
     sb.from('body_metrics').select('weight_kg,fat_pct,muscle_pct,measured_at').order('measured_at', { ascending: true }),
     sb.from('model_calibration').select('other_tissue_kcal_per_kg,calibrated_at').order('calibrated_at', { ascending: true }),
   ]);
+  logQueryErrors('renderForecastAccuracyChart', forecastAccuracyResults);
+  const [{ data: measurements }, { data: calibrations }] = forecastAccuracyResults;
   const rows = (measurements || []).filter(m => m.weight_kg != null && m.fat_pct != null && m.muscle_pct != null);
 
   const pairs = [];
@@ -2875,14 +2898,7 @@ async function loadHuomioita() {
 
   if (!appSettings) appSettings = await loadAppSettings();
 
-  const [
-    { data: setsRows },
-    { data: weightRows },
-    { data: sleepThis },
-    { data: sleepLast },
-    { data: stepsThis },
-    { data: stepsLast },
-  ] = await Promise.all([
+  const huomiotResults = await Promise.all([
     sb.from('workout_sets').select('workout_date,exercise_name,weight_kg,reps').gte('workout_date', from42).lte('workout_date', todayIso),
     sb.from('body_metrics').select('weight_kg,fat_pct,muscle_pct,measured_at').gte('measured_at', from21).lte('measured_at', todayIso).order('measured_at', { ascending: true }),
     sb.from('sleep_data').select('sleep_score').gte('sleep_date', thisWeekFrom).lte('sleep_date', thisWeekTo),
@@ -2890,6 +2906,15 @@ async function loadHuomioita() {
     sb.from('step_data').select('steps').gte('step_date', thisWeekFrom).lte('step_date', thisWeekTo),
     sb.from('step_data').select('steps').gte('step_date', lastWeekFrom).lte('step_date', lastWeekTo),
   ]);
+  logQueryErrors('loadHuomioita', huomiotResults);
+  const [
+    { data: setsRows },
+    { data: weightRows },
+    { data: sleepThis },
+    { data: sleepLast },
+    { data: stepsThis },
+    { data: stepsLast },
+  ] = huomiotResults;
 
   const stepsThisVals = (stepsThis || []).map(r => r.steps);
   const stepsLastVals = (stepsLast || []).map(r => r.steps);
@@ -5462,10 +5487,23 @@ function refreshKoontiFastingRow() {
 
 async function renderRuoka() {
   document.getElementById('food-day-label').textContent = formatFoodDayLabel(foodDayOffset);
+  const nudgeEl = document.getElementById('food-day-nudge');
+  if (foodDayOffset !== 0) {
+    const dateStr = addDays(new Date(), foodDayOffset).toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' });
+    nudgeEl.innerHTML = `
+      <div class="day-nudge-banner">
+        <span>⚠️ Katsot <strong>${dateStr}</strong>, et tätä päivää.</span>
+        <button class="day-nudge-btn" onclick="backToTodayFood()">Takaisin tähän päivään →</button>
+      </div>`;
+  } else {
+    nudgeEl.innerHTML = '';
+  }
   await loadFoodDay();
   loadFastingTimer();
   loadRecentFasts();
 }
+
+function backToTodayFood() { foodDayOffset = 0; renderRuoka(); }
 
 async function loadFoodDay() {
   const requestId = ++foodDayRequestId;
