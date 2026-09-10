@@ -176,7 +176,8 @@ input[type=number], input[type=date], input[type=text], input[type=password], se
   transition: border-color var(--t);
 }
 input:focus, select:focus { border-color: var(--accent); }
-input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
+input[type=date]::-webkit-calendar-picker-indicator,
+input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 
 /* ─── Hero card (Fitness+ -tyyli) ──────────────────────────── */
 .hero-card {
@@ -995,6 +996,8 @@ input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.5); }
 .food-fasting-row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
 .food-fasting-label { font-size:var(--fs-sm); color:var(--text3); }
 .food-fasting-status { font-size:var(--fs-lg); font-weight:700; color:var(--text); margin-top:2px; }
+.fasting-recent-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px solid var(--border); cursor:pointer; font-size:var(--fs-sm); color:var(--text2); }
+.fasting-recent-chev { color:var(--text3); }
 
 .meal-card { background: var(--surface); border-radius: var(--radius-lg); padding:12px; margin-bottom:10px; }
 .meal-card-header { display:flex; justify-content:space-between; font-size:var(--fs-sm); font-weight:600; color:var(--text); }
@@ -5401,10 +5404,79 @@ function renderFastingTimer() {
   }
 }
 
+async function loadRecentFasts() {
+  const { data, error } = await sb.from('fasting_sessions')
+    .select('id,started_at,ended_at')
+    .not('ended_at', 'is', null)
+    .order('ended_at', { ascending: false })
+    .limit(5);
+  if (error) { console.error('loadRecentFasts failed:', error.message); return; }
+  recentFasts = data || [];
+  renderRecentFasts();
+}
+
+function renderRecentFasts() {
+  const el = document.getElementById('food-fasting-recent');
+  if (!el) return;
+  el.innerHTML = recentFasts.map(s => {
+    const start = new Date(s.started_at), end = new Date(s.ended_at);
+    const dateStr = end.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' });
+    return `<div class="fasting-recent-row" onclick="openEditFastModal('${s.id}')">
+      <span>${dateStr} · ${formatFastingDuration(end - start)}</span>
+      <span class="fasting-recent-chev">›</span>
+    </div>`;
+  }).join('');
+}
+
+function toLocalDatetimeInputValue(date) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function openEditFastModal(id) {
+  const s = recentFasts.find(f => f.id === id);
+  if (!s) return;
+  const body = `
+    <div class="form-row"><label>Alkoi</label><input type="datetime-local" id="edit-fast-start" value="${toLocalDatetimeInputValue(new Date(s.started_at))}"></div>
+    <div class="form-row"><label>Päättyi</label><input type="datetime-local" id="edit-fast-end" value="${toLocalDatetimeInputValue(new Date(s.ended_at))}"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="saveFastEdit('${id}')">Tallenna</button>
+    <button class="btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="deleteFast('${id}')">Poista</button>
+    <div class="status" id="edit-fast-status"></div>
+  `;
+  openMetricModal('Muokkaa paastoa', body);
+}
+
+async function saveFastEdit(id) {
+  const startVal = document.getElementById('edit-fast-start').value;
+  const endVal = document.getElementById('edit-fast-end').value;
+  if (!startVal || !endVal) { showStatus('edit-fast-status', 'Täytä molemmat ajat', true); return; }
+  if (new Date(endVal) <= new Date(startVal)) { showStatus('edit-fast-status', 'Lopun on oltava alun jälkeen', true); return; }
+  const { error } = await sb.from('fasting_sessions')
+    .update({ started_at: new Date(startVal).toISOString(), ended_at: new Date(endVal).toISOString() })
+    .eq('id', id);
+  if (error) { showStatus('edit-fast-status', 'Tallennus epäonnistui', true); return; }
+  document.getElementById('metric-info-overlay').remove();
+  await loadRecentFasts();
+  refreshKoontiFastingRow();
+}
+
+async function deleteFast(id) {
+  const { error } = await sb.from('fasting_sessions').delete().eq('id', id);
+  if (error) { console.error('deleteFast failed:', error.message); return; }
+  document.getElementById('metric-info-overlay').remove();
+  await loadRecentFasts();
+  refreshKoontiFastingRow();
+}
+
+function refreshKoontiFastingRow() {
+  if (document.getElementById('page-koonti').classList.contains('active')) loadWeeklyReportCard(0);
+}
+
 async function renderRuoka() {
   document.getElementById('food-day-label').textContent = formatFoodDayLabel(foodDayOffset);
   await loadFoodDay();
   loadFastingTimer();
+  loadRecentFasts();
 }
 
 async function loadFoodDay() {
