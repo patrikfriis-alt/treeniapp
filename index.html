@@ -5327,26 +5327,12 @@ async function stopFast() {
   refreshKoontiFastingRow();
 }
 
-async function getLastRealFoodEntryAt() {
-  const { data, error } = await sb.from('food_log_entries')
-    .select('created_at')
-    .gte('kcal', 10)
-    .order('created_at', { ascending: false })
-    .limit(1);
-  if (error) { console.error('getLastRealFoodEntryAt failed:', error.message); return null; }
-  return data && data[0] ? new Date(data[0].created_at) : null;
-}
-
 function formatFastingDuration(ms) {
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
   return `${h}h ${m}min`;
 }
 
-// Käyttää created_at:ia (kirjaushetki) syömisajan approksimaationa, ei logged_at:ia
-// (käyttäjän valitsema päivä) — jälkikäteen täytetyt merkinnät (esim. eilisen aterian
-// kirjaus tänään) vinouttavat aukkolaskentaa, koska created_at ei silloin vastaa
-// todellista syömisaikaa. Tunnettu, hyväksytty rajoitus — ei uutta ajastussaraketta.
 async function computeWeeklyFastingByDay(mondayIso, sundayIso) {
   const lookbackFrom = localIso(addDays(new Date(mondayIso), -14));
   const { data, error } = await sb.from('fasting_sessions')
