@@ -2328,16 +2328,12 @@ async function loadWeekSummary(offset = wOff) {
   const [
     { data: gymData },
     { data: actData, error: actErr },
-    { data: sleepData, error: sleepErr },
   ] = await Promise.all([
     sb.from('workout_sets').select('workout_date,session_type').gte('workout_date', from).lte('workout_date', to),
     sb.from('activity_data').select('activity_type,activity_date,duration_min').gte('activity_date', from).lte('activity_date', to),
-    sb.from('sleep_data').select('sleep_score').gte('sleep_date', from).lte('sleep_date', to),
   ]);
 
   const gymDays = new Set((gymData || []).map(r => r.workout_date));
-  const gymEl = document.getElementById('ws-gym');
-  if (gymEl) gymEl.textContent = gymDays.size;
   const kGymEl = document.getElementById('koonti-ws-gym');
   if (kGymEl) kGymEl.textContent = gymDays.size;
 
@@ -2347,22 +2343,10 @@ async function loadWeekSummary(offset = wOff) {
   });
 
   if (actErr) { console.error('loadWeekSummary (act) failed:', actErr.message); }
-  const actEl = document.getElementById('ws-act');
-  if (actEl) actEl.textContent = actData ? actData.length : '—';
   const kActEl = document.getElementById('koonti-ws-act');
   if (kActEl) kActEl.textContent = actData ? actData.length : '—';
 
   weekCardCache.actList = actData || [];
-
-  if (sleepErr) { console.error('loadWeekSummary (sleep) failed:', sleepErr.message); }
-  const withScore = sleepData ? sleepData.filter(r => r.sleep_score != null) : [];
-  const sleepEl = document.getElementById('ws-sleep');
-  if (withScore.length) {
-    const avg = withScore.reduce((s, r) => s + r.sleep_score, 0) / withScore.length;
-    if (sleepEl) sleepEl.textContent = Math.round(avg) + 'p';
-  } else {
-    if (sleepEl) sleepEl.textContent = '—';
-  }
 }
 
 async function getWeekStats(offset) {
@@ -2980,8 +2964,6 @@ async function loadMotivationSummary(offset = wOff) {
     .gte('activity_date', monthStart).lte('activity_date', monthEnd);
   if (actMonthErr) { console.error('loadMotivationSummary failed:', actMonthErr.message); return; }
   const monthCount = actMonth ? actMonth.length : 0;
-  const msMonthEl = document.getElementById('ms-month');
-  if (msMonthEl) msMonthEl.textContent = monthCount + ' krt';
   const kMonthEl = document.getElementById('koonti-ms-month');
   if (kMonthEl) kMonthEl.textContent = monthCount + ' krt';
 
@@ -3006,8 +2988,6 @@ async function loadMotivationSummary(offset = wOff) {
   const weekFrom = mon2.iso, weekTo = localIso(sun2);
   const activeDaysThisWeek = new Set([...activeDays90].filter(d => d >= weekFrom && d <= weekTo));
   const weekPct = Math.min(100, Math.round(activeDaysThisWeek.size / 6 * 100));
-  const msWeekEl = document.getElementById('ms-week');
-  if (msWeekEl) msWeekEl.textContent = weekPct + '%';
   const kWeekEl = document.getElementById('koonti-ms-week');
   if (kWeekEl) kWeekEl.textContent = weekPct + '%';
   const kWeekBarEl = document.getElementById('koonti-ms-week-bar');
@@ -3033,8 +3013,6 @@ async function loadMotivationSummary(offset = wOff) {
       break;
     }
   }
-  const msStreakEl = document.getElementById('ms-streak');
-  if (msStreakEl) msStreakEl.textContent = streak + ' pv';
   const kStreakEl = document.getElementById('koonti-ms-streak');
   if (kStreakEl) kStreakEl.textContent = streak + ' pv';
   motivationCache.streak = streak;
@@ -3430,9 +3408,9 @@ async function loadBodyMetrics() {
   const deltaEl = document.getElementById('m-weight-delta');
   if (deltaEl) deltaEl.textContent = '';
   if (latest) {
-    document.getElementById('m-weight').textContent = latest.weight_kg  ? `${latest.weight_kg} kg` : '—';
-    document.getElementById('m-fat')   .textContent = latest.fat_pct    ? `${latest.fat_pct}%`     : '—';
-    document.getElementById('m-muscle').textContent = latest.muscle_pct ? `${latest.muscle_pct}%`  : '—';
+    document.getElementById('m-weight').textContent = latest.weight_kg  != null ? `${latest.weight_kg} kg` : '—';
+    document.getElementById('m-fat')   .textContent = latest.fat_pct    != null ? `${latest.fat_pct}%`     : '—';
+    document.getElementById('m-muscle').textContent = latest.muscle_pct != null ? `${latest.muscle_pct}%`  : '—';
   }
 
   let forecast = null;
@@ -3484,7 +3462,7 @@ async function loadBodyMetrics() {
         },
       },
     });
-    if (deltaEl && hist.length >= 2 && latest && latest.weight_kg && hist[1] && hist[1].weight_kg) {
+    if (deltaEl && hist.length >= 2 && latest && latest.weight_kg != null && hist[1] && hist[1].weight_kg != null) {
       const d = Math.round((latest.weight_kg - hist[1].weight_kg) * 10) / 10;
       deltaEl.textContent = (d >= 0 ? '+' : '') + d + ' kg ed. mittauksesta';
     }
@@ -3719,7 +3697,7 @@ async function renderForecastChart(startIso, endIso, profile, forecast) {
 
   const liveForecastByDate = {};
   if (forecast && forecast.rows.length && forecast.weeksToTarget < 150 && endIso >= todayIso) {
-    const lastDate = new Date(forecastState.latest.measured_at);
+    const lastDate = new Date(forecastState.latest.measured_at + 'T00:00:00');
     forecast.rows.forEach(r => {
       const d = new Date(lastDate);
       d.setDate(lastDate.getDate() + r.week * 7);
@@ -3732,7 +3710,7 @@ async function renderForecastChart(startIso, endIso, profile, forecast) {
   if (endIso < todayIso) {
     const historical = await computeHistoricalForecast(startIso, profile.target_weight_kg);
     if (historical) {
-      const startDate = new Date(historical.startDate);
+      const startDate = new Date(historical.startDate + 'T00:00:00');
       historical.rows.forEach(r => {
         const d = new Date(startDate);
         d.setDate(startDate.getDate() + r.week * 7);
@@ -4363,8 +4341,8 @@ async function loadSleep() {
   const { data, error } = await sb.from('sleep_data').select('sleep_date,sleep_score')
     .order('sleep_date',{ ascending:false }).limit(7);
   if (error) { console.error('loadSleep failed:', error.message); return; }
-  if (data && data[0] && data[0].sleep_score != null)
-    document.getElementById('sleep-last').textContent = data[0].sleep_score + 'p';
+  document.getElementById('sleep-last').textContent = (data && data[0] && data[0].sleep_score != null)
+    ? data[0].sleep_score + 'p' : '—';
   if (data && data.length) {
     const withScore = data.filter(d => d.sleep_score != null);
     const avg = withScore.length ? withScore.reduce((s,d)=>s+d.sleep_score,0)/withScore.length : null;
@@ -4910,107 +4888,29 @@ function foodItemName(entry) {
   return escapeHtml(entry.food_cache ? src.name_fi : src.name);
 }
 
-function entryCarbs(entry) {
+function entryNutrient(entry, field) {
   const src = entrySource(entry);
-  if (!src) return 0;
-  return src.carbs_per_100g * entry.amount_g / 100;
+  if (!src || src[field] == null) return 0;
+  return src[field] * entry.amount_g / 100;
 }
 
-function entryFat(entry) {
-  const src = entrySource(entry);
-  if (!src) return 0;
-  return src.fat_per_100g * entry.amount_g / 100;
-}
-
-function entryFiber(entry) {
-  const src = entrySource(entry);
-  if (!src || src.fiber_per_100g == null) return 0;
-  return src.fiber_per_100g * entry.amount_g / 100;
-}
-
-function entrySugar(entry) {
-  const src = entrySource(entry);
-  if (!src || src.sugar_per_100g == null) return 0;
-  return src.sugar_per_100g * entry.amount_g / 100;
-}
-
-function entrySalt(entry) {
-  const src = entrySource(entry);
-  if (!src || src.salt_per_100g == null) return 0;
-  return src.salt_per_100g * entry.amount_g / 100;
-}
-
-function entryFatSaturated(entry) {
-  const src = entrySource(entry);
-  if (!src || src.fat_saturated_per_100g == null) return 0;
-  return src.fat_saturated_per_100g * entry.amount_g / 100;
-}
-
-function entryFatMono(entry) {
-  const src = entrySource(entry);
-  if (!src || src.fat_mono_per_100g == null) return 0;
-  return src.fat_mono_per_100g * entry.amount_g / 100;
-}
-
-function entryFatPoly(entry) {
-  const src = entrySource(entry);
-  if (!src || src.fat_poly_per_100g == null) return 0;
-  return src.fat_poly_per_100g * entry.amount_g / 100;
-}
-
-function entryFatTrans(entry) {
-  const src = entrySource(entry);
-  if (!src || src.fat_trans_per_100g == null) return 0;
-  return src.fat_trans_per_100g * entry.amount_g / 100;
-}
-
-function entrySodium(entry) {
-  const src = entrySource(entry);
-  if (!src || src.sodium_per_100g == null) return 0;
-  return src.sodium_per_100g * entry.amount_g / 100;
-}
-
-function entryCalcium(entry) {
-  const src = entrySource(entry);
-  if (!src || src.calcium_per_100g == null) return 0;
-  return src.calcium_per_100g * entry.amount_g / 100;
-}
-
-function entryPotassium(entry) {
-  const src = entrySource(entry);
-  if (!src || src.potassium_per_100g == null) return 0;
-  return src.potassium_per_100g * entry.amount_g / 100;
-}
-
-function entryMagnesium(entry) {
-  const src = entrySource(entry);
-  if (!src || src.magnesium_per_100g == null) return 0;
-  return src.magnesium_per_100g * entry.amount_g / 100;
-}
-
-function entryIron(entry) {
-  const src = entrySource(entry);
-  if (!src || src.iron_per_100g == null) return 0;
-  return src.iron_per_100g * entry.amount_g / 100;
-}
-
-function entryZinc(entry) {
-  const src = entrySource(entry);
-  if (!src || src.zinc_per_100g == null) return 0;
-  return src.zinc_per_100g * entry.amount_g / 100;
-}
-
-function entryVitaminC(entry) {
-  const src = entrySource(entry);
-  if (!src || src.vitamin_c_per_100g == null) return 0;
-  return src.vitamin_c_per_100g * entry.amount_g / 100;
-}
-
-function entryVitaminD(entry) {
-  const src = entrySource(entry);
-  if (!src || src.vitamin_d_per_100g == null) return 0;
-  return src.vitamin_d_per_100g * entry.amount_g / 100;
-}
+const entryCarbs        = entry => entryNutrient(entry, 'carbs_per_100g');
+const entryFat          = entry => entryNutrient(entry, 'fat_per_100g');
+const entryFiber        = entry => entryNutrient(entry, 'fiber_per_100g');
+const entrySugar        = entry => entryNutrient(entry, 'sugar_per_100g');
+const entrySalt         = entry => entryNutrient(entry, 'salt_per_100g');
+const entryFatSaturated = entry => entryNutrient(entry, 'fat_saturated_per_100g');
+const entryFatMono      = entry => entryNutrient(entry, 'fat_mono_per_100g');
+const entryFatPoly      = entry => entryNutrient(entry, 'fat_poly_per_100g');
+const entryFatTrans     = entry => entryNutrient(entry, 'fat_trans_per_100g');
+const entrySodium       = entry => entryNutrient(entry, 'sodium_per_100g');
+const entryCalcium      = entry => entryNutrient(entry, 'calcium_per_100g');
+const entryPotassium    = entry => entryNutrient(entry, 'potassium_per_100g');
+const entryMagnesium    = entry => entryNutrient(entry, 'magnesium_per_100g');
+const entryIron         = entry => entryNutrient(entry, 'iron_per_100g');
+const entryZinc         = entry => entryNutrient(entry, 'zinc_per_100g');
+const entryVitaminC     = entry => entryNutrient(entry, 'vitamin_c_per_100g');
+const entryVitaminD     = entry => entryNutrient(entry, 'vitamin_d_per_100g');
 
 const TILASTOT_COLUMNS = [
   { key: 'amount_g',     label: 'Määrä (g)',                 decimals: 0, value: e => e.amount_g },
@@ -6116,7 +6016,7 @@ async function analyzeFoodPhotoFile(file) {
       return;
     }
     const data = await res.json();
-    const components = data.components || [];
+    const components = (data.components || []).filter(c => c && typeof c.name === 'string' && c.name.trim() && Number.isFinite(c.grams));
     foodPhotoRows = components.map(c => ({
       id: `row-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       name: c.name,
@@ -7844,10 +7744,32 @@ async function loadKoonti() {
   loadHuomioita();
 
   const todayIso = localIso(new Date());
+  const weekStartIso = wStart(0).iso;
 
-  const { data: wsRows, error: wsErr } = await sb.from('workout_sessions')
-    .select('is_done,session_type,calories')
-    .eq('workout_date', todayIso).limit(1);
+  const [
+    { data: wsRows, error: wsErr },
+    { data: actRows, error: actErr },
+    activityProgress,
+    { data: bodyRows, error: bodyErr },
+    { data: sleepRows, error: sleepErr },
+    { data: stepsWeekRows, error: stepsErr },
+    { data: waterRows, error: waterErr },
+    entries,
+    loadedAppSettings,
+  ] = await Promise.all([
+    sb.from('workout_sessions').select('is_done,session_type,calories').eq('workout_date', todayIso).limit(1),
+    sb.from('activity_data').select('activity_type,activity_date,duration_min,created_at')
+      .order('activity_date', { ascending: false }).order('created_at', { ascending: false }).limit(1),
+    loadActivityGoalProgress(0),
+    sb.from('body_metrics').select('weight_kg,measured_at').order('measured_at', { ascending: false }).limit(2),
+    sb.from('sleep_data').select('sleep_date,sleep_score').order('sleep_date', { ascending: false }).limit(7),
+    sb.from('step_data').select('step_date,steps').gte('step_date', weekStartIso).order('step_date', { ascending: false }),
+    sb.from('water_log').select('amount_ml').eq('logged_at', todayIso),
+    loadFoodDayEntries(todayIso),
+    appSettings ? Promise.resolve(appSettings) : loadAppSettings(),
+  ]);
+  if (!appSettings) appSettings = loadedAppSettings;
+
   if (wsErr) console.error('loadKoonti (workout_sessions) failed:', wsErr.message);
   const kcSaliCard = document.getElementById('kc-sali');
   const kcSaliSub  = document.getElementById('kc-sali-sub');
@@ -7871,11 +7793,6 @@ async function loadKoonti() {
     }
   }
 
-  const { data: actRows, error: actErr } = await sb.from('activity_data')
-    .select('activity_type,activity_date,duration_min,created_at')
-    .order('activity_date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(1);
   if (actErr) console.error('loadKoonti (activity_data) failed:', actErr.message);
   const kcAerobiaCard = document.getElementById('kc-aerobia');
   const kcAerobiaSub = document.getElementById('kc-aerobia-sub');
@@ -7888,7 +7805,6 @@ async function loadKoonti() {
 
   updateAppBadge(saliDoneToday || aerobiaDoneToday);
 
-  const activityProgress = await loadActivityGoalProgress(0);
   const kcAerobiaGoal = document.getElementById('kc-aerobia-goal');
   const kcAerobiaBarTrack = document.getElementById('kc-aerobia-bar-track');
   const kcAerobiaBarFill = document.getElementById('kc-aerobia-bar-fill');
@@ -7913,9 +7829,6 @@ async function loadKoonti() {
     kcAerobiaBarTrack.style.display = 'none';
   }
 
-  const { data: bodyRows, error: bodyErr } = await sb.from('body_metrics')
-    .select('weight_kg,measured_at')
-    .order('measured_at', { ascending: false }).limit(2);
   if (bodyErr) console.error('loadKoonti (body_metrics) failed:', bodyErr.message);
   const kcKehoCard = document.getElementById('kc-keho');
   const kcKehoSub = document.getElementById('kc-keho-sub');
@@ -7933,9 +7846,6 @@ async function loadKoonti() {
     kcKehoSub.textContent = 'Ei mittauksia vielä';
   }
 
-  const { data: sleepRows, error: sleepErr } = await sb.from('sleep_data')
-    .select('sleep_date,sleep_score')
-    .order('sleep_date', { ascending: false }).limit(7);
   if (sleepErr) console.error('loadKoonti (sleep_data) failed:', sleepErr.message);
   const kcUniCard = document.getElementById('kc-uni');
   const kcUniSub = document.getElementById('kc-uni-sub');
@@ -7948,11 +7858,6 @@ async function loadKoonti() {
     kcUniSub.textContent = 'Ei kirjauksia vielä';
   }
 
-  const weekStartIso = wStart(0).iso;
-  const { data: stepsWeekRows, error: stepsErr } = await sb.from('step_data')
-    .select('step_date,steps')
-    .gte('step_date', weekStartIso)
-    .order('step_date', { ascending: false });
   if (stepsErr) console.error('loadKoonti (step_data) failed:', stepsErr.message);
   const kcStepsCard = document.getElementById('kc-steps');
   const kcStepsSub = document.getElementById('kc-steps-sub');
@@ -7967,7 +7872,6 @@ async function loadKoonti() {
   } else {
     kcStepsSub.textContent = 'Ei kirjauksia vielä';
   }
-  if (!appSettings) appSettings = await loadAppSettings();
   const kcStepsGoal = document.getElementById('kc-steps-goal');
   const kcStepsBarTrack = document.getElementById('kc-steps-bar-track');
   const kcStepsBarFill = document.getElementById('kc-steps-bar-fill');
@@ -7982,9 +7886,6 @@ async function loadKoonti() {
     kcStepsBarTrack.style.display = 'none';
   }
 
-  const { data: waterRows, error: waterErr } = await sb.from('water_log')
-    .select('amount_ml')
-    .eq('logged_at', todayIso);
   if (waterErr) console.error('loadKoonti (water_log) failed:', waterErr.message);
   const kcWaterCard = document.getElementById('kc-water');
   const kcWaterSub = document.getElementById('kc-water-sub');
@@ -8006,7 +7907,6 @@ async function loadKoonti() {
     kcWaterBarTrack.style.display = 'none';
   }
 
-  const entries = await loadFoodDayEntries(todayIso);
   const kcRuokaCard = document.getElementById('kc-ruoka');
   const kcRuokaSub = document.getElementById('kc-ruoka-sub');
   kcRuokaSub.classList.remove('skel-sub');
@@ -8239,6 +8139,12 @@ function toggleSessionExpand(id) {
 }
 
 async function saveSessionField(id, field, value) {
+  if (field === 'name' && !value.trim()) {
+    const existing = programSessionsRaw.find(s => s.id === id);
+    const input = document.querySelector(`.sess-card[data-session-id="${id}"] .sess-name-input`);
+    if (input && existing) input.value = existing.name;
+    return;
+  }
   const { error } = await sbWrite({ table: 'program_sessions', op: 'update', payload: { [field]: value }, eq: { column: 'id', value: id } });
   if (error) { console.error('saveSessionField failed:', error.message); return; }
   await loadProgram();
@@ -8312,7 +8218,7 @@ async function saveExerciseTarget(exId) {
   const setsEl = document.getElementById(`ex-target-sets-${exId}`);
   const dispEl = document.getElementById(`ex-target-display-${exId}`);
   if (!setsEl || !dispEl) return;
-  const target_sets = parseInt(setsEl.value, 10) || 1;
+  const target_sets = Math.max(1, parseInt(setsEl.value, 10) || 1);
   const target_display = dispEl.value.trim() || `${target_sets}×10`;
   const { error } = await sbWrite({
     table: 'program_session_exercises',

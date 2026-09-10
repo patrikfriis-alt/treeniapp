@@ -20,23 +20,26 @@ function yesterdayHelsinkiIso(): string {
   return d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Helsinki' });
 }
 
-async function hasActivityOn(sb: ReturnType<typeof createClient>, dateIso: string): Promise<boolean> {
+// Returns null (instead of coercing to false) when the underlying query fails, so callers can
+// skip sending a notification instead of treating "we couldn't tell" as "definitely didn't happen".
+async function hasActivityOn(sb: ReturnType<typeof createClient>, dateIso: string): Promise<boolean | null> {
   const [{ count: c1, error: e1 }, { count: c2, error: e2 }] = await Promise.all([
     sb.from('activity_data').select('id', { count: 'exact', head: true }).eq('activity_date', dateIso),
     sb.from('workout_sets').select('id', { count: 'exact', head: true }).eq('workout_date', dateIso),
   ]);
   if (e1) console.error('activity_data count query failed:', e1.message);
   if (e2) console.error('workout_sets count query failed:', e2.message);
+  if (e1 || e2) return null;
   return (c1 || 0) > 0 || (c2 || 0) > 0;
 }
 
-async function hasSleepScoreOn(sb: ReturnType<typeof createClient>, dateIso: string): Promise<boolean> {
+async function hasSleepScoreOn(sb: ReturnType<typeof createClient>, dateIso: string): Promise<boolean | null> {
   const { count, error } = await sb
     .from('sleep_data')
     .select('id', { count: 'exact', head: true })
     .eq('sleep_date', dateIso)
     .not('sleep_score', 'is', null);
-  if (error) console.error('sleep_data count query failed:', error.message);
+  if (error) { console.error('sleep_data count query failed:', error.message); return null; }
   return (count || 0) > 0;
 }
 
@@ -85,64 +88,75 @@ async function weeklyRecapStats(
 }
 
 Deno.serve(async (req) => {
-  if (req.headers.get('x-cron-secret') !== CRON_SECRET) {
-    return new Response('Unauthorized', { status: 401 });
-  }
-  const type = new URL(req.url).searchParams.get('type');
-  if (type !== 'streak' && type !== 'activity' && type !== 'weekly-recap' && type !== 'sleep-reminder') {
-    return new Response('Bad Request', { status: 400 });
-  }
-
-  const sb = createClient(SB_URL, SB_SERVICE_KEY);
-
-  const { data: settings, error: settingsError } = await sb.from('app_settings').select('push_enabled').eq('id', 1).maybeSingle();
-  if (settingsError) console.error('app_settings query failed:', settingsError.message);
-  if (!settings || !settings.push_enabled) return new Response('push disabled', { status: 200 });
-
-  let title: string, body: string;
-  if (type === 'weekly-recap') {
-    const stats = await weeklyRecapStats(sb);
-    if (stats.activeDays === 0) return new Response('no activity this week', { status: 200 });
-    title = 'Valkku';
-    const tonnageText = `${Math.round(stats.tonnage)} kg nostettu`;
-    const stepsText = stats.avgSteps != null ? `, ka ${stats.avgSteps} askelta/pv` : '';
-    body = `Viikko takana: ${stats.activeDays} treeniä, ${tonnageText}${stepsText} 💪`;
-  } else if (type === 'sleep-reminder') {
-    const todayLogged = await hasSleepScoreOn(sb, todayHelsinkiIso());
-    if (todayLogged) return new Response('sleep already logged today', { status: 200 });
-    title = 'Valkku';
-    body = '😴 Muista kirjata unipisteet tältä yöltä';
-  } else {
-    const today = todayHelsinkiIso();
-    const todayActive = await hasActivityOn(sb, today);
-    if (todayActive) return new Response('already active today', { status: 200 });
-
-    if (type === 'streak') {
-      const yesterdayActive = await hasActivityOn(sb, yesterdayHelsinkiIso());
-      if (!yesterdayActive) return new Response('no streak to protect', { status: 200 });
-      title = 'Valkku';
-      body = '🔥 Streakisi katkeamassa tänään — ehdit vielä!';
-    } else {
-      title = 'Valkku';
-      body = 'Et ole vielä liikkunut tänään 💪';
+  try {
+    if (req.headers.get('x-cron-secret') !== CRON_SECRET) {
+      return new Response('Unauthorized', { status: 401 });
     }
-  }
+    const type = new URL(req.url).searchParams.get('type');
+    if (type !== 'streak' && type !== 'activity' && type !== 'weekly-recap' && type !== 'sleep-reminder') {
+      return new Response('Bad Request', { status: 400 });
+    }
 
-  const { data: subs, error: subsError } = await sb.from('push_subscriptions').select('*');
-  if (subsError) console.error('push_subscriptions query failed:', subsError.message);
-  for (const sub of subs || []) {
-    try {
-      await webpush.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        JSON.stringify({ title, body, type }),
-      );
-    } catch (err: any) {
-      if (err.statusCode === 404 || err.statusCode === 410) {
-        await sb.from('push_subscriptions').delete().eq('id', sub.id);
+    const sb = createClient(SB_URL, SB_SERVICE_KEY);
+
+    const { data: settings, error: settingsError } = await sb.from('app_settings').select('push_enabled').eq('id', 1).maybeSingle();
+    if (settingsError) console.error('app_settings query failed:', settingsError.message);
+    if (!settings || !settings.push_enabled) return new Response('push disabled', { status: 200 });
+
+    let title: string, body: string;
+    if (type === 'weekly-recap') {
+      const stats = await weeklyRecapStats(sb);
+      if (stats.activeDays === 0) return new Response('no activity this week', { status: 200 });
+      title = 'Valkku';
+      const tonnageText = `${Math.round(stats.tonnage)} kg nostettu`;
+      const stepsText = stats.avgSteps != null ? `, ka ${stats.avgSteps} askelta/pv` : '';
+      body = `Viikko takana: ${stats.activeDays} treeniä, ${tonnageText}${stepsText} 💪`;
+    } else if (type === 'sleep-reminder') {
+      const todayLogged = await hasSleepScoreOn(sb, todayHelsinkiIso());
+      if (todayLogged !== false) {
+        return new Response(todayLogged === null ? 'sleep check failed, skipping' : 'sleep already logged today', { status: 200 });
+      }
+      title = 'Valkku';
+      body = '😴 Muista kirjata unipisteet tältä yöltä';
+    } else {
+      const today = todayHelsinkiIso();
+      const todayActive = await hasActivityOn(sb, today);
+      if (todayActive !== false) {
+        return new Response(todayActive === null ? 'activity check failed, skipping' : 'already active today', { status: 200 });
+      }
+
+      if (type === 'streak') {
+        const yesterdayActive = await hasActivityOn(sb, yesterdayHelsinkiIso());
+        if (yesterdayActive !== true) {
+          return new Response(yesterdayActive === null ? 'activity check failed, skipping' : 'no streak to protect', { status: 200 });
+        }
+        title = 'Valkku';
+        body = '🔥 Streakisi katkeamassa tänään — ehdit vielä!';
       } else {
-        console.error('push send failed:', err.message);
+        title = 'Valkku';
+        body = 'Et ole vielä liikkunut tänään 💪';
       }
     }
+
+    const { data: subs, error: subsError } = await sb.from('push_subscriptions').select('*');
+    if (subsError) console.error('push_subscriptions query failed:', subsError.message);
+    for (const sub of subs || []) {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          JSON.stringify({ title, body, type }),
+        );
+      } catch (err: any) {
+        if (err.statusCode === 404 || err.statusCode === 410) {
+          await sb.from('push_subscriptions').delete().eq('id', sub.id);
+        } else {
+          console.error('push send failed:', err.message);
+        }
+      }
+    }
+    return new Response('sent', { status: 200 });
+  } catch (err) {
+    console.error('check-and-notify unhandled error:', err instanceof Error ? err.message : String(err));
+    return new Response('Internal Server Error', { status: 500 });
   }
-  return new Response('sent', { status: 200 });
 });
