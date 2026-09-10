@@ -33,6 +33,25 @@ Säännöt:
 - Älä käytä otsikoita tai luettelomerkkejä, kirjoita juoksevaa tekstiä kuin viesti.
 - Vastaa suomeksi.`;
 
+// A failed send can leave two consecutive same-role rows in coach_messages (e.g. the user's
+// message is inserted before the API call, which then fails and is retried). The Anthropic API
+// rejects non-alternating roles, so merge adjacent same-role turns before sending — this also
+// heals any conversation that was already left in that state by a past failure.
+function collapseConsecutiveRoles(
+  history: { role: string; content: string }[],
+): { role: string; content: string }[] {
+  const merged: { role: string; content: string }[] = [];
+  for (const m of history) {
+    const last = merged[merged.length - 1];
+    if (last && last.role === m.role) {
+      last.content += '\n\n' + m.content;
+    } else {
+      merged.push({ role: m.role, content: m.content });
+    }
+  }
+  return merged;
+}
+
 async function callClaude(
   systemPrompt: string,
   messages: { role: string; content: string }[],
@@ -213,7 +232,7 @@ Deno.serve(async (req) => {
     return new Response('Bad Request: no messages found for conversation', { status: 400, headers: CORS_HEADERS });
   }
 
-  const messages = history.map((m) => ({ role: m.role, content: m.content }));
+  const messages = collapseConsecutiveRoles(history.map((m) => ({ role: m.role, content: m.content })));
 
   let dataContext: string;
   try {

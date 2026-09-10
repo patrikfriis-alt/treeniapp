@@ -2435,16 +2435,21 @@ async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
     rows.push(weekRow('scale', 'var(--green)', 'Painon muutos', `${sign}${thisWeek.weightDelta} kg`));
   }
 
-  bmrInfo = await (bmrInfo || getBmrInfo());
+  const mon = wStart(offset);
+  const sun = new Date(mon.date);
+  sun.setDate(mon.date.getDate() + 6);
+  const sunIso = localIso(sun);
+
+  const [resolvedBmrInfo, fastingByDay] = await Promise.all([
+    bmrInfo || getBmrInfo(),
+    computeWeeklyFastingByDay(mon.iso, sunIso),
+  ]);
+  bmrInfo = resolvedBmrInfo;
+
   if (bmrInfo.bmr != null && bmrInfo.weightKg != null) {
-    const mon = wStart(offset);
-    const sun = new Date(mon.date);
-    sun.setDate(mon.date.getDate() + 6);
-    const sunIso = localIso(sun);
-    const [exByDate, foodByDate, fastingByDay] = await Promise.all([
+    const [exByDate, foodByDate] = await Promise.all([
       getDailyExerciseCalories(mon.iso, sunIso),
       getDailyFoodCalories(mon.iso, sunIso),
-      computeWeeklyFastingByDay(mon.iso, sunIso),
     ]);
     const exerciseKcal = Object.values(exByDate).reduce((s, v) => s + v, 0);
     const foodKcal = Object.values(foodByDate).reduce((s, v) => s + v, 0);
@@ -2485,16 +2490,16 @@ async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
 
     rows.push(weekRow('flame', 'var(--amber)', 'Viikon kalorit', weeklyValStr, barHtml + subHtml + daystripHtml,
       `openWeeklyCaloriesModal(${Math.round(foodKcal)}, ${Math.round(bmrInfo.bmr * 7)}, ${Math.round(exerciseKcal)})`));
-
-    const weeklyFastingMs = Object.values(fastingByDay).reduce((s, v) => s + v, 0);
-    const dayMinutes = [];
-    for (let i = 0; i < 7; i++) {
-      dayMinutes.push(Math.round((fastingByDay[localIso(addDays(mon.date, i))] || 0) / 60000));
-    }
-    const fastingSuffix = activeFastSession ? ' (käynnissä)' : '';
-    rows.push(weekRow('timer', 'var(--accent)', 'Paastoaika', formatFastingDuration(weeklyFastingMs) + fastingSuffix, '',
-      `openFastingBreakdownModal('${mon.iso}', [${dayMinutes.join(', ')}])`));
   }
+
+  const weeklyFastingMs = Object.values(fastingByDay).reduce((s, v) => s + v, 0);
+  const dayMinutes = [];
+  for (let i = 0; i < 7; i++) {
+    dayMinutes.push(Math.round((fastingByDay[localIso(addDays(mon.date, i))] || 0) / 60000));
+  }
+  const fastingSuffix = activeFastSession ? ' (käynnissä)' : '';
+  rows.push(weekRow('timer', 'var(--accent)', 'Paastoaika', formatFastingDuration(weeklyFastingMs) + fastingSuffix, '',
+    `openFastingBreakdownModal('${mon.iso}', [${dayMinutes.join(', ')}])`));
 
   document.getElementById('kc-weekly-rows').innerHTML = rows.join('');
   renderIcons();
@@ -3587,6 +3592,9 @@ function calculateMaintenance(fatKg, muscleKg, otherKg, otherTissueCoeff, activi
 }
 
 function simulateToTarget({ fatKg, muscleKg, otherKg, targetWeightKg, weeklyIntakeKcal, otherTissueCoeff, activityMult, muscleChangeKgPerWeek = 0, maxWeeks = 150 }) {
+  if ((fatKg + muscleKg + otherKg) <= targetWeightKg) {
+    return { weeksToTarget: 0, rows: [], alreadyAtTarget: true };
+  }
   const rows = [];
   let week = 0;
   let fat = fatKg, muscle = muscleKg;
@@ -3600,14 +3608,17 @@ function simulateToTarget({ fatKg, muscleKg, otherKg, targetWeightKg, weeklyInta
     fat -= fatLoss;
     rows.push({ week, totalWeight: +(fat + muscle + otherKg).toFixed(1), fatKg: +fat.toFixed(1), muscleKg: +muscle.toFixed(1), weeklyDeficit: Math.round(deficit) });
   }
-  return { weeksToTarget: week, rows };
+  return { weeksToTarget: week, rows, alreadyAtTarget: false };
 }
 
 async function getRecentAvgWeeklyIntake(asOfIso = localIso(new Date())) {
   const to = asOfIso;
   const from = localIso(addDays(asOfIso, -20));
-  const totalKcal = await getFoodCalories(from, to);
-  return totalKcal / 3;
+  const { totalKcal, loggedDays } = await getFoodLogCoverage(from, to);
+  // Average over days actually logged, not the full 21-day window — sparse logging
+  // (e.g. 6 of 21 days) would otherwise pull the estimate down toward zero.
+  if (loggedDays === 0) return 0;
+  return (totalKcal / loggedDays) * 7;
 }
 
 function forecastMonthBounds(offset) {
@@ -3662,7 +3673,9 @@ async function renderForecastCard() {
   const { startIso, endIso, label } = forecastMonthBounds(forecastMonthOffset);
 
   let statsHtml;
-  if (!forecast || forecast.weeksToTarget >= 150 || !forecast.rows.length) {
+  if (forecast && forecast.alreadyAtTarget) {
+    statsHtml = `<div class="kc-week-budget-sub">🎉 Tavoitepaino on jo saavutettu</div>`;
+  } else if (!forecast || forecast.weeksToTarget >= 150 || !forecast.rows.length) {
     statsHtml = `<div class="kc-week-budget-sub">Nykyisellä syömistahdilla tavoitetta ei saavuteta ennustejaksolla</div>`;
   } else {
     const etaDate = new Date();
