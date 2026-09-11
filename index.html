@@ -1908,8 +1908,9 @@ const celebratedPRSlots = new Set();
 
 function checkForPR(o, d, st, e) {
   const sess = SESS[st];
-  if (!sess || !sess.ex[e]) return;
-  const exName = sess.ex[e].n;
+  const exObj = sess && sess.ex.find(x => x._id === e);
+  if (!exObj) return;
+  const exName = exObj.n;
   const k = eKey(o, d, st, e);
   if (celebratedPRSlots.has(k)) return;
   const prevSets = prevCache[exName];
@@ -1965,8 +1966,9 @@ function scheduleSyncSet(o, d, st, e, s) {
 
 async function syncSet(o, d, st, e, s) {
   const sess = SESS[st];
-  if (!sess || !sess.ex[e]) return;
-  const ex = sess.ex[e], ed = getED(o, d, st, e), sd = ed.sets[s] || {};
+  const ex = sess && sess.ex.find(x => x._id === e);
+  if (!ex) return;
+  const ed = getED(o, d, st, e), sd = ed.sets[s] || {};
   if (!sd.kg && !sd.reps) return;
   const mon = wStart(o), dt = new Date(mon.date);
   dt.setDate(mon.date.getDate() + d);
@@ -1992,15 +1994,15 @@ async function syncSet(o, d, st, e, s) {
   }
 }
 
-function prefillExercise(o, d, ei, btnEl) {
+function prefillExercise(o, d, exId, btnEl) {
   const st = getActiveSession(o, d);
   const sess = SESS[st];
-  if (!sess || !sess.ex[ei]) return;
-  const ex = sess.ex[ei];
+  const ex = sess && sess.ex.find(x => x._id === exId);
+  if (!ex) return;
   const prev = prevCache[ex.n];
   if (!prev) return;
 
-  const k = eKey(o, d, st, ei);
+  const k = eKey(o, d, st, exId);
   if (!LD[k]) LD[k] = { sets: [] };
 
   for (let s = 0; s < ex.s; s++) {
@@ -2011,14 +2013,14 @@ function prefillExercise(o, d, ei, btnEl) {
     LD[k].sets[s].reps = prevSet.reps       !== null ? String(prevSet.reps)      : '';
     LD[k].sets[s].prefilled = true;
 
-    const box = document.getElementById(`set-${o}-${d}-${ei}-${s}`);
+    const box = document.getElementById(`set-${o}-${d}-${exId}-${s}`);
     if (box) {
       const inputs = box.querySelectorAll('input[type="text"]');
       if (inputs[0]) inputs[0].value = LD[k].sets[s].kg;
       if (inputs[1]) inputs[1].value = LD[k].sets[s].reps;
     }
 
-    updateSetBox(o, d, ei, s);
+    updateSetBox(o, d, exId, s);
     // Not synced yet — a prefilled-but-unconfirmed set only syncs once the user
     // actually confirms it (edits it, or taps to confirm the suggested numbers).
   }
@@ -2120,11 +2122,11 @@ async function reconcileSessionWithServer(o, d, st, sess, requestId) {
   });
 
   let changed = false;
-  sess.ex.forEach((ex, ei) => {
-    const k = eKey(o, d, st, ei);
+  sess.ex.forEach((ex) => {
+    const k = eKey(o, d, st, ex._id);
     const ed = LD[k] || { sets: [] };
     for (let s = 0; s < ex.s; s++) {
-      const timerKey = `${st}-${o}-${d}-${ei}-${s}`;
+      const timerKey = `${st}-${o}-${d}-${ex._id}-${s}`;
       if (syncTimers[timerKey]) continue;
       if (isPendingSet(ex.n, s + 1)) continue;
       if (ed.sets[s] && ed.sets[s].prefilled) continue;
@@ -2255,7 +2257,8 @@ function updateSetBox(o, d, e, s) {
   const ed   = getED(o, d, st, e);
   const sd   = (ed.sets && ed.sets[s]) || {};
   const sess = SESS[st];
-  const exName = sess && sess.ex && sess.ex[e] ? sess.ex[e].n : null;
+  const exObj = sess && sess.ex.find(x => x._id === e);
+  const exName = exObj ? exObj.n : null;
   const prev = exName ? getPrevSet(exName, s) : null;
   const status = setStatus(sd, prev);
   box.className = `set-table-row s-${status}`;
@@ -2281,7 +2284,7 @@ function updateSetBox(o, d, e, s) {
     }
   }
 
-  const exTarget = sess && sess.ex && sess.ex[e];
+  const exTarget = exObj;
   if (exTarget) {
     const doneCount = (ed.sets || []).filter(row => {
       const rd = row || {};
@@ -3293,7 +3296,8 @@ async function renderSession(requestId) {
   const locked  = !started || done;
 
   sess.ex.forEach((ex, ei) => {
-    let ed     = getED(wOff, aDay, st, ei);
+    const exId = ex._id;
+    let ed     = getED(wOff, aDay, st, exId);
     const prev = prevCache[ex.n];
 
     // Progressioehdotus: automaattinen esitäyttö kun liike avataan päivälle ensimmäistä kertaa.
@@ -3306,7 +3310,7 @@ async function renderSession(requestId) {
       const repsList = prev.map(s => s.reps).filter(r => r != null);
       const isDeloadWeek = !!(appSettings && appSettings.deload_week_monday === wStart(wOff).iso);
       const cleanly = !isDeloadWeek && repsList.length > 0 && repsList.every(r => r >= repsList[0]);
-      const k = eKey(wOff, aDay, st, ei);
+      const k = eKey(wOff, aDay, st, exId);
       if (!LD[k]) LD[k] = { sets: [] };
       let anyApplied = false;
       for (let s = 0; s < ex.s; s++) {
@@ -3346,19 +3350,19 @@ async function renderSession(requestId) {
 
     // Prefill-nappi
     const prefillBtn = prev && started && !done
-      ? `<button onclick="prefillExercise(${wOff},${aDay},${ei},this)" class="prefill-btn">↓ Käytä edell.</button>`
+      ? `<button onclick="prefillExercise(${wOff},${aDay},${exId},this)" class="prefill-btn">↓ Käytä edell.</button>`
       : '';
 
     html += `<div class="ex-block">
       <div class="ex-block-header">
         <div>
-          <div class="ex-block-title" data-ex="${ex.n.replace(/"/g,'&quot;')}" onclick="openExerciseModal(this.dataset.ex)" style="cursor:pointer">${escapeHtml(ex.n)}<span class="ex-check" id="ex-check-${wOff}-${aDay}-${ei}"${exDone ? '' : ' style="display:none"'}>✓</span>${isPR ? '<span class="pr-badge">PR</span>' : ''}</div>
+          <div class="ex-block-title" data-ex="${ex.n.replace(/"/g,'&quot;')}" onclick="openExerciseModal(this.dataset.ex)" style="cursor:pointer">${escapeHtml(ex.n)}<span class="ex-check" id="ex-check-${wOff}-${aDay}-${exId}"${exDone ? '' : ' style="display:none"'}>✓</span>${isPR ? '<span class="pr-badge">PR</span>' : ''}</div>
           <div class="ex-block-sub">${escapeHtml(ex.t)}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
           <div class="ex-block-progress">
-            <div class="ex-block-prog-label" id="ex-prog-label-${wOff}-${aDay}-${ei}">${doneCount}/${ex.s} sarjaa</div>
-            <div class="ex-block-prog-bar"><div class="ex-block-prog-fill${exDone ? ' done' : ''}" id="ex-prog-fill-${wOff}-${aDay}-${ei}" style="width:${progPct}%"></div></div>
+            <div class="ex-block-prog-label" id="ex-prog-label-${wOff}-${aDay}-${exId}">${doneCount}/${ex.s} sarjaa</div>
+            <div class="ex-block-prog-bar"><div class="ex-block-prog-fill${exDone ? ' done' : ''}" id="ex-prog-fill-${wOff}-${aDay}-${exId}" style="width:${progPct}%"></div></div>
           </div>
           ${prefillBtn}
         </div>
@@ -3377,18 +3381,18 @@ async function renderSession(requestId) {
       const checkVisible = status !== 'undone' && status !== 'prefilled';
 
       const orm = status !== 'prefilled' ? calc1RM(parseFloat(sd.kg), parseInt(sd.reps)) : null;
-      const confirmTap = status === 'prefilled' ? ` onclick="confirmPrefilledSet(${wOff},${aDay},${ei},${s})" style="cursor:pointer"` : '';
-      html += `<div class="set-table-row s-${status}" id="set-${wOff}-${aDay}-${ei}-${s}">
-        <span class="set-tnum"${confirmTap}>${s + 1}<span class="set-check" id="set-check-${wOff}-${aDay}-${ei}-${s}"${checkVisible ? '' : ' style="display:none"'}>✓</span></span>
-        <input class="set-tinput" type="text" inputmode="decimal" placeholder="kg" autocomplete="off" name="set-kg-${wOff}-${aDay}-${ei}-${s}"
+      const confirmTap = status === 'prefilled' ? ` onclick="confirmPrefilledSet(${wOff},${aDay},${exId},${s})" style="cursor:pointer"` : '';
+      html += `<div class="set-table-row s-${status}" id="set-${wOff}-${aDay}-${exId}-${s}">
+        <span class="set-tnum"${confirmTap}>${s + 1}<span class="set-check" id="set-check-${wOff}-${aDay}-${exId}-${s}"${checkVisible ? '' : ' style="display:none"'}>✓</span></span>
+        <input class="set-tinput" type="text" inputmode="decimal" placeholder="kg" autocomplete="off" name="set-kg-${wOff}-${aDay}-${exId}-${s}"
           value="${sd.kg || ''}" ${locked ? 'disabled' : ''}
-          onchange="saveSet(${wOff},${aDay},${ei},${s},'kg',this.value.replace(',','.'))">
-        <input class="set-tinput" type="text" inputmode="numeric" placeholder="tr" autocomplete="off" name="set-reps-${wOff}-${aDay}-${ei}-${s}"
+          onchange="saveSet(${wOff},${aDay},${exId},${s},'kg',this.value.replace(',','.'))">
+        <input class="set-tinput" type="text" inputmode="numeric" placeholder="tr" autocomplete="off" name="set-reps-${wOff}-${aDay}-${exId}-${s}"
           value="${sd.reps || ''}" ${locked ? 'disabled' : ''}
-          onchange="saveSet(${wOff},${aDay},${ei},${s},'reps',this.value)">
+          onchange="saveSet(${wOff},${aDay},${exId},${s},'reps',this.value)">
         <span class="set-tprev">
-          <span id="set-prevtext-${wOff}-${aDay}-${ei}-${s}">${statusIcon}${prevStr}</span>
-          <span class="set-1rm${orm ? ' visible' : ''}" id="set-1rm-${wOff}-${aDay}-${ei}-${s}">${orm ? `1RM ~${orm}kg` : ''}</span>
+          <span id="set-prevtext-${wOff}-${aDay}-${exId}-${s}">${statusIcon}${prevStr}</span>
+          <span class="set-1rm${orm ? ' visible' : ''}" id="set-1rm-${wOff}-${aDay}-${exId}-${s}">${orm ? `1RM ~${orm}kg` : ''}</span>
         </span>
       </div>`;
     }
@@ -8296,6 +8300,18 @@ function migrateLD_v3() {
   localStorage.setItem('ld_migration_v3', '1');
 }
 
+function migrateLD_v4() {
+  if (localStorage.getItem('ld_migration_v4')) return;
+  // Sarjadata siirtyi liikkeen taulukkoindeksistä (joka siirtyy Ohjelman raahausjärjestyksessä)
+  // sen pysyvään tietokanta-id:hen — vanhat indeksipohjaiset avaimet eivät enää vastaa oikeaa
+  // liikettä, joten ne poistetaan kertaluontoisesti. reconcileSessionWithServer täyttää tilan
+  // uudelleen palvelimelta seuraavalla renderöinnillä, joten mitään ei menetetä pysyvästi.
+  const exKeyRe = /_e\d+$/;
+  Object.keys(LD).forEach(k => { if (exKeyRe.test(k)) delete LD[k]; });
+  saveLD();
+  localStorage.setItem('ld_migration_v4', '1');
+}
+
 /* ═══════════════════════════════════════════════════════════════
    OFFLINE-KIRJOITUSJONO
 ═══════════════════════════════════════════════════════════════ */
@@ -8425,6 +8441,7 @@ window.addEventListener('online', flushQueue);
   if (programLoaded) {
     migrateLD_v2();
     migrateLD_v3();
+    migrateLD_v4();
   } else {
     console.error('Ohjelmadataa ei saatu ladattua — ohitetaan kertaluontoiset migraatiot tällä kertaa.');
   }
