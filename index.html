@@ -2351,16 +2351,28 @@ function updateSetBox(o, d, e, s) {
   const exName = exObj ? exObj.n : null;
   const prev = exName ? getPrevSet(exName, s) : null;
   const status = setStatus(sd, prev);
+
+  // Manual typing (saveSet) must never auto-collapse a row out from under the person
+  // editing it — only the confirm-tap promotion flow explicitly adds is-collapsed
+  // (in confirmPrefilledSet) right before calling this function. So: preserve whatever
+  // collapse state the row already had, as long as the new status still allows it.
+  const wasCollapsed = box.classList.contains('is-collapsed');
+  const stillCollapsible = status === 'same' || status === 'better' || status === 'worse';
   box.className = `set-table-row s-${status}`;
+  if (wasCollapsed && stillCollapsible) box.classList.add('is-collapsed');
 
   const checkEl = document.getElementById(`set-check-${o}-${d}-${e}-${s}`);
   if (checkEl) checkEl.style.display = (status !== 'undone' && status !== 'prefilled') ? '' : 'none';
 
   const prevTextEl = document.getElementById(`set-prevtext-${o}-${d}-${e}-${s}`);
+  const prevStr = prev ? `${prev.weight_kg ?? '?'}×${prev.reps ?? '?'}` : '—';
   if (prevTextEl) {
-    const prevStr = prev ? `${prev.weight_kg ?? '?'}×${prev.reps ?? '?'}` : '—';
+    // The "+2,5%" badge lives inside this span (see Task 2's markup) — rebuilt inline
+    // here rather than patched separately, since prevTextEl.innerHTML fully replaces it
+    // either way.
     const statusIcon = { worse: '▼ ', same: '● ', better: '▲ ', prefilled: '↓ ' }[status] || '';
-    prevTextEl.textContent = `${statusIcon}${prevStr}`;
+    const showBadge = status === 'prefilled' && prev && prev.weight_kg != null && parseFloat(sd.kg) > prev.weight_kg;
+    prevTextEl.innerHTML = `${statusIcon}${prevStr}<span class="badge-progress" id="set-progbadge-${o}-${d}-${e}-${s}"${showBadge ? '' : ' style="display:none"'}>+2,5%</span>`;
   }
 
   const ormEl = document.getElementById(`set-1rm-${o}-${d}-${e}-${s}`);
@@ -2373,6 +2385,15 @@ function updateSetBox(o, d, e, s) {
       ormEl.classList.remove('visible');
     }
   }
+
+  const summaryEl = document.getElementById(`set-summary-${o}-${d}-${e}-${s}`);
+  if (summaryEl) {
+    const deltaCls  = { worse: 'down', same: 'flat', better: 'up' }[status] || 'flat';
+    const deltaIcon = { worse: '▼', same: '●', better: '▲' }[status] || '';
+    summaryEl.innerHTML = `${sd.kg || '?'}×${sd.reps || '?'} kg<span class="delta ${deltaCls}">${deltaIcon} ${prevStr}</span>`;
+  }
+
+  if (exObj) refreshNextGlow(o, d, e, exObj, ed);
 
   const exTarget = exObj;
   if (exTarget) {
