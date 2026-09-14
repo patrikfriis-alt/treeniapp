@@ -2107,7 +2107,20 @@ function confirmPrefilledSet(o, d, e, s) {
   if (!sd || !sd.prefilled) return;
   delete sd.prefilled;
   saveLD();
-  updateSetBox(o, d, e, s);
+
+  const box = document.getElementById(`set-${o}-${d}-${e}-${s}`);
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (box && !reduceMotion) {
+    box.classList.add('is-confirming');
+    setTimeout(() => {
+      box.classList.remove('is-confirming');
+      box.classList.add('is-collapsed');
+      updateSetBox(o, d, e, s);
+    }, 380);
+  } else {
+    if (box) box.classList.add('is-collapsed');
+    updateSetBox(o, d, e, s);
+  }
   checkForPR(o, d, st, e);
   scheduleSyncSet(o, d, st, e, s);
 }
