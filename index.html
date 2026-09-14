@@ -2114,7 +2114,9 @@ function confirmPrefilledSet(o, d, e, s) {
     box.classList.add('is-confirming');
     setTimeout(() => {
       box.classList.remove('is-confirming');
-      box.classList.add('is-collapsed');
+      if (!box.contains(document.activeElement)) {
+        box.classList.add('is-collapsed');
+      }
       updateSetBox(o, d, e, s);
     }, 380);
   } else {
@@ -2374,18 +2376,29 @@ function updateSetBox(o, d, e, s) {
   box.className = `set-table-row s-${status}`;
   if (wasCollapsed && stillCollapsible) box.classList.add('is-collapsed');
 
+  const tnumEl = box.querySelector('.set-expanded .set-tnum');
+  if (tnumEl) {
+    if (status === 'prefilled') {
+      tnumEl.onclick = () => confirmPrefilledSet(o, d, e, s);
+      tnumEl.style.cursor = 'pointer';
+    } else {
+      tnumEl.onclick = null;
+      tnumEl.style.cursor = '';
+    }
+  }
+
   const checkEl = document.getElementById(`set-check-${o}-${d}-${e}-${s}`);
   if (checkEl) checkEl.style.display = (status !== 'undone' && status !== 'prefilled') ? '' : 'none';
 
   const prevTextEl = document.getElementById(`set-prevtext-${o}-${d}-${e}-${s}`);
   const prevStr = prev ? `${prev.weight_kg ?? '?'}×${prev.reps ?? '?'}` : '—';
   if (prevTextEl) {
-    // The "+2,5%" badge lives inside this span (see Task 2's markup) — rebuilt inline
+    // The "+2,5 kg" badge lives inside this span (see Task 2's markup) — rebuilt inline
     // here rather than patched separately, since prevTextEl.innerHTML fully replaces it
     // either way.
     const statusIcon = { worse: '▼ ', same: '● ', better: '▲ ', prefilled: '↓ ' }[status] || '';
     const showBadge = status === 'prefilled' && prev && prev.weight_kg != null && parseFloat(sd.kg) > prev.weight_kg;
-    prevTextEl.innerHTML = `${statusIcon}${prevStr}<span class="badge-progress" id="set-progbadge-${o}-${d}-${e}-${s}"${showBadge ? '' : ' style="display:none"'}>+2,5%</span>`;
+    prevTextEl.innerHTML = `${statusIcon}${prevStr}<span class="badge-progress" id="set-progbadge-${o}-${d}-${e}-${s}"${showBadge ? '' : ' style="display:none"'}>+2,5 kg</span>`;
   }
 
   const ormEl = document.getElementById(`set-1rm-${o}-${d}-${e}-${s}`);
@@ -2403,7 +2416,9 @@ function updateSetBox(o, d, e, s) {
   if (summaryEl) {
     const deltaCls  = { worse: 'down', same: 'flat', better: 'up' }[status] || 'flat';
     const deltaIcon = { worse: '▼', same: '●', better: '▲' }[status] || '';
-    summaryEl.innerHTML = `${sd.kg || '?'}×${sd.reps || '?'} kg<span class="delta ${deltaCls}">${deltaIcon} ${prevStr}</span>`;
+    const kgDisplay = escapeHtml(String(sd.kg || '?').replace('.', ','));
+    const repsDisplay = escapeHtml(String(sd.reps || '?'));
+    summaryEl.innerHTML = `${kgDisplay} kg × ${repsDisplay}<span class="delta ${deltaCls}">${deltaIcon} ${prevStr}</span>`;
   }
 
   if (exObj) refreshNextGlow(o, d, e, exObj, ed);
@@ -3513,7 +3528,9 @@ async function renderSession(requestId) {
 
       const deltaCls  = { worse: 'down', same: 'flat', better: 'up' }[status] || 'flat';
       const deltaIcon = { worse: '▼', same: '●', better: '▲' }[status] || '';
-      const summaryText = `${sd.kg || '?'}×${sd.reps || '?'} kg<span class="delta ${deltaCls}" id="set-delta-${wOff}-${aDay}-${exId}-${s}">${deltaIcon} ${prevStr}</span>`;
+      const kgDisplay = escapeHtml(String(sd.kg || '?').replace('.', ','));
+      const repsDisplay = escapeHtml(String(sd.reps || '?'));
+      const summaryText = `${kgDisplay} kg × ${repsDisplay}<span class="delta ${deltaCls}">${deltaIcon} ${prevStr}</span>`;
 
       html += `<div class="set-table-row s-${status}${isCollapsed ? ' is-collapsed' : ''}${isNext ? ' is-next' : ''}" id="set-${wOff}-${aDay}-${exId}-${s}">
         <div class="set-expanded">
@@ -3525,7 +3542,7 @@ async function renderSession(requestId) {
             value="${sd.reps || ''}" ${locked ? 'disabled' : ''}
             onchange="saveSet(${wOff},${aDay},${exId},${s},'reps',this.value)">
           <span class="set-tprev">
-            <span id="set-prevtext-${wOff}-${aDay}-${exId}-${s}">${statusIcon}${prevStr}<span class="badge-progress" id="set-progbadge-${wOff}-${aDay}-${exId}-${s}"${showProgBadge ? '' : ' style="display:none"'}>+2,5%</span></span>
+            <span id="set-prevtext-${wOff}-${aDay}-${exId}-${s}">${statusIcon}${prevStr}<span class="badge-progress" id="set-progbadge-${wOff}-${aDay}-${exId}-${s}"${showProgBadge ? '' : ' style="display:none"'}>+2,5 kg</span></span>
             <span class="set-1rm${orm ? ' visible' : ''}" id="set-1rm-${wOff}-${aDay}-${exId}-${s}">${orm ? `1RM ~${orm}kg` : ''}</span>
           </span>
         </div>
