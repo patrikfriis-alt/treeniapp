@@ -645,6 +645,17 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
   border-radius: 0 0 16px 16px;
   overflow: hidden;
 }
+.ex-stuck-hint {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 12px; margin-bottom: 8px;
+  background: var(--green-bg); border: 1px solid rgba(47,255,126,0.25);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm); color: var(--text2);
+}
+.ex-stuck-hint button {
+  flex: none; font-size: var(--fs-xs); font-weight: 700; color: #032b12;
+  background: var(--green); border: none; border-radius: 6px; padding: 6px 10px;
+}
 .set-table-hdr {
   display: grid;
   grid-template-columns: 34px 1fr 1fr 60px;
@@ -2095,6 +2106,47 @@ function prefillExercise(o, d, exId, btnEl) {
     btnEl.style.color = 'var(--teal)';
     setTimeout(() => { btnEl.textContent = orig; btnEl.style.color = ''; }, 1500);
   }
+}
+
+// Applies the weight-plateau hint's suggested bumped weight to every set of an exercise,
+// targeting the exercise's current target rep count rather than copying historical per-set
+// reps (the point is to try the assigned target at a higher weight). Reuses the same
+// prefilled-set mechanism as prefillExercise/the auto-progression suggestion — tap-to-confirm,
+// the promotion animation, and collapse-on-confirm all already work on rows this touches.
+function applySuggestedWeight(o, d, exId) {
+  const st = getActiveSession(o, d);
+  const sess = SESS[st];
+  const ex = sess && sess.ex.find(x => x._id === exId);
+  if (!ex) return;
+  const stuck = stuckCache[ex.n];
+  if (!stuck) return;
+  const targetReps = parseTargetReps(ex.t);
+  if (targetReps === null) return;
+  const bumpedKg = suggestBumpedWeight(stuck.weight);
+
+  const k = eKey(o, d, st, exId);
+  if (!LD[k]) LD[k] = { sets: [] };
+
+  for (let s = 0; s < ex.s; s++) {
+    if (!LD[k].sets[s]) LD[k].sets[s] = {};
+    LD[k].sets[s].kg = String(bumpedKg);
+    LD[k].sets[s].reps = String(targetReps);
+    LD[k].sets[s].prefilled = true;
+
+    const box = document.getElementById(`set-${o}-${d}-${exId}-${s}`);
+    if (box) {
+      const inputs = box.querySelectorAll('input[type="text"]');
+      if (inputs[0]) inputs[0].value = LD[k].sets[s].kg;
+      if (inputs[1]) inputs[1].value = LD[k].sets[s].reps;
+    }
+
+    updateSetBox(o, d, exId, s);
+  }
+
+  saveLD();
+
+  const hintEl = document.getElementById(`ex-stuck-${o}-${d}-${exId}`);
+  if (hintEl) hintEl.remove();
 }
 
 // Confirms a prefilled-but-unperformed set as actually done (tapped when the
@@ -3571,6 +3623,15 @@ async function renderSession(requestId) {
       ? `<button onclick="prefillExercise(${wOff},${aDay},${exId},this)" class="prefill-btn">↓ Käytä edell.</button>`
       : '';
 
+    // Paino jumissa -vihje: sama paino + kohdetoistot täynnä 2 kertaa putkeen tässä session_typessa.
+    const stuck = stuckCache[ex.n];
+    const stuckHint = stuck && started && !done && noSetsYet
+      ? `<div class="ex-stuck-hint" id="ex-stuck-${wOff}-${aDay}-${exId}">
+           <span>💪 Sama paino 2 kertaa putkeen, kaikki toistot täynnä</span>
+           <button onclick="applySuggestedWeight(${wOff},${aDay},${exId})">Kokeile ${suggestBumpedWeight(stuck.weight)} kg</button>
+         </div>`
+      : '';
+
     html += `<div class="ex-block">
       <div class="ex-block-header">
         <div>
@@ -3585,6 +3646,7 @@ async function renderSession(requestId) {
           ${prefillBtn}
         </div>
       </div>
+      ${stuckHint}
       <div class="ex-set-table">
         <div class="set-table-hdr">
           <span>S</span><span>KG</span><span>TOISTOT</span><span>EDELL.</span>
