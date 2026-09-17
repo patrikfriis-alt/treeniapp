@@ -1214,7 +1214,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
 <!-- ── KOONTI ─────────────────────────────────────────────────── -->
 <div id="page-koonti" class="page active">
   <div class="koonti-navbar" id="koonti-navbar">Koonti</div>
-  <div class="koonti-greeting">Hei! 👋</div>
+  <div class="koonti-greeting">Hei!</div>
   <div class="koonti-date" id="koonti-date"></div>
 
   <div class="card" id="onboarding-card" style="display:none">
@@ -1751,6 +1751,9 @@ const ICONS = {
   droplet:   '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z" />',
   trending:  '<path d="M16 7h6v6" /><path d="m22 7-8.5 8.5-5-5L2 17" />',
   table:     '<path d="M12 3v18" /><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M3 9h18" /><path d="M3 15h18" />',
+  trophy:    '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />',
+  bot:       '<path d="M12 8V4H8" /><rect width="16" height="12" x="4" y="8" rx="2" /><path d="M2 14h2" /><path d="M20 14h2" /><path d="M15 13v2" /><path d="M9 13v2" />',
+  camera:    '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" />',
 };
 
 function svgIcon(name, color, size) {
@@ -2011,7 +2014,7 @@ function checkForPR(o, d, st, e) {
 
   if (currentMax > prevMax) {
     celebratedPRSlots.add(k);
-    showCelebrationToast('🏆', 'Uusi ennätys!', `${escapeHtml(exName)} ${currentMax}kg`, 'pr');
+    showCelebrationToast(svgIcon('trophy', '#fff', 28), 'Uusi ennätys!', `${escapeHtml(exName)} ${currentMax}kg`, 'pr');
   }
 }
 
@@ -3351,7 +3354,7 @@ async function loadMotivationSummary(offset = wOff) {
     const lastCelebrated = parseInt(localStorage.getItem('celebratedStreak') || '0', 10);
     if (streak > lastCelebrated) {
       localStorage.setItem('celebratedStreak', String(streak));
-      showCelebrationToast('🔥', `${streak} päivän streak!`, 'Pidät yllä upeaa vauhtia');
+      showCelebrationToast(svgIcon('flame', '#fff', 28), `${streak} päivän streak!`, 'Pidät yllä upeaa vauhtia');
     }
   }
 }
@@ -3641,7 +3644,7 @@ async function renderSession(requestId) {
     const stuck = stuckCache[ex.n];
     const stuckHint = stuck && started && !done && doneCount === 0
       ? `<div class="ex-stuck-hint" id="ex-stuck-${wOff}-${aDay}-${exId}">
-           <span>💪 Sama paino 2 kertaa putkeen, kaikki toistot täynnä</span>
+           <span style="display:inline-flex;align-items:center;gap:6px">${svgIcon('dumbbell', 'var(--green)', 16)}Sama paino 2 kertaa putkeen, kaikki toistot täynnä</span>
            <button onclick="applySuggestedWeight(${wOff},${aDay},${exId})">Kokeile ${String(suggestBumpedWeight(stuck.weight)).replace('.', ',')} kg</button>
          </div>`
       : '';
@@ -3994,7 +3997,7 @@ async function renderForecastCard() {
 
   let statsHtml;
   if (forecast && forecast.alreadyAtTarget) {
-    statsHtml = `<div class="kc-week-budget-sub">🎉 Tavoitepaino on jo saavutettu</div>`;
+    statsHtml = `<div class="kc-week-budget-sub">Tavoitepaino on jo saavutettu</div>`;
   } else if (!forecast || forecast.weeksToTarget >= 150 || !forecast.rows.length) {
     statsHtml = `<div class="kc-week-budget-sub">Nykyisellä syömistahdilla tavoitetta ei saavuteta ennustejaksolla</div>`;
   } else {
@@ -6391,7 +6394,7 @@ function renderFoodPhotoRows() {
       const summary = hasMacros
         ? `${Math.round(row.kcalPer100g * row.grams / 100)} kcal · ${Math.round(row.proteinPer100g * row.grams / 100 * 10) / 10}g proteiini · ${Math.round(row.carbsPer100g * row.grams / 100 * 10) / 10}g hiilarit · ${Math.round(row.fatPer100g * row.grams / 100 * 10) / 10}g rasva`
         : 'Makrot puuttuvat';
-      const sourceTag = row.source === 'fineli' ? ' · Fineli' : row.source === 'ai' ? ' · 🤖 AI-arvio' : '';
+      const sourceTag = row.source === 'fineli' ? ' · Fineli' : row.source === 'ai' ? ` · <span style="display:inline-flex;align-items:center;gap:3px;vertical-align:middle">${svgIcon('bot', 'currentColor', 12)}AI-arvio</span>` : '';
       return `
       <div class="food-photo-row">
         <div style="display:flex;gap:8px;align-items:center;">
@@ -6689,10 +6692,10 @@ function renderLisatiedotPanel(grams) {
   if (!hasAnyData) panel.style.display = 'none';
 
   if (sel.processCode === 'RAW') {
-    badge.textContent = '🟢 Käsittelemätön';
+    badge.innerHTML = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:6px;vertical-align:middle"></span>Käsittelemätön';
     badge.style.display = '';
   } else if (sel.processCode) {
-    badge.textContent = '🟠 Prosessoitu';
+    badge.innerHTML = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--amber);margin-right:6px;vertical-align:middle"></span>Prosessoitu';
     badge.style.display = '';
   } else {
     badge.style.display = 'none';
@@ -8814,7 +8817,7 @@ if ('serviceWorker' in navigator) {
       <div style="display:flex;gap:8px;margin-bottom:10px;">
         <input type="text" id="food-search-input" placeholder="Hae esim. kananrinta..."
                oninput="onFoodSearchInput()" style="flex:1;box-sizing:border-box;">
-        <button class="btn" onclick="openFoodPhotoPicker()" style="flex:none;padding:0 14px;" title="Tunnista kuvasta">📷</button>
+        <button class="btn" onclick="openFoodPhotoPicker()" style="flex:none;padding:0 14px;display:flex;align-items:center;" title="Tunnista kuvasta"><span data-icon="camera" data-icon-color="currentColor"></span></button>
       </div>
       <input type="file" id="food-photo-input" accept="image/*" style="display:none" onchange="onFoodPhotoSelected(this)">
       <div id="food-search-favorites"></div>
@@ -8831,7 +8834,7 @@ if ('serviceWorker' in navigator) {
         <span class="food-search-custom-link" onclick="addFoodPhotoRow()">+ Lisää rivi</span>
       </div>
       <button class="btn" id="food-photo-fineli-btn" onclick="fetchFineliForAllRows()" style="display:none;width:100%;margin-bottom:8px;">Hae Finelistä</button>
-      <button class="btn" id="food-photo-ai-btn" onclick="estimateMissingRowsWithAI()" style="display:none;width:100%;margin-bottom:8px;">🤖 Arvioi tekoälyllä</button>
+      <button class="btn" id="food-photo-ai-btn" onclick="estimateMissingRowsWithAI()" style="display:none;width:100%;margin-bottom:8px;"><span style="display:inline-flex;align-items:center;justify-content:center;gap:6px;width:100%;"><span data-icon="bot" data-icon-color="currentColor"></span>Arvioi tekoälyllä</span></button>
       <div class="status" id="food-photo-ai-status"></div>
       <button class="btn" onclick="backToFoodSearchList()" style="background:none;color:var(--text2);width:100%;">← Takaisin hakuun</button>
       <button class="btn btn-primary" id="food-photo-save-btn" onclick="saveAllFoodPhotoRows()" disabled style="width:100%;margin-top:10px;font-size:var(--fs-md);padding:14px;">Tallenna kaikki</button>
