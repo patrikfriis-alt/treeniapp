@@ -645,6 +645,17 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
   border-radius: 0 0 16px 16px;
   overflow: hidden;
 }
+.ex-stuck-hint {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 12px; margin-bottom: 8px;
+  background: var(--green-bg); border: 1px solid rgba(47,255,126,0.25);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm); color: var(--text2);
+}
+.ex-stuck-hint button {
+  flex: none; font-size: var(--fs-xs); font-weight: 700; color: #032b12;
+  background: var(--green); border: none; border-radius: 6px; padding: 6px 10px;
+}
 .set-table-hdr {
   display: grid;
   grid-template-columns: 34px 1fr 1fr 60px;
@@ -2097,6 +2108,49 @@ function prefillExercise(o, d, exId, btnEl) {
   }
 }
 
+// Applies the weight-plateau hint's suggested bumped weight to every set of an exercise,
+// targeting the exercise's current target rep count rather than copying historical per-set
+// reps (the point is to try the assigned target at a higher weight). Reuses the same
+// prefilled-set mechanism as prefillExercise/the auto-progression suggestion — tap-to-confirm,
+// the promotion animation, and collapse-on-confirm all already work on rows this touches.
+function applySuggestedWeight(o, d, exId) {
+  const st = getActiveSession(o, d);
+  const sess = SESS[st];
+  const ex = sess && sess.ex.find(x => x._id === exId);
+  if (!ex) return;
+  const stuck = stuckCache[ex.n];
+  if (!stuck) return;
+  const targetReps = parseTargetReps(ex.t);
+  if (targetReps === null) return;
+  const bumpedKg = suggestBumpedWeight(stuck.weight);
+
+  const k = eKey(o, d, st, exId);
+  if (!LD[k]) LD[k] = { sets: [] };
+
+  for (let s = 0; s < ex.s; s++) {
+    if (!LD[k].sets[s]) LD[k].sets[s] = {};
+    const existing = LD[k].sets[s];
+    if (existing && !existing.prefilled && (existing.kg || existing.reps)) continue;
+    LD[k].sets[s].kg = String(bumpedKg);
+    LD[k].sets[s].reps = String(targetReps);
+    LD[k].sets[s].prefilled = true;
+
+    const box = document.getElementById(`set-${o}-${d}-${exId}-${s}`);
+    if (box) {
+      const inputs = box.querySelectorAll('input[type="text"]');
+      if (inputs[0]) inputs[0].value = LD[k].sets[s].kg;
+      if (inputs[1]) inputs[1].value = LD[k].sets[s].reps;
+    }
+
+    updateSetBox(o, d, exId, s);
+  }
+
+  saveLD();
+
+  const hintEl = document.getElementById(`ex-stuck-${o}-${d}-${exId}`);
+  if (hintEl) hintEl.remove();
+}
+
 // Confirms a prefilled-but-unperformed set as actually done (tapped when the
 // suggested numbers are already correct, so there's nothing to edit). Only
 // then does it count toward progress/PR and sync to the server.
@@ -2133,6 +2187,12 @@ function confirmPrefilledSet(o, d, e, s) {
 ═══════════════════════════════════════════════════════════════ */
 let prevCache = {};
 
+// stuckCache[exerciseName] = { weight } — present only when stuck; absent otherwise.
+//   weight — the identical weight_kg used across both of the last 2 occurrences of this
+//            exercise within today's session_type.
+// Populated by loadStuckWeightCache(o, d, requestId).
+let stuckCache = {};
+
 async function loadPrevSession(o, d, requestId) {
   prevCache = {};
   const st = getActiveSession(o, d), sess = SESS[st];
@@ -2168,6 +2228,76 @@ async function loadPrevSession(o, d, requestId) {
     if (!prevCache[r.exercise_name]) prevCache[r.exercise_name] = [];
     prevCache[r.exercise_name].push(r);
   });
+}
+
+async function loadStuckWeightCache(o, d, requestId) {
+  stuckCache = {};
+  const st = getActiveSession(o, d), sess = SESS[st];
+  if (!sess || !sess.ex || !sess.ex.length) return;
+
+  const names = sess.ex.map(e => e.n);
+  const mon = wStart(o), dt = new Date(mon.date);
+  dt.setDate(mon.date.getDate() + d);
+  const todayStr = localIso(dt);
+
+  const { data, error } = await sb
+    .from('workout_sets')
+    .select('workout_date,exercise_name,set_number,weight_kg,reps')
+    .in('exercise_name', names)
+    .eq('session_type', st)
+    .lt('workout_date', todayStr)
+    .order('workout_date', { ascending: false })
+    .order('set_number',   { ascending: true  })
+    .limit(400);
+
+  if (requestId !== treeniRequestId) return;
+  if (error) { console.error('loadStuckWeightCache failed:', error.message); return; }
+  if (!data) return;
+
+  // Group by exercise, keep only the 2 most recent distinct dates per exercise.
+  const byExercise = {};
+  data.forEach(r => {
+    if (!byExercise[r.exercise_name]) byExercise[r.exercise_name] = { dates: [], byDate: {} };
+    const eb = byExercise[r.exercise_name];
+    if (!eb.byDate[r.workout_date]) {
+      if (eb.dates.length >= 2) return; // already have the 2 most recent dates
+      eb.dates.push(r.workout_date);
+      eb.byDate[r.workout_date] = [];
+    }
+    if (eb.dates.includes(r.workout_date)) eb.byDate[r.workout_date].push(r);
+  });
+
+  sess.ex.forEach(ex => {
+    const targetReps = parseTargetReps(ex.t);
+    if (targetReps === null) return; // time-based or unparseable target (e.g. "3×45s") — skip
+    const eb = byExercise[ex.n];
+    if (!eb || eb.dates.length < 2) return; // fewer than 2 prior occurrences this session_type
+
+    // `eb.dates` holds date strings; map to their arrays of set-rows. Deliberately not
+    // named `d` for the lambda param — `d` is already this function's day-of-week arg.
+    const [setsA, setsB] = eb.dates.map(dateStr => eb.byDate[dateStr]);
+    const hitTarget = rows => rows.length >= ex.s && rows.every(r => (r.reps || 0) >= targetReps);
+    if (!hitTarget(setsA) || !hitTarget(setsB)) return;
+
+    const w1 = setsA[0].weight_kg;
+    if (w1 == null) return;
+    const sameWeight = setsA.every(r => r.weight_kg === w1) && setsB.every(r => r.weight_kg === w1);
+    if (!sameWeight) return;
+
+    stuckCache[ex.n] = { weight: w1 };
+  });
+}
+
+// "3×10" -> 10, "4×12" -> 12, "3×45s" -> null (not a rep-based target)
+function parseTargetReps(targetDisplay) {
+  const m = /×\s*(\d+)\s*$/.exec(targetDisplay || '');
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function suggestBumpedWeight(weight) {
+  let suggested = Math.round((weight * 1.025) / 2.5) * 2.5;
+  if (suggested <= weight) suggested = weight + 2.5;
+  return suggested;
 }
 
 async function reconcileSessionWithServer(o, d, st, sess, requestId) {
@@ -3425,7 +3555,10 @@ async function renderSession(requestId) {
   }
 
   // Fetch previous session data
-  await loadPrevSession(wOff, aDay, requestId);
+  await Promise.all([
+    loadPrevSession(wOff, aDay, requestId),
+    loadStuckWeightCache(wOff, aDay, requestId),
+  ]);
   if (requestId !== treeniRequestId) return;
   await reconcileSessionWithServer(wOff, aDay, st, sess, requestId);
   if (requestId !== treeniRequestId) return;
@@ -3492,6 +3625,15 @@ async function renderSession(requestId) {
       ? `<button onclick="prefillExercise(${wOff},${aDay},${exId},this)" class="prefill-btn">↓ Käytä edell.</button>`
       : '';
 
+    // Paino jumissa -vihje: sama paino + kohdetoistot täynnä 2 kertaa putkeen tässä session_typessa.
+    const stuck = stuckCache[ex.n];
+    const stuckHint = stuck && started && !done && doneCount === 0
+      ? `<div class="ex-stuck-hint" id="ex-stuck-${wOff}-${aDay}-${exId}">
+           <span>💪 Sama paino 2 kertaa putkeen, kaikki toistot täynnä</span>
+           <button onclick="applySuggestedWeight(${wOff},${aDay},${exId})">Kokeile ${String(suggestBumpedWeight(stuck.weight)).replace('.', ',')} kg</button>
+         </div>`
+      : '';
+
     html += `<div class="ex-block">
       <div class="ex-block-header">
         <div>
@@ -3506,6 +3648,7 @@ async function renderSession(requestId) {
           ${prefillBtn}
         </div>
       </div>
+      ${stuckHint}
       <div class="ex-set-table">
         <div class="set-table-hdr">
           <span>S</span><span>KG</span><span>TOISTOT</span><span>EDELL.</span>
