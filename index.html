@@ -63,6 +63,9 @@
 
 /* ─── Reset & base ──────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* Without this, iOS Safari (incl. standalone PWA mode) delays :active feedback while it
+   disambiguates tap vs. scroll, so the tap-scale feedback below can feel laggy or silent. */
+button, a, [onclick] { touch-action: manipulation; }
 
 body {
   background: var(--bg);
@@ -748,6 +751,14 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
 @media (prefers-reduced-motion: reduce) {
   .set-table-row.s-prefilled .set-tnum,
   .set-table-row.is-confirming .set-expanded .set-tnum { transition: none; transform: none; }
+
+  /* Bottom-sheet modal: cross-fade instead of sliding up. */
+  .modal-sheet { transition: opacity .15s ease; transform: none; opacity: 0; }
+  .modal-overlay.open .modal-sheet { opacity: 1; }
+
+  /* Sidebar is driven by an inline transform (openSidebar/closeSidebar) — can't cross-fade
+     without touching that JS, so it just snaps instead of sliding. */
+  #sidebar { transition: none; }
 }
 
 .badge-progress {
