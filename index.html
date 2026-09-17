@@ -2129,6 +2129,8 @@ function applySuggestedWeight(o, d, exId) {
 
   for (let s = 0; s < ex.s; s++) {
     if (!LD[k].sets[s]) LD[k].sets[s] = {};
+    const existing = LD[k].sets[s];
+    if (existing && !existing.prefilled && (existing.kg || existing.reps)) continue;
     LD[k].sets[s].kg = String(bumpedKg);
     LD[k].sets[s].reps = String(targetReps);
     LD[k].sets[s].prefilled = true;
@@ -2274,7 +2276,7 @@ async function loadStuckWeightCache(o, d, requestId) {
     // `eb.dates` holds date strings; map to their arrays of set-rows. Deliberately not
     // named `d` for the lambda param — `d` is already this function's day-of-week arg.
     const [setsA, setsB] = eb.dates.map(dateStr => eb.byDate[dateStr]);
-    const hitTarget = rows => rows.length > 0 && rows.every(r => (r.reps || 0) >= targetReps);
+    const hitTarget = rows => rows.length >= ex.s && rows.every(r => (r.reps || 0) >= targetReps);
     if (!hitTarget(setsA) || !hitTarget(setsB)) return;
 
     const w1 = setsA[0].weight_kg;
@@ -3625,10 +3627,10 @@ async function renderSession(requestId) {
 
     // Paino jumissa -vihje: sama paino + kohdetoistot täynnä 2 kertaa putkeen tässä session_typessa.
     const stuck = stuckCache[ex.n];
-    const stuckHint = stuck && started && !done && noSetsYet
+    const stuckHint = stuck && started && !done && doneCount === 0
       ? `<div class="ex-stuck-hint" id="ex-stuck-${wOff}-${aDay}-${exId}">
            <span>💪 Sama paino 2 kertaa putkeen, kaikki toistot täynnä</span>
-           <button onclick="applySuggestedWeight(${wOff},${aDay},${exId})">Kokeile ${suggestBumpedWeight(stuck.weight)} kg</button>
+           <button onclick="applySuggestedWeight(${wOff},${aDay},${exId})">Kokeile ${String(suggestBumpedWeight(stuck.weight)).replace('.', ',')} kg</button>
          </div>`
       : '';
 
