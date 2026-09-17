@@ -46,6 +46,7 @@
   --fs-sm:   13px;
   --fs-base: 14px;
   --fs-md:   16px;
+  --fs-md2:  17px; /* body base text, page headers, Sali set inputs, primary CTA — was a stray literal in 4 places */
   --fs-lg:   18px;
   --fs-xl:   20px;
   --fs-2xl:  22px;
@@ -71,7 +72,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Satoshi', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
-  font-size: 17px;
+  font-size: var(--fs-md2);
   letter-spacing: -0.2px;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
@@ -340,7 +341,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
   right: 0;
   z-index: 90;
   padding: 14px 16px 10px;
-  font-size: 17px;
+  font-size: var(--fs-md2);
   font-weight: 600;
   text-align: center;
   background: rgba(20,20,22,0.72);
@@ -416,9 +417,9 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
   display:flex; align-items:center; justify-content:center;
   font-size:var(--fs-xs); font-weight:600; color:var(--text3);
 }
-.kc-week-day.under { background:var(--green); color:#fff; } /* weekly-kcal-budget strip only: under the daily fair share */
-.kc-week-day.over  { background:var(--red); color:#fff; } /* weekly-kcal-budget strip only: over the daily fair share */
-.kc-week-day.active { background:var(--green); color:#fff; } /* endurance-goal strip: activity logged that day */
+.kc-week-day.under { background:var(--green); color:#032b12; } /* weekly-kcal-budget strip only: under the daily fair share */
+.kc-week-day.over  { background:var(--red); color:#000; } /* weekly-kcal-budget strip only: over the daily fair share */
+.kc-week-day.active { background:var(--green); color:#032b12; } /* endurance-goal strip: activity logged that day */
 .kc-week-day.under, .kc-week-day.over, .kc-week-day.active { cursor: pointer; }
 .kc-weekly-row { padding: 9px 0; border-bottom: 1px solid var(--border); }
 .kc-weekly-row:last-child { border-bottom: none; }
@@ -595,7 +596,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
   text-overflow: ellipsis;
   transition: all var(--t);
 }
-.day-done-btn:hover { background: var(--green); color: #fff; }
+.day-done-btn:hover { background: var(--green); color: #032b12; }
 
 /* ─── Missed-day nudge ──────────────────────────────────────── */
 .day-nudge-banner {
@@ -612,7 +613,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
 }
 .day-nudge-btn {
   background: var(--amber);
-  color: #fff;
+  color: #000;
   border: none;
   border-radius: var(--radius-sm);
   padding: 8px 12px;
@@ -773,7 +774,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
   width: 58px;
   height: 36px;
   padding: 0 6px;
-  font-size: 17px;
+  font-size: var(--fs-md2);
   font-weight: 600;
   background: var(--surface3);
   border: 1.5px solid transparent;
@@ -846,7 +847,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
   border: none;
   border-radius: var(--radius-md);
   color: var(--text2);
-  font-size: 17px;
+  font-size: var(--fs-md2);
   font-weight: 600;
   letter-spacing: -0.01em;
   cursor: pointer;
@@ -3785,7 +3786,7 @@ async function loadBodyMetrics() {
     const histMuscle = [...hist].reverse().map(d => d.muscle_pct);
 
     const datasets = [
-      { label:'Paino',  data: histWeights, borderColor:'#1D9E75', borderWidth:2, pointRadius:3, pointBackgroundColor:'#1D9E75', tension:.3, fill:false, yAxisID:'y1' },
+      { label:'Paino',  data: histWeights, borderColor:'#8a2be2', borderWidth:2, pointRadius:3, pointBackgroundColor:'#8a2be2', tension:.3, fill:false, yAxisID:'y1' },
       { label:'Rasva%', data: histFat,    borderColor:'#378ADD', borderWidth:2, pointRadius:3, pointBackgroundColor:'#378ADD', tension:.3, fill:false, yAxisID:'y2' },
       { label:'Lihas%', data: histMuscle, borderColor:'#ffbb00', borderWidth:2, pointRadius:3, pointBackgroundColor:'#ffbb00', tension:.3, fill:false, yAxisID:'y2' },
     ];
@@ -4080,7 +4081,7 @@ async function renderForecastChart(startIso, endIso, profile, forecast) {
   const hasHistorical = historicalData.some(v => v != null);
 
   const datasets = [
-    { label: 'Toteuma', data: actualData, borderColor: '#1D9E75', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#1D9E75', tension: .3, fill: false, spanGaps: true },
+    { label: 'Toteuma', data: actualData, borderColor: '#8a2be2', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#8a2be2', tension: .3, fill: false, spanGaps: true },
   ];
   if (hasLive) {
     datasets.push({ label: 'Ennuste', data: liveData, borderColor: 'rgba(29,158,117,0.5)', borderDash: [5, 5], borderWidth: 2, pointRadius: 0, tension: .3, fill: false, spanGaps: true });
@@ -4706,7 +4707,7 @@ async function loadSleep() {
       data: {
         labels: [...chartData].reverse().map(d => d.sleep_date.slice(5)),
         datasets: [
-          { label:'Unipisteet', data:[...chartData].reverse().map(d=>d.sleep_score), borderColor:'#00f2ff', borderWidth:2, pointRadius:3, pointBackgroundColor:'#00f2ff', tension:.3, fill:false },
+          { label:'Unipisteet', data:[...chartData].reverse().map(d=>d.sleep_score), borderColor:'#005c9e', borderWidth:2, pointRadius:3, pointBackgroundColor:'#005c9e', tension:.3, fill:false },
         ],
       },
       options: {
@@ -4856,10 +4857,10 @@ async function loadExerciseChart(exName) {
       datasets: [{
         label: exName,
         data: values,
-        borderColor: '#1D9E75',
+        borderColor: '#00f2ff',
         borderWidth: 2,
         pointRadius: 3,
-        pointBackgroundColor: '#1D9E75',
+        pointBackgroundColor: '#00f2ff',
         tension: .3,
         fill: false,
       }],
@@ -5060,10 +5061,10 @@ async function loadRunChart() {
       datasets: [{
         label: type === 'distance' ? 'km' : 'min/km',
         data: values,
-        borderColor: '#378ADD',
+        borderColor: '#ff6b00',
         borderWidth: 2,
         pointRadius: 4,
-        pointBackgroundColor: '#378ADD',
+        pointBackgroundColor: '#ff6b00',
         tension: 0.3,
         fill: false,
       }],
