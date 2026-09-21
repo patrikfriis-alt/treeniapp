@@ -3750,7 +3750,25 @@ async function renderSession(requestId) {
   el.innerHTML = html;
 }
 
-function toggleDone()   { const st = getActiveSession(wOff, aDay); setDone(wOff, aDay, st, !isDone(wOff, aDay, st)); renderTreeni(); }
+function toggleDone() {
+  const st = getActiveSession(wOff, aDay);
+  const goingDone = !isDone(wOff, aDay, st);
+  if (goingDone) {
+    const sess = SESS[st];
+    const incomplete = (sess && sess.ex ? sess.ex : []).filter(ex => {
+      const ed = getED(wOff, aDay, st, ex._id);
+      const doneCount = (ed.sets || []).filter(s => {
+        const sd = s || {};
+        if (sd.prefilled) return false;
+        return numOrNull(parseFloat(sd.kg)) !== null || numOrNull(parseInt(sd.reps)) !== null;
+      }).length;
+      return ex.s > 0 && doneCount < ex.s;
+    }).map(ex => ex.n);
+    if (incomplete.length && !confirm(`Näissä liikkeissä on kesken olevia sarjoja:\n${incomplete.join('\n')}\n\nMerkitäänkö treeni silti tehdyksi?`)) return;
+  }
+  setDone(wOff, aDay, st, goingDone);
+  renderTreeni();
+}
 function startSession() { const st = getActiveSession(wOff, aDay); setStarted(wOff, aDay, st, true); renderTreeni(); }
 function changeWeek(dir) { wOff += dir; renderTreeni(); }
 
