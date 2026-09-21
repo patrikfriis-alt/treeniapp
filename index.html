@@ -5596,6 +5596,18 @@ async function loadActiveFastSession() {
   return data;
 }
 
+// Shows a fasting-related status message wherever it can currently be seen: the Ruoka page's
+// own status line, and — if the Koonti breakdown modal happens to be open — that modal's status
+// line too, since the two entry points call the exact same startFast()/stopFast() functions but
+// live on different pages.
+function showFastingStatus(msg, isErr) {
+  showStatus('food-fasting-status', msg, isErr);
+  if (document.getElementById('fasting-modal-status')) showStatus('fasting-modal-status', msg, isErr);
+}
+
+// Returns 'ok' | 'duplicate' | 'error' so callers (the Ruoka page's button and the Koonti
+// breakdown modal) can tell a genuine start apart from "one was already active" without
+// re-deriving it from activeFastSession, which is truthy in both cases after this returns.
 async function startFast() {
   const { error } = await sb.from('fasting_sessions').insert({ started_at: new Date().toISOString() });
   if (error) {
@@ -5609,27 +5621,29 @@ async function startFast() {
       const running = activeFastSession
         ? formatFastingDuration(Date.now() - new Date(activeFastSession.started_at).getTime())
         : null;
-      showStatus('food-fasting-status', running
+      showFastingStatus(running
         ? `Sinulla on jo aktiivinen paasto käynnissä (${running}) — lopeta se ensin`
         : 'Sinulla on jo aktiivinen paasto käynnissä — lopeta se ensin', true);
-      return;
+      return 'duplicate';
     }
-    showStatus('food-fasting-status', 'Paaston tallennus epäonnistui', true);
-    return;
+    showFastingStatus('Paaston tallennus epäonnistui', true);
+    return 'error';
   }
   await loadFastingTimer();
   refreshKoontiFastingRow();
+  return 'ok';
 }
 
 async function stopFast() {
-  if (!activeFastSession) return;
+  if (!activeFastSession) return 'error';
   const { error } = await sb.from('fasting_sessions')
     .update({ ended_at: new Date().toISOString() })
     .eq('id', activeFastSession.id);
-  if (error) { console.error('stopFast failed:', error.message); showStatus('food-fasting-status', 'Paaston tallennus epäonnistui', true); return; }
+  if (error) { console.error('stopFast failed:', error.message); showFastingStatus('Paaston tallennus epäonnistui', true); return 'error'; }
   await loadFastingTimer();
   await loadRecentFasts();
   refreshKoontiFastingRow();
+  return 'ok';
 }
 
 function formatFastingDuration(ms) {
@@ -8361,11 +8375,19 @@ function openWeeklyCaloriesModal(foodKcal, bmrWeekly, exerciseKcal) {
   openMetricModal('Viikon kalorit', body);
 }
 
+// Remembers the args of the currently-open fasting breakdown modal so the start/stop wrapper
+// functions below can re-open it in place (showing why nothing happened) without threading
+// mondayIso/minutes through an inline onclick attribute.
+let _fastingModalCtx = null;
+
 function openFastingBreakdownModal(mondayIso, minutes) {
+  _fastingModalCtx = { mondayIso, minutes };
   const controlHtml = activeFastSession
     ? `<div class="food-fasting-status" style="margin-bottom:4px;">${formatFastingDuration(Date.now() - new Date(activeFastSession.started_at).getTime())}</div>
-       <button class="btn btn-primary" style="width:100%;margin-bottom:16px;" onclick="stopFast();document.getElementById('metric-info-overlay').remove();">Lopeta paasto</button>`
-    : `<button class="btn btn-primary" style="width:100%;margin-bottom:16px;" onclick="startFast();document.getElementById('metric-info-overlay').remove();">Aloita paasto</button>`;
+       <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="stopFastFromModal()">Lopeta paasto</button>
+       <div class="status" id="fasting-modal-status"></div>`
+    : `<button class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="startFastFromModal()">Aloita paasto</button>
+       <div class="status" id="fasting-modal-status"></div>`;
 
   const rowsHtml = minutes.map((min, i) => {
     const d = addDays(new Date(mondayIso), i);
@@ -8374,6 +8396,36 @@ function openFastingBreakdownModal(mondayIso, minutes) {
     return `<div class="metric-modal-row"><span>${label}</span><span class="val">${h}h ${m}min</span></div>`;
   }).join('');
   openMetricModal('Paastoaika', controlHtml + rowsHtml);
+}
+
+// Re-renders the modal's control area after a failed/duplicate start-or-stop, carrying the
+// message showFastingStatus already wrote into the OLD #fasting-modal-status across the
+// re-render — openFastingBreakdownModal rebuilds that element fresh (empty), which would
+// otherwise wipe the message out before the user ever sees it.
+function reopenFastingModalPreservingStatus(ctx) {
+  const prev = document.getElementById('fasting-modal-status');
+  const prevText = prev ? prev.textContent : '';
+  const prevClass = prev ? prev.className : 'status';
+  openFastingBreakdownModal(ctx.mondayIso, ctx.minutes);
+  const next = document.getElementById('fasting-modal-status');
+  if (next && prevText) { next.textContent = prevText; next.className = prevClass; }
+}
+
+// Only closes the modal on a genuine success — on 'duplicate'/'error' it re-opens the modal in
+// place instead, so the message is actually visible and the control area refreshes to whatever
+// the real current state turns out to be.
+async function startFastFromModal() {
+  const ctx = _fastingModalCtx;
+  const status = await startFast();
+  if (status === 'ok') { document.getElementById('metric-info-overlay').remove(); }
+  else if (ctx) { reopenFastingModalPreservingStatus(ctx); }
+}
+
+async function stopFastFromModal() {
+  const ctx = _fastingModalCtx;
+  const status = await stopFast();
+  if (status === 'ok') { document.getElementById('metric-info-overlay').remove(); }
+  else if (ctx) { reopenFastingModalPreservingStatus(ctx); }
 }
 
 
