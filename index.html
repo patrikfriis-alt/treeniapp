@@ -5600,8 +5600,20 @@ async function startFast() {
   const { error } = await sb.from('fasting_sessions').insert({ started_at: new Date().toISOString() });
   if (error) {
     console.error('startFast failed:', error.message);
-    // 23505 = unique_violation -> an active fast already exists (e.g. a second tab beat this one)
-    if (error.code === '23505') { await loadFastingTimer(); return; }
+    // 23505 = unique_violation -> an active fast already exists (e.g. a second tab beat this
+    // one, or the user genuinely still has an unstopped fast from before). Without this message
+    // the UI just silently reloads and shows that old session's elapsed time, which looks like
+    // "starting a new fast resumed the old one" instead of the one-active-fast rule doing its job.
+    if (error.code === '23505') {
+      await loadFastingTimer();
+      const running = activeFastSession
+        ? formatFastingDuration(Date.now() - new Date(activeFastSession.started_at).getTime())
+        : null;
+      showStatus('food-fasting-status', running
+        ? `Sinulla on jo aktiivinen paasto käynnissä (${running}) — lopeta se ensin`
+        : 'Sinulla on jo aktiivinen paasto käynnissä — lopeta se ensin', true);
+      return;
+    }
     showStatus('food-fasting-status', 'Paaston tallennus epäonnistui', true);
     return;
   }
