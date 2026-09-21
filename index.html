@@ -2678,13 +2678,18 @@ async function getWeekStats(offset) {
     { data: sleepData },
     { data: weightData },
   ] = await Promise.all([
-    sb.from('workout_sets').select('workout_date').gte('workout_date', from).lte('workout_date', to),
+    sb.from('workout_sets').select('workout_date,weight_kg,reps').gte('workout_date', from).lte('workout_date', to),
     sb.from('activity_data').select('distance_km').gte('activity_date', from).lte('activity_date', to),
     sb.from('sleep_data').select('sleep_score').gte('sleep_date', from).lte('sleep_date', to),
     sb.from('body_metrics').select('weight_kg,measured_at').gte('measured_at', from).lte('measured_at', to).order('measured_at', { ascending: true }),
   ]);
 
   const gymDays = new Set((gymData || []).map(r => r.workout_date)).size;
+  // Same computation as the weekly-recap push notification (check-and-notify's weeklyRecapStats)
+  // — kept identical so this card always matches what the notification reports.
+  const tonnage = (gymData || [])
+    .filter(r => r.weight_kg != null && r.reps != null)
+    .reduce((s, r) => s + r.weight_kg * r.reps, 0);
   const actCount = actData ? actData.length : 0;
   const totalKm = (actData || []).reduce((s, r) => s + (r.distance_km || 0), 0);
   const withScore = (sleepData || []).filter(r => r.sleep_score != null);
@@ -2694,7 +2699,7 @@ async function getWeekStats(offset) {
     ? Math.round((withWeight[withWeight.length - 1].weight_kg - withWeight[0].weight_kg) * 10) / 10
     : null;
 
-  return { gymDays, actCount, totalKm, avgSleep, weightDelta };
+  return { gymDays, tonnage, actCount, totalKm, avgSleep, weightDelta };
 }
 
 async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
@@ -2723,6 +2728,9 @@ async function loadWeeklyReportCard(offset = wOff, bmrInfo = null) {
 
   const rows = [];
   rows.push(weekRow('dumbbell', 'var(--accent)', 'Salikertoja', `${thisWeek.gymDays}${fmtDelta(thisWeek.gymDays, lastWeek.gymDays, '')}`));
+  if (thisWeek.tonnage > 0 || lastWeek.tonnage > 0) {
+    rows.push(weekRow('dumbbell', 'var(--green)', 'Nostettu', `${Math.round(thisWeek.tonnage)} kg${fmtDelta(Math.round(thisWeek.tonnage), Math.round(lastWeek.tonnage), ' kg')}`));
+  }
   rows.push(weekRow('running', 'var(--red)', 'Aktiviteettikertoja', `${thisWeek.actCount}${fmtDelta(thisWeek.actCount, lastWeek.actCount, '')}`));
   if (thisWeek.totalKm > 0 || lastWeek.totalKm > 0) {
     rows.push(weekRow('running', 'var(--red)', 'Kilometrit', `${thisWeek.totalKm.toFixed(1)} km${fmtDelta(thisWeek.totalKm, lastWeek.totalKm, ' km')}`));
