@@ -35,9 +35,12 @@ Repo: `/Users/patrikfriis/Projects/Unelma`. Spec: `docs/superpowers/specs/2026-0
 only publishes changes for tables in the `public` schema — `assistant.tasks`/`assistant.task_events`
 need to be explicitly added to the `supabase_realtime` publication via the dashboard SQL editor before
 Task 11's subscription can receive anything; this plan gives the exact SQL but its actual effect can
-only be confirmed against the real Supabase project. (2) The reverse-proxy/TLS tool (Caddy vs nginx +
-certbot) for `unelmaboard.com` is decided at Task 24 (manual VPS work), not earlier — nothing in Tasks
-1-23 depends on which one is chosen. (3) The exact spring `damping`/`response` values in Tasks 21-23 are
+only be confirmed against the real Supabase project. (2) `unelmaboard.com` is Cloudflare-proxied (not
+DNS-only) with TLS in Full (strict) mode via a Cloudflare Origin CA cert on the VPS, decided during
+implementation (Task 24) specifically to unlock free-tier WAF geo-blocking/rate-limiting — nothing in
+Tasks 1-23 depends on this, and it's mentioned here only because it's a real infra decision made
+outside the original spec, tracked alongside its own backlog task. (3) The exact spring
+`damping`/`response` values in Tasks 21-23 are
 this plan's best-effort translation of the `apple-design` skill's guidance (critically damped for
 commits, slight bounce only on momentum-driven rejects) — treat them as a starting point to feel out
 and tune during implementation, not a value copied from a source that measured this exact interaction.
@@ -3524,29 +3527,38 @@ git commit -m "feat: wire card drag-and-drop with column hit-testing and rubber-
 
 **Files:** none (infrastructure + manual verification, matching Phase 1's Task 16 pattern)
 
-- [ ] **Step 1: Point DNS**
+- [ ] **Step 1: Point DNS — Cloudflare-proxied, not DNS-only**
 
 In Cloudflare's dashboard for `unelmaboard.com`: add an `A` record for `@` (and optionally `www`)
-pointing at `46.62.211.102`. If proxying through Cloudflare (orange cloud), note that changes TLS
-termination behavior — decide plain DNS-only (grey cloud) vs Cloudflare-proxied at this step, since it
-affects which of Step 2's two options makes sense (Cloudflare-proxied traffic arrives at the VPS
-already over Cloudflare's own connection, which changes whether Let's Encrypt on the VPS itself is
-even necessary).
+pointing at `46.62.211.102`, with the proxy status set to **Proxied** (orange cloud) — decided
+deliberately, not left open, specifically so the free-tier WAF is available: an EU-only geo-block rule
+and a rate limit on `POST /api/auth/login` (tracked as its own backlog task, "Cloudflare EU geo-block +
+rate-limit for unelmaboard.com" — do that dashboard config as part of this step, or right after; it's
+infra work, not something to promote for automated dev-task execution).
 
 - [ ] **Step 2: Set up the reverse proxy + TLS on the VPS**
 
-Install and configure either Caddy (simplest — automatic Let's Encrypt, minimal config) or nginx +
-certbot. Caddy is recommended for a single-domain personal setup: a `Caddyfile` as short as
+Since traffic is Cloudflare-proxied (Step 1), set Cloudflare's SSL/TLS mode to **Full (strict)** —
+Flexible mode would leave the Cloudflare-to-VPS hop unencrypted, which defeats the point. Full (strict)
+still requires a valid cert on the VPS itself, but Cloudflare issues a free, long-lived (15-year)
+**Origin CA certificate** for exactly this purpose — install that as a static cert rather than running
+Let's Encrypt/certbot on the VPS (no ACME renewal automation needed; note the 15-year expiry somewhere
+so it's not a forgotten problem in 2041).
+
+Install and configure Caddy (simplest for a single-domain personal setup) to terminate that cert and
+reverse-proxy to the app:
 
 ```
 unelmaboard.com {
+  tls /etc/caddy/unelmaboard-origin.pem /etc/caddy/unelmaboard-origin-key.pem
   reverse_proxy localhost:3000
 }
 ```
 
-handles cert issuance and renewal automatically. Exact install command depends on the OS package
-available at implementation time (`sudo apt install caddy` via Caddy's official apt repo, similar
-process to the `gh` install in Phase 1's plan, `docs/superpowers/plans/2026-09-21-personal-assistant-phase1-plan.md`,
+(Paths illustrative — place the downloaded Origin CA cert/key wherever the actual Caddy install
+convention puts them.) Exact Caddy install command depends on the OS package available at
+implementation time (`sudo apt install caddy` via Caddy's official apt repo, similar process to the
+`gh` install in Phase 1's plan, `docs/superpowers/plans/2026-09-21-personal-assistant-phase1-plan.md`,
 Task 16).
 
 - [ ] **Step 3: Add the frontend build to the deploy path**
@@ -3621,8 +3633,8 @@ by name in `DraggableTaskCard.tsx` (Task 22) and `dragLogic.ts` (Task 23) rather
 **Honesty about unresolved specifics:** Task 11 explicitly flags the Supabase Realtime publication
 requirement as something that must be verified against the real project, not assumed. Task 22 flags the
 exact `motion` package export surface (`motion/react` vs `motion`) as needing confirmation against the
-actually-installed version. Task 24 explicitly defers the Caddy-vs-nginx choice and the
-Cloudflare-proxy-vs-DNS-only decision to implementation time, consistent with how Phase 1's plan handled
+actually-installed version. Task 24 decides Cloudflare-proxied + Origin CA over DNS-only + Let's Encrypt
+(unlocking free WAF geo-blocking/rate-limiting), consistent with how Phase 1's plan handled
 its own genuinely-unverifiable-from-a-sandbox specifics (Tasks 5, 13, 14, 15 there). The spring
 `damping`/`response` values throughout Tasks 21-23 are explicitly flagged in this plan's header as a
 starting point to tune, not a source-verified constant — unlike, say, the `project()` deceleration-rate
