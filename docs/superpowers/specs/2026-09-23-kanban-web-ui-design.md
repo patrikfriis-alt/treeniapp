@@ -98,6 +98,16 @@ Six columns, one per stage, always visible (no domain-scoped board splitting —
 **Domain filter:** multi-select chips (COO / DEV / Politics / Monitor) above the board. Selection is
 saved per-browser via `localStorage` and restored on load — no "all domains" reset each visit.
 
+**Drag-and-drop:** decided in a follow-up brainstorming round (after this spec was first written)
+triggered by explicitly invoking the `apple-design` personal skill — fluid, physical motion (instant
+press feedback, 1:1 pointer tracking, interruptible velocity-aware springs, momentum, rubber-banding)
+governs the whole UI, and cards are freely draggable to any column for that physical feel. But the
+board's actual state machine only has **2 of its 6 column-boundaries as real human-triggered
+transitions**: Blocked→Backlog (retry) and Backlog→Ready (promote) — every other column is
+system/agent-driven. A drop on any column that isn't one of those two real transitions rubber-bands the
+card back to its origin (carrying the release velocity through the reject, not a hard snap) rather than
+silently doing nothing or erroring. See the implementation plan's Tasks 21-23 for the mechanics.
+
 ---
 
 ## 06 · Task Actions

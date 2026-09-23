@@ -15,19 +15,32 @@ and deployed alongside the backend. Auth: single shared password, in-memory sess
 cookie. Realtime: one shared Supabase Realtime subscription server-side, broadcast to connected SSE
 clients.
 
+**Interaction design:** built per this environment's `apple-design` personal skill (fluid, physical
+motion translated for the web — instant press feedback, direct 1:1 pointer tracking, interruptible
+velocity-aware springs, momentum, rubber-banding, translucent materials). This governs every
+interactive surface, but the one place it becomes real *architecture* rather than styling is card
+drag-and-drop (Tasks 21-23): cards are freely draggable to any column for the physical feel, but only
+two column-boundaries are real backend transitions (Blocked→Backlog retry, Backlog→Ready promote) — a
+drop anywhere else rubber-bands back to origin rather than silently failing or doing nothing.
+
 **Tech Stack:** TypeScript, Express (new dependency), `cookie-parser`, React 18, Vite, `@testing-library/react`,
-`dnd-kit` (drag-and-drop — confirmed at Task 16), existing `@supabase/supabase-js`/Vitest.
+`motion` (spring physics + velocity-aware animation for drag — chosen over `dnd-kit` because this needs
+direct control of interruptible, velocity-handoff spring animation that generic DnD libraries don't
+expose; confirmed at Task 22), existing `@supabase/supabase-js`/Vitest.
 
 Repo: `/Users/patrikfriis/Projects/Unelma`. Spec: `docs/superpowers/specs/2026-09-23-kanban-web-ui-design.md`
 (this repo, `treeniapp`, per project convention).
 
-**A note on two things this plan cannot fully pin down in advance:** (1) Supabase Realtime, by default,
+**A note on things this plan cannot fully pin down in advance:** (1) Supabase Realtime, by default,
 only publishes changes for tables in the `public` schema — `assistant.tasks`/`assistant.task_events`
 need to be explicitly added to the `supabase_realtime` publication via the dashboard SQL editor before
 Task 11's subscription can receive anything; this plan gives the exact SQL but its actual effect can
 only be confirmed against the real Supabase project. (2) The reverse-proxy/TLS tool (Caddy vs nginx +
-certbot) for `unelmaboard.com` is decided at Task 21 (manual VPS work), not earlier — nothing in Tasks
-1-20 depends on which one is chosen.
+certbot) for `unelmaboard.com` is decided at Task 24 (manual VPS work), not earlier — nothing in Tasks
+1-23 depends on which one is chosen. (3) The exact spring `damping`/`response` values in Tasks 21-23 are
+this plan's best-effort translation of the `apple-design` skill's guidance (critically damped for
+commits, slight bounce only on momentum-driven rejects) — treat them as a starting point to feel out
+and tune during implementation, not a value copied from a source that measured this exact interaction.
 
 ---
 
@@ -1454,7 +1467,7 @@ git commit -m "feat: add realtime SSE stream bridged from Supabase Realtime"
 
 **Note:** an external uptime monitor may depend on `GET /health` returning exactly `200 "ok"` — this
 task's Express route (added in Task 4) already replicates that exact contract, so this is safe, but
-worth a real check against the live monitor after deploying (Task 21's smoke test).
+worth a real check against the live monitor after deploying (Task 24's smoke test).
 
 - [ ] **Step 1: Add the static-dir config field**
 
@@ -1554,8 +1567,14 @@ cd /Users/patrikfriis/Projects/Unelma
 npm create vite@latest webui -- --template react-ts
 cd webui
 npm install
+npm install motion
 npm install --save-dev vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom
 ```
+
+`motion` (the current package name for what used to be published as `framer-motion`) provides the
+spring animation primitives Tasks 21-23 need for drag — critically-damped/bouncy springs, velocity
+handoff on release, and animating from an element's live presentation value rather than a fixed target
+(interruptibility), none of which a plain CSS transition can do.
 
 - [ ] **Step 2: Add the Vitest config to `vite.config.ts`**
 
@@ -1643,6 +1662,64 @@ export const api = {
   retryTask: (id: string) => request<{ ok: true }>(`/tasks/${id}/retry`, { method: "POST" }),
 };
 ```
+
+- [ ] **Step 4.5: Base styles — typography, press feedback, reduced-motion (per the `apple-design` skill)**
+
+Replace the Vite-generated `webui/src/index.css` with:
+
+```css
+/* webui/src/index.css */
+:root {
+  color-scheme: dark;
+  font: 100%/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; /* platform font, comfortable leading */
+}
+
+body { margin: 0; background: #0e0e0e; color: #f0f0f0; }
+
+h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.1; } /* negative tracking, tight leading on large text */
+p, span, div { letter-spacing: 0; } /* near-zero tracking on body text */
+
+button {
+  font: inherit;
+  cursor: pointer;
+  transition: transform 100ms ease-out; /* instant, cheap press feedback */
+}
+button:active { transform: scale(0.97); }
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px) saturate(140%); /* translucent material, not a flat scrim */
+  animation: overlay-materialize 200ms ease-out; /* materialize, don't just fade */
+}
+.overlay-panel {
+  background: rgba(26, 26, 26, 0.85);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 360px;
+  animation: overlay-materialize 200ms ease-out;
+}
+
+@keyframes overlay-materialize {
+  from { opacity: 0; backdrop-filter: blur(0); transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button { transition: none; }
+  button:active { transform: none; }
+  .overlay, .overlay-panel { animation: none; }
+}
+```
+
+Delete `webui/src/App.css` (the Vite template's per-component stylesheet) — this project keeps styling
+inline per-component plus this one shared base file, not a growing pile of CSS-module files.
 
 - [ ] **Step 5: Minimal `App.tsx`/`main.tsx`**
 
@@ -2449,7 +2526,7 @@ button that sets it, and conditionally render `TaskForm` inside the overlay when
 
 ```tsx
 // webui/src/pages/Board.tsx — full file after this step
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api.js";
 import { TaskCard } from "../components/TaskCard.js";
 import { DomainFilter } from "../components/DomainFilter.js";
@@ -2478,14 +2555,6 @@ function loadStoredDomains(): TaskDomain[] {
     return ALL_DOMAINS;
   }
 }
-
-const overlayStyle: CSSProperties = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
-  display: "flex", alignItems: "center", justifyContent: "center",
-};
-const overlayPanelStyle: CSSProperties = {
-  background: "#1a1a1a", padding: 20, borderRadius: 8, minWidth: 360,
-};
 
 export function Board() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -2524,8 +2593,8 @@ export function Board() {
         ))}
       </div>
       {showForm && (
-        <div style={overlayStyle}>
-          <div style={overlayPanelStyle}>
+        <div className="overlay">
+          <div className="overlay-panel">
             <TaskForm mode="create" onDone={() => { setShowForm(false); refetch(); }} />
             <button type="button" onClick={() => setShowForm(false)}>Cancel</button>
           </div>
@@ -2709,16 +2778,16 @@ export function Board() {
         ))}
       </div>
       {showForm && (
-        <div style={overlayStyle}>
-          <div style={overlayPanelStyle}>
+        <div className="overlay">
+          <div className="overlay-panel">
             <TaskForm mode="create" onDone={() => { setShowForm(false); refetch(); }} />
             <button type="button" onClick={() => setShowForm(false)}>Cancel</button>
           </div>
         </div>
       )}
       {selectedTask && (
-        <div style={overlayStyle}>
-          <div style={overlayPanelStyle}>
+        <div className="overlay">
+          <div className="overlay-panel">
             <TaskDetail task={selectedTask} onDone={() => { setSelectedTaskId(null); refetch(); }} />
             <button type="button" onClick={() => setSelectedTaskId(null)}>Close</button>
           </div>
@@ -2842,9 +2911,616 @@ git commit -m "feat: live-refresh the board via SSE on any task change"
 
 ---
 
-## Part C — Deployment (Task 21)
+### Task 21: `useDragCard` — pointer tracking, velocity, hysteresis
 
-### Task 21: DNS, reverse proxy/TLS, deploy build step, and end-to-end verification
+**Files:**
+- Create: `webui/src/hooks/useDragCard.ts`
+- Create: `webui/src/hooks/useDragCard.test.ts`
+
+Pure gesture-tracking logic, decoupled from rendering (per `apple-design` §2/§3): 1:1 offset tracking
+from the exact grab point, a small movement threshold before committing to "this is a drag, not a
+click" (§10), and a short position/timestamp history so a release velocity can be computed (§5). No
+rendering or animation here — that's Task 22.
+
+- [ ] **Step 1: Write the failing tests**
+
+```ts
+// webui/src/hooks/useDragCard.test.ts
+import { describe, it, expect, vi } from "vitest";
+import { renderHook, act } from "@testing-library/react";
+import { useDragCard } from "./useDragCard.js";
+import type { PointerEvent as ReactPointerEvent } from "react";
+
+function fakeEvent(x: number, y: number): ReactPointerEvent {
+  return {
+    clientX: x,
+    clientY: y,
+    pointerId: 1,
+    target: { setPointerCapture: vi.fn(), releasePointerCapture: vi.fn() },
+  } as unknown as ReactPointerEvent;
+}
+
+describe("useDragCard", () => {
+  it("stays not-dragging until movement exceeds the hysteresis threshold", () => {
+    const onRelease = vi.fn();
+    const { result } = renderHook(() => useDragCard({ onRelease, hysteresis: 10 }));
+
+    act(() => result.current.handlers.onPointerDown(fakeEvent(0, 0)));
+    act(() => result.current.handlers.onPointerMove(fakeEvent(3, 3)));
+
+    expect(result.current.state.isDragging).toBe(false);
+  });
+
+  it("becomes dragging and tracks offset 1:1 once past the threshold", () => {
+    const onRelease = vi.fn();
+    const { result } = renderHook(() => useDragCard({ onRelease, hysteresis: 10 }));
+
+    act(() => result.current.handlers.onPointerDown(fakeEvent(0, 0)));
+    act(() => result.current.handlers.onPointerMove(fakeEvent(20, 5)));
+
+    expect(result.current.state.isDragging).toBe(true);
+    expect(result.current.state.offset).toEqual({ x: 20, y: 5 });
+  });
+
+  it("calls onRelease with the final offset, a computed velocity, and the raw release point", () => {
+    const onRelease = vi.fn();
+    const { result } = renderHook(() => useDragCard({ onRelease, hysteresis: 10 }));
+
+    act(() => result.current.handlers.onPointerDown(fakeEvent(0, 0)));
+    act(() => result.current.handlers.onPointerMove(fakeEvent(50, 0)));
+    act(() => result.current.handlers.onPointerUp(fakeEvent(60, 0)));
+
+    expect(onRelease).toHaveBeenCalledTimes(1);
+    const [offset, velocity, releasePoint] = onRelease.mock.calls[0];
+    expect(offset).toEqual({ x: 50, y: 0 }); // offset from grab point, tracked up to the last MOVE
+    expect(typeof velocity.x).toBe("number");
+    expect(releasePoint).toEqual({ x: 60, y: 0 }); // the actual pointer-up screen position
+  });
+
+  it("resets to not-dragging and zero offset after release", () => {
+    const onRelease = vi.fn();
+    const { result } = renderHook(() => useDragCard({ onRelease, hysteresis: 10 }));
+
+    act(() => result.current.handlers.onPointerDown(fakeEvent(0, 0)));
+    act(() => result.current.handlers.onPointerMove(fakeEvent(50, 0)));
+    act(() => result.current.handlers.onPointerUp(fakeEvent(50, 0)));
+
+    expect(result.current.state.isDragging).toBe(false);
+    expect(result.current.state.offset).toEqual({ x: 0, y: 0 });
+  });
+
+  it("does nothing on pointerup if no drag was in progress", () => {
+    const onRelease = vi.fn();
+    const { result } = renderHook(() => useDragCard({ onRelease, hysteresis: 10 }));
+
+    act(() => result.current.handlers.onPointerUp(fakeEvent(0, 0)));
+
+    expect(onRelease).not.toHaveBeenCalled();
+  });
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `cd /Users/patrikfriis/Projects/Unelma/webui && npx vitest run src/hooks/useDragCard.test.ts`
+Expected: FAIL — `Cannot find module './useDragCard.js'`.
+
+- [ ] **Step 3: Implement**
+
+```ts
+// webui/src/hooks/useDragCard.ts
+import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export interface UseDragCardOptions {
+  onRelease: (offset: Point, velocity: Point, releasePoint: Point) => void;
+  hysteresis?: number; // px of movement before it counts as a drag, not a click
+}
+
+interface HistoryEntry {
+  x: number;
+  y: number;
+  t: number;
+}
+
+const HISTORY_LENGTH = 5; // only recent samples matter for velocity
+
+export function useDragCard({ onRelease, hysteresis = 10 }: UseDragCardOptions) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [offset, setOffset] = useState<Point>({ x: 0, y: 0 });
+  const grabStart = useRef<Point | null>(null);
+  const history = useRef<HistoryEntry[]>([]);
+
+  const onPointerDown = useCallback((e: ReactPointerEvent) => {
+    (e.target as Partial<Element>).setPointerCapture?.(e.pointerId); // jsdom in tests has no real impl - safe no-op there
+    grabStart.current = { x: e.clientX, y: e.clientY };
+    history.current = [{ x: e.clientX, y: e.clientY, t: performance.now() }];
+  }, []);
+
+  const onPointerMove = useCallback(
+    (e: ReactPointerEvent) => {
+      if (!grabStart.current) return;
+      const dx = e.clientX - grabStart.current.x;
+      const dy = e.clientY - grabStart.current.y;
+      if (!isDragging && Math.hypot(dx, dy) < hysteresis) return;
+      setIsDragging(true);
+      setOffset({ x: dx, y: dy });
+      history.current.push({ x: e.clientX, y: e.clientY, t: performance.now() });
+      if (history.current.length > HISTORY_LENGTH) history.current.shift();
+    },
+    [isDragging, hysteresis],
+  );
+
+  const onPointerUp = useCallback(
+    (e: ReactPointerEvent) => {
+      if (!grabStart.current) return;
+      (e.target as Partial<Element>).releasePointerCapture?.(e.pointerId);
+      const velocity = computeVelocity(history.current);
+      const finalOffset = offset;
+      const releasePoint: Point = { x: e.clientX, y: e.clientY };
+      grabStart.current = null;
+      setIsDragging(false);
+      setOffset({ x: 0, y: 0 });
+      onRelease(finalOffset, velocity, releasePoint);
+    },
+    [offset, onRelease],
+  );
+
+  return {
+    state: { isDragging, offset },
+    handlers: { onPointerDown, onPointerMove, onPointerUp },
+  };
+}
+
+function computeVelocity(history: HistoryEntry[]): Point {
+  if (history.length < 2) return { x: 0, y: 0 };
+  const first = history[0]!;
+  const last = history[history.length - 1]!;
+  const dtSeconds = (last.t - first.t) / 1000;
+  if (dtSeconds <= 0) return { x: 0, y: 0 };
+  return { x: (last.x - first.x) / dtSeconds, y: (last.y - first.y) / dtSeconds }; // px/s
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `cd /Users/patrikfriis/Projects/Unelma/webui && npx vitest run src/hooks/useDragCard.test.ts`
+Expected: PASS (5 tests)
+
+- [ ] **Step 5: Run the full frontend suite and build**
+
+Run: `cd /Users/patrikfriis/Projects/Unelma/webui && npx vitest run && npm run build`
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd /Users/patrikfriis/Projects/Unelma
+git add webui/src/hooks/useDragCard.ts webui/src/hooks/useDragCard.test.ts
+git commit -m "feat: add pointer drag-tracking hook with velocity and hysteresis"
+```
+
+---
+
+### Task 22: `DraggableTaskCard` — spring-animated drag wrapper
+
+**Files:**
+- Create: `webui/src/components/DraggableTaskCard.tsx`
+- Create: `webui/src/components/DraggableTaskCard.test.tsx`
+
+**BEFORE implementing:** confirm the exact `motion` package export surface against the version actually
+installed (`npm ls motion` in `webui/`) — this plan assumes `motion.div`, `useMotionValue`, and `animate`
+are all importable from `"motion/react"`, matching the package's current docs at the time this plan was
+written, but package export paths do shift between versions and this can't be verified from a sandbox.
+If `animate` isn't exported from `"motion/react"` in the installed version, check `"motion"`'s root
+export instead.
+
+Wraps the presentational `TaskCard` (Task 16) with drag behavior: instant grab feedback (scale + shadow,
+§1), 1:1 tracking while dragging (§2), and on release either commits (handled by the caller) or springs
+back to origin carrying the release velocity (§3, §5, §9) — never a hard, non-interruptible snap.
+
+- [ ] **Step 1: Write the failing tests**
+
+```tsx
+// webui/src/components/DraggableTaskCard.test.tsx
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { DraggableTaskCard } from "./DraggableTaskCard.js";
+import type { Task } from "../types.js";
+
+const TASK: Task = {
+  id: "task-1", title: "Add dark mode", description: "...", domain: "dev", stage: "backlog",
+  priority: 2, assigned_model: null, progress_status: null, repo: "patrikfriis-alt/treeniapp",
+  pr_url: null, result_summary: null, created_at: "2026-09-23T00:00:00Z", updated_at: "2026-09-23T00:00:00Z",
+};
+
+describe("DraggableTaskCard", () => {
+  it("calls onClick on a plain click with no drag movement", () => {
+    const onClick = vi.fn();
+    render(<DraggableTaskCard task={TASK} onClick={onClick} onDragRelease={vi.fn()} />);
+
+    fireEvent.click(screen.getByTestId("draggable-card"));
+
+    expect(onClick).toHaveBeenCalled();
+  });
+
+  it("calls onDragRelease with the task id, offset, velocity, and release point after a real drag", () => {
+    const onDragRelease = vi.fn().mockReturnValue(true);
+    render(<DraggableTaskCard task={TASK} onClick={vi.fn()} onDragRelease={onDragRelease} />);
+    const card = screen.getByTestId("draggable-card");
+
+    fireEvent.pointerDown(card, { clientX: 0, clientY: 0, pointerId: 1 });
+    fireEvent.pointerMove(card, { clientX: 40, clientY: 0, pointerId: 1 });
+    fireEvent.pointerUp(card, { clientX: 40, clientY: 0, pointerId: 1 });
+
+    expect(onDragRelease).toHaveBeenCalledWith(
+      "task-1",
+      expect.objectContaining({ x: 40, y: 0 }),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("does not call onClick after a real drag past the hysteresis threshold", () => {
+    const onClick = vi.fn();
+    render(<DraggableTaskCard task={TASK} onClick={onClick} onDragRelease={vi.fn().mockReturnValue(true)} />);
+    const card = screen.getByTestId("draggable-card");
+
+    fireEvent.pointerDown(card, { clientX: 0, clientY: 0, pointerId: 1 });
+    fireEvent.pointerMove(card, { clientX: 40, clientY: 0, pointerId: 1 });
+    fireEvent.pointerUp(card, { clientX: 40, clientY: 0, pointerId: 1 });
+    fireEvent.click(card);
+
+    expect(onClick).not.toHaveBeenCalled();
+  });
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `cd /Users/patrikfriis/Projects/Unelma/webui && npx vitest run src/components/DraggableTaskCard.test.tsx`
+Expected: FAIL — `Cannot find module './DraggableTaskCard.js'`.
+
+- [ ] **Step 3: Implement**
+
+```tsx
+// webui/src/components/DraggableTaskCard.tsx
+import { useEffect } from "react";
+import { motion, useMotionValue, animate } from "motion/react";
+import { useDragCard, type Point } from "../hooks/useDragCard.js";
+import { TaskCard } from "./TaskCard.js";
+import type { Task } from "../types.js";
+
+export function DraggableTaskCard({
+  task,
+  onClick,
+  onDragRelease,
+}: {
+  task: Task;
+  onClick: () => void;
+  // Returns (or resolves to) whether the drop was accepted. Rejected drops rubber-band back to origin.
+  onDragRelease: (taskId: string, offset: Point, velocity: Point, releasePoint: Point) => Promise<boolean> | boolean;
+}) {
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+
+  const { state, handlers } = useDragCard({
+    onRelease: async (offset, velocity, releasePoint) => {
+      const accepted = await onDragRelease(task.id, offset, velocity, releasePoint);
+      if (accepted) {
+        // The card will vanish from this column on the caller's next refetch - freeze in place,
+        // no animation needed (nothing here is disruptive to interrupt).
+        x.set(0);
+        y.set(0);
+        return;
+      }
+      // Rejected: spring back to origin, carrying the release velocity through the re-target
+      // (§3/§5/§9) - a hard reset here would be exactly the "brick wall" the skill warns against.
+      animate(x, 0, { type: "spring", bounce: 0.2, duration: 0.4, velocity: velocity.x });
+      animate(y, 0, { type: "spring", bounce: 0.2, duration: 0.4, velocity: velocity.y });
+    },
+  });
+
+  // Only drive x/y from the live drag offset while actively dragging - once released, the
+  // animate()/set() calls above are the sole owners of these values. Touching them here
+  // unconditionally on every render would fight (and immediately cancel) the spring-back animation.
+  useEffect(() => {
+    if (state.isDragging) {
+      x.set(state.offset.x);
+      y.set(state.offset.y);
+    }
+  }, [state.isDragging, state.offset.x, state.offset.y, x, y]);
+
+  return (
+    <motion.div
+      data-testid="draggable-card"
+      style={{ x, y, cursor: state.isDragging ? "grabbing" : "grab", touchAction: "none" }}
+      animate={{
+        scale: state.isDragging ? 1.03 : 1,
+        boxShadow: state.isDragging ? "0 8px 24px rgba(0,0,0,0.4)" : "0 0 0 rgba(0,0,0,0)",
+      }}
+      transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+      onPointerDown={handlers.onPointerDown}
+      onPointerMove={handlers.onPointerMove}
+      onPointerUp={handlers.onPointerUp}
+      onClick={() => {
+        if (!state.isDragging) onClick();
+      }}
+    >
+      <TaskCard task={task} />
+    </motion.div>
+  );
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `cd /Users/patrikfriis/Projects/Unelma/webui && npx vitest run src/components/DraggableTaskCard.test.tsx`
+Expected: PASS (3 tests)
+
+- [ ] **Step 5: Run the full frontend suite and build**
+
+Run: `cd /Users/patrikfriis/Projects/Unelma/webui && npx vitest run && npm run build`
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd /Users/patrikfriis/Projects/Unelma
+git add webui/src/components/DraggableTaskCard.tsx webui/src/components/DraggableTaskCard.test.tsx
+git commit -m "feat: add spring-animated draggable task card wrapper"
+```
+
+---
+
+### Task 23: Board drag-and-drop integration — hit-testing, valid transitions, rubber-banding
+
+**Files:**
+- Create: `webui/src/lib/dragLogic.ts`
+- Create: `webui/src/lib/dragLogic.test.ts`
+- Modify: `webui/src/pages/Board.tsx`
+- Modify: `webui/src/pages/Board.test.tsx`
+
+Only two column-boundaries are real backend transitions (spec decision, confirmed during brainstorming):
+Blocked→Backlog (retry) and Backlog→Ready (promote). Every other drop — including back onto the card's
+own column — rubber-bands back via `DraggableTaskCard`'s own reject path (Task 22); this task only
+decides *which* drops are valid and dispatches the matching API call.
+
+- [ ] **Step 1: Write the failing tests for the pure logic**
+
+```ts
+// webui/src/lib/dragLogic.test.ts
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { resolveDragAction, project, hitTestColumn } from "./dragLogic.js";
+
+describe("resolveDragAction", () => {
+  it("resolves blocked -> backlog as a retry", () => {
+    expect(resolveDragAction("blocked", "backlog")).toBe("retry");
+  });
+
+  it("resolves backlog -> ready as a promote", () => {
+    expect(resolveDragAction("backlog", "ready")).toBe("promote");
+  });
+
+  it("resolves any other pair as null (not a real transition)", () => {
+    expect(resolveDragAction("backlog", "backlog")).toBeNull();
+    expect(resolveDragAction("ready", "in_progress")).toBeNull();
+    expect(resolveDragAction("review", "done")).toBeNull();
+    expect(resolveDragAction("backlog", null)).toBeNull();
+  });
+});
+
+describe("project", () => {
+  it("returns 0 for 0 velocity", () => {
+    expect(project(0)).toBe(0);
+  });
+
+  it("projects further for higher velocity", () => {
+    expect(project(500)).toBeGreaterThan(project(100));
+  });
+
+  it("projects backward for negative velocity", () => {
+    expect(project(-500)).toBeLessThan(0);
+  });
+});
+
+describe("hitTestColumn", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("returns the stage of the column element under the given point", () => {
+    const columnEl = { getAttribute: () => "ready" };
+    const target = { closest: () => columnEl };
+    vi.spyOn(document, "elementFromPoint").mockReturnValue(target as unknown as Element);
+
+    expect(hitTestColumn({ x: 10, y: 10 }, { x: 0, y: 0 })).toBe("ready");
+  });
+
+  it("falls back to the velocity-projected point when the raw point misses", () => {
+    const columnEl = { getAttribute: () => "backlog" };
+    const hitTarget = { closest: () => columnEl };
+    const missTarget = { closest: () => null };
+    vi.spyOn(document, "elementFromPoint")
+      .mockReturnValueOnce(missTarget as unknown as Element) // raw point: miss
+      .mockReturnValueOnce(hitTarget as unknown as Element); // projected point: hit
+
+    expect(hitTestColumn({ x: 10, y: 10 }, { x: 800, y: 0 })).toBe("backlog");
+  });
+
+  it("returns null when both the raw and projected points miss", () => {
+    vi.spyOn(document, "elementFromPoint").mockReturnValue(null);
+    expect(hitTestColumn({ x: 10, y: 10 }, { x: 0, y: 0 })).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `cd /Users/patrikfriis/Projects/Unelma/webui && npx vitest run src/lib/dragLogic.test.ts`
+Expected: FAIL — `Cannot find module './dragLogic.js'`.
+
+- [ ] **Step 3: Implement `dragLogic.ts`**
+
+```ts
+// webui/src/lib/dragLogic.ts
+import type { TaskStage } from "../types.js";
+import type { Point } from "../hooks/useDragCard.js";
+
+export function resolveDragAction(from: TaskStage, to: TaskStage | null): "retry" | "promote" | null {
+  if (from === "blocked" && to === "backlog") return "retry";
+  if (from === "backlog" && to === "ready") return "promote";
+  return null;
+}
+
+// Apple's exponential-decay momentum projection (Designing Fluid Interfaces, WWDC 2018) -
+// where a flick of this velocity would "land" if it decelerated naturally, in px.
+export function project(velocity: number, decelerationRate = 0.998): number {
+  return ((velocity / 1000) * decelerationRate) / (1 - decelerationRate);
+}
+
+function elementColumnStage(point: Point): TaskStage | null {
+  const el = document.elementFromPoint(point.x, point.y);
+  const columnEl = el?.closest("[data-column-stage]");
+  return (columnEl?.getAttribute("data-column-stage") as TaskStage | null) ?? null;
+}
+
+// Checks the raw release point first; if that misses, checks where the gesture's momentum would
+// have carried it (§6) - so a fast flick that's released just short of a column boundary still
+// counts, matching "take a small input and make a big output."
+export function hitTestColumn(releasePoint: Point, velocity: Point): TaskStage | null {
+  const raw = elementColumnStage(releasePoint);
+  if (raw) return raw;
+  const projected: Point = {
+    x: releasePoint.x + project(velocity.x),
+    y: releasePoint.y + project(velocity.y),
+  };
+  return elementColumnStage(projected);
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `cd /Users/patrikfriis/Projects/Unelma/webui && npx vitest run src/lib/dragLogic.test.ts`
+Expected: PASS (9 tests)
+
+- [ ] **Step 5: Write the failing test for the Board wiring**
+
+Add to `Board.test.tsx`:
+
+```tsx
+import { api } from "../api.js";
+vi.mock("../api.js", () => ({
+  api: { listTasks: vi.fn(), retryTask: vi.fn(), promoteTask: vi.fn() },
+}));
+
+// ... existing TASK helper and tests unchanged ...
+
+describe("Board drag-and-drop", () => {
+  it("renders each column with a data-column-stage attribute matching its stage", async () => {
+    (api.listTasks as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const { container } = render(<Board />);
+    await screen.findByText("Backlog");
+
+    for (const stage of ["backlog", "ready", "in_progress", "review", "blocked", "done"]) {
+      expect(container.querySelector(`[data-column-stage="${stage}"]`)).not.toBeNull();
+    }
+  });
+});
+```
+
+- [ ] **Step 6: Run test to verify it fails**
+
+Run: `cd /Users/patrikfriis/Projects/Unelma/webui && npx vitest run src/pages/Board.test.tsx`
+
+- [ ] **Step 7: Wire `DraggableTaskCard` + drag handling into `Board.tsx`**
+
+```tsx
+// webui/src/pages/Board.tsx — changes on top of Task 20's version
+import { DraggableTaskCard } from "../components/DraggableTaskCard.js";
+import { resolveDragAction, hitTestColumn } from "../lib/dragLogic.js";
+import type { Point } from "../hooks/useDragCard.js";
+// ... other imports unchanged ...
+
+export function Board() {
+  // ... existing state (tasks, domains, showForm, selectedTaskId) and
+  // useEffect/handleDomainChange/refetch/useRealtimeTasks unchanged from Tasks 17-20 ...
+
+  async function handleDragRelease(
+    taskId: string,
+    _offset: Point,
+    velocity: Point,
+    releasePoint: Point,
+  ): Promise<boolean> {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return false;
+
+    const targetStage = hitTestColumn(releasePoint, velocity);
+    const action = resolveDragAction(task.stage, targetStage);
+    if (!action) return false;
+
+    try {
+      if (action === "retry") await api.retryTask(taskId);
+      if (action === "promote") await api.promoteTask(taskId);
+      refetch();
+      return true;
+    } catch (err) {
+      console.error(`Failed to ${action} task via drag:`, err);
+      return false;
+    }
+  }
+
+  // ... visibleTasks, selectedTask unchanged ...
+
+  return (
+    <div style={{ padding: 16 }}>
+      {/* ... DomainFilter + New Task button row unchanged ... */}
+      <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
+        {COLUMNS.map(({ stage, label }) => (
+          <div key={stage} data-column-stage={stage} style={{ flex: 1, minWidth: 0 }}>
+            <h3>{label}</h3>
+            {visibleTasks.filter((t) => t.stage === stage).map((t) => (
+              <DraggableTaskCard
+                key={t.id}
+                task={t}
+                onClick={() => setSelectedTaskId(t.id)}
+                onDragRelease={handleDragRelease}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+      {/* ... showForm/selectedTask overlays unchanged from Task 19 ... */}
+    </div>
+  );
+}
+```
+
+(Replace the plain `<div onClick=... style={{cursor:"pointer"}}><TaskCard task={t} /></div>` wrapper
+from Task 19 with `<DraggableTaskCard>` above — `TaskCard` itself, Task 16's component, is unchanged;
+`DraggableTaskCard` already renders it internally.)
+
+- [ ] **Step 8: Run tests to verify they pass**
+
+Run: `cd /Users/patrikfriis/Projects/Unelma/webui && npx vitest run`
+
+- [ ] **Step 9: Run the full frontend suite and build**
+
+Run: `cd /Users/patrikfriis/Projects/Unelma/webui && npx vitest run && npm run build`
+
+- [ ] **Step 10: Commit**
+
+```bash
+cd /Users/patrikfriis/Projects/Unelma
+git add webui/src/lib/dragLogic.ts webui/src/lib/dragLogic.test.ts webui/src/pages/Board.tsx webui/src/pages/Board.test.tsx
+git commit -m "feat: wire card drag-and-drop with column hit-testing and rubber-band rejection"
+```
+
+---
+
+## Part C — Deployment (Task 24)
+
+### Task 24: DNS, reverse proxy/TLS, deploy build step, and end-to-end verification
 
 **Files:** none (infrastructure + manual verification, matching Phase 1's Task 16 pattern)
 
@@ -2870,7 +3546,8 @@ unelmaboard.com {
 
 handles cert issuance and renewal automatically. Exact install command depends on the OS package
 available at implementation time (`sudo apt install caddy` via Caddy's official apt repo, similar
-process to Task 16's `gh` install).
+process to the `gh` install in Phase 1's plan, `docs/superpowers/plans/2026-09-21-personal-assistant-phase1-plan.md`,
+Task 16).
 
 - [ ] **Step 3: Add the frontend build to the deploy path**
 
@@ -2924,8 +3601,13 @@ events end to end (the one genuinely unverifiable-from-a-sandbox assumption this
 
 **Spec coverage:** every section of `2026-09-23-kanban-web-ui-design.md` maps to a task — architecture
 (Tasks 4, 12, 13), data model (Task 1), board layout (Tasks 15-16), cards/filtering (Tasks 16-17), task
-actions (Tasks 7-10, 18-19), auth (Tasks 3-4), hosting (Task 21). The retry-target decision (backlog,
+actions (Tasks 7-10, 18-19), auth (Tasks 3-4), hosting (Task 24). The retry-target decision (backlog,
 not straight to ready) is reflected in Task 10's implementation exactly as decided during brainstorming.
+Drag-and-drop (Tasks 21-23) and its "only 2 of 6 column-boundaries are real, everything else
+rubber-bands" scoping were decided in a follow-up round of brainstorming after the spec was written
+(triggered by explicitly invoking the `apple-design` skill) — not reflected in the spec document itself,
+since the spec predates that decision. Worth a follow-up edit to the spec to record this scoping
+decision permanently, rather than leaving it only in this plan.
 
 **Type consistency:** `Task`/`TaskStage`/`TaskDomain` in `webui/src/types.ts` mirror the backend's
 `AssistantTask`/`TaskStage`/`TaskDomain` from `src/types.ts` by name and shape — kept as a separate,
@@ -2933,10 +3615,15 @@ intentionally-duplicated type file (the frontend is a genuinely separate package
 `package.json`/build, not sharing TS types across the Vite/tsc boundary without real module-resolution
 work that isn't worth it for a handful of fields). `WebServerDeps` in `src/webui/server.ts` is extended
 incrementally across Tasks 4-11 exactly as `SchedulerDeps` was extended incrementally in Phase 1 — each
-extension's test includes every field defined so far.
+extension's test includes every field defined so far. `Point` (from `useDragCard.ts`, Task 21) is reused
+by name in `DraggableTaskCard.tsx` (Task 22) and `dragLogic.ts` (Task 23) rather than redefined.
 
 **Honesty about unresolved specifics:** Task 11 explicitly flags the Supabase Realtime publication
-requirement as something that must be verified against the real project, not assumed. Task 21 explicitly
-defers the Caddy-vs-nginx choice and the Cloudflare-proxy-vs-DNS-only decision to implementation time,
-consistent with how Phase 1's plan handled its own genuinely-unverifiable-from-a-sandbox specifics
-(Tasks 5, 13, 14, 15 there).
+requirement as something that must be verified against the real project, not assumed. Task 22 flags the
+exact `motion` package export surface (`motion/react` vs `motion`) as needing confirmation against the
+actually-installed version. Task 24 explicitly defers the Caddy-vs-nginx choice and the
+Cloudflare-proxy-vs-DNS-only decision to implementation time, consistent with how Phase 1's plan handled
+its own genuinely-unverifiable-from-a-sandbox specifics (Tasks 5, 13, 14, 15 there). The spring
+`damping`/`response` values throughout Tasks 21-23 are explicitly flagged in this plan's header as a
+starting point to tune, not a source-verified constant — unlike, say, the `project()` deceleration-rate
+constant (`0.998`), which comes directly from Apple's own published sample code and isn't a guess.
