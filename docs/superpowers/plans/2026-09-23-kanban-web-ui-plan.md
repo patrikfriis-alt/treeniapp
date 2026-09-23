@@ -536,7 +536,10 @@ export function createWebServer(deps: WebServerDeps): Express {
 
   if (deps.staticDir) {
     app.use(express.static(deps.staticDir));
-    app.get("*", (_req, res) => {
+    // A bare "*" string throws at registration time on Express 5's path-to-regexp v8 - a
+    // regex route matcher works identically across versions and isn't tied to a
+    // version-specific wildcard string syntax at all.
+    app.get(/.*/, (_req, res) => {
       res.sendFile(path.join(deps.staticDir!, "index.html"));
     });
   }
