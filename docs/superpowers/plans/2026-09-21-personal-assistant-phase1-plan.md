@@ -707,12 +707,9 @@ git commit -m "feat: add /promote command, manual executor choice for dev tasks"
 - Create: `src/assistant/claudeCli.ts`
 - Create: `src/assistant/claudeCli.test.ts`
 
-**BEFORE implementing this task:** run `claude --help` (and check current Claude Code CLI docs) on a machine with the CLI installed, and confirm:
-1. The exact flag for one-shot non-interactive execution (this plan assumes `--print` / `-p`).
-2. The exact flag for skipping interactive tool-use approval when no human is present to approve (this plan assumes `--dangerously-skip-permissions` — a real, documented flag for unattended/CI use, but confirm it still exists under this name).
-3. Whether `--output-format json` (or similar) is available to get structured success/failure info instead of parsing free-text stdout.
+**Verified 2026-09-21 against a real installed `claude` CLI (`claude --help`):** `--print`/`-p` and `--dangerously-skip-permissions` are both real, current flags — confirmed, no longer an open question. `--output-format json` also exists (choices: `text`, `json`, `stream-json`) but its exact JSON schema wasn't verified here (would need a real authenticated run to inspect) — not used in this task's implementation below; revisit as a future improvement once the schema is confirmed on the VPS, rather than parsing a guessed-at shape now.
 
-If any of these differ from what's below, update the implementation accordingly — do not implement against unverified assumptions.
+**Still genuinely open (deferred to Task 13, not this task):** there is no `CLAUDE_CONFIG_DIR` flag or any other per-invocation config/credentials-directory override visible in `claude --help` — the interface below accepts a generic `env` override object instead of a hardcoded config-dir field, so whatever mechanism Task 13 lands on (separate Unix accounts, a `HOME` override, or something else) can be plugged in here without changing this file again.
 
 This wrapper only handles *spawning the CLI and capturing its result*; it does not know about git, worktrees, or Supabase — those are Task 6 and Task 8's job. Keeping this narrow makes it mockable via `child_process` in every other task's tests.
 
@@ -745,7 +742,7 @@ describe("runClaudeHeadless", () => {
     const resultPromise = runClaudeHeadless({
       prompt: "tee jotain",
       cwd: "/tmp/task-1",
-      configDir: "/home/saleikko/.claude-account-1",
+      env: { CLAUDE_IDENTITY_EXAMPLE: "account-1" },
     });
 
     child.stdout.emit("data", Buffer.from("valmis\n"));
@@ -758,7 +755,7 @@ describe("runClaudeHeadless", () => {
       expect.arrayContaining(["--print", "tee jotain", "--dangerously-skip-permissions"]),
       expect.objectContaining({
         cwd: "/tmp/task-1",
-        env: expect.objectContaining({ CLAUDE_CONFIG_DIR: "/home/saleikko/.claude-account-1" }),
+        env: expect.objectContaining({ CLAUDE_IDENTITY_EXAMPLE: "account-1" }),
       }),
     );
   });
@@ -770,7 +767,7 @@ describe("runClaudeHeadless", () => {
     const resultPromise = runClaudeHeadless({
       prompt: "tee jotain",
       cwd: "/tmp/task-1",
-      configDir: "/home/saleikko/.claude-account-1",
+      env: {},
     });
 
     child.stderr.emit("data", Buffer.from("virhe\n"));
@@ -787,7 +784,7 @@ describe("runClaudeHeadless", () => {
     const resultPromise = runClaudeHeadless({
       prompt: "tee jotain",
       cwd: "/tmp/task-1",
-      configDir: "/home/saleikko/.claude-account-1",
+      env: {},
     });
 
     child.emit("error", new Error("spawn claude ENOENT"));
@@ -812,7 +809,12 @@ import { spawn } from "node:child_process";
 export interface RunClaudeHeadlessOptions {
   prompt: string;
   cwd: string;
-  configDir: string;
+  // Extra/override env vars for identifying which Claude account this
+  // invocation should authenticate as. The exact variable(s) needed are
+  // decided in Task 13 (no dedicated CLI flag for this was found as of
+  // 2026-09-21 - see that task for the resolved mechanism) - this stays
+  // a generic bag so that decision doesn't require touching this file.
+  env: Record<string, string>;
 }
 
 export interface RunClaudeHeadlessResult {
@@ -830,7 +832,7 @@ export function runClaudeHeadless(
       "--dangerously-skip-permissions",
     ], {
       cwd: options.cwd,
-      env: { ...process.env, CLAUDE_CONFIG_DIR: options.configDir },
+      env: { ...process.env, ...options.env },
     });
 
     let stdout = "";
@@ -1112,6 +1114,8 @@ git commit -m "feat: add PR-verification helper via gh pr list"
 - Create: `src/assistant/devExecutor.test.ts`
 
 Ties Tasks 5–7 together into the actual per-task flow: mark `in_progress` → set up workspace → invoke `claude` headlessly → verify a PR exists → mark `review` (with `pr_url`) or `blocked` (with a note) → always tear down the workspace.
+
+**Note on `claudeConfigDir` below:** Task 5 changed `runClaudeHeadless` to accept a generic `env: Record<string, string>` bag rather than a specific `configDir` field, since no real per-invocation config-directory flag was found for the `claude` CLI (see Task 5's notes). This task and Tasks 9/10/12/13 still use `claudeConfigDir: string` as a placeholder field name for "which account identity to use" — Task 13 resolves the actual mechanism and env var name(s). When implementing this task, either wire `options.claudeConfigDir` through as a single-key `env` object using whatever provisional key makes the tests pass (e.g. `{ CLAUDE_CONFIG_DIR: options.claudeConfigDir }`) and revisit it when Task 13 lands, or implement Task 13 first and come back — either order works, just don't treat the env var name used here as confirmed.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1915,7 +1919,11 @@ git commit -m "feat: add morning brief cron job"
 - Modify: `src/scheduler/index.ts`
 - Modify: `src/scheduler/index.test.ts`
 
-**BEFORE implementing:** confirm `CLAUDE_CONFIG_DIR` (used in Task 5) is genuinely the correct, current mechanism for pointing the `claude` CLI at a second, independently-authenticated account/config on the same machine — verify against current Claude Code CLI docs, since this is the crux of the whole parallelism feature.
+**BEFORE implementing — this is the crux of the whole parallelism feature and is NOT yet resolved.** `claude --help` (checked 2026-09-21, real installed CLI) has no `--config-dir`-style flag and no documented env var for pointing at a second account's credentials in a single invocation. Two real candidates to actually test on the VPS before writing this task's code:
+1. **Separate Unix accounts** — create a second system user (e.g. `saleikko-2`), have it run `claude auth login` (or `claude setup-token`) under its own `$HOME`, and invoke it via `sudo -u saleikko-2 claude ...` from the orchestrator. Most likely to work cleanly since `claude` almost certainly stores its config under `$HOME` like most CLI tools, but adds a real user-management step to Task 16's manual setup.
+2. **`HOME` env override per subprocess** — try setting `env: { ...process.env, HOME: "/home/saleikko/.claude-account-2-home" }` in the `spawn()` call and see if `claude` respects it for locating its config/credentials. Simpler if it works, unconfirmed.
+
+Whichever works, wire it into `runClaudeHeadless`'s `env` param (from Task 5) using the real key(s) discovered — update Task 5/8's `claudeConfigDir` placeholder naming to match once this is confirmed, rather than leaving mismatched terminology across the codebase.
 
 - [ ] **Step 1: Add second account config**
 

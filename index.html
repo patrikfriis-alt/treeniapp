@@ -82,7 +82,7 @@ body {
 }
 
 /* ─── Display font (headlines, big numbers) ─────────────────── */
-.koonti-greeting, .hero-metric-val, .hero-name, .hero-stat-val, .ex-block-title, .set-tnum, .set-tinput,
+.koonti-greeting, .hero-metric-val, .hero-name, .hero-stat-val, .ex-block-title, .set-tnum, .set-tinput, .set-collapsed-summary,
 .seuranta-hero-main, .seuranta-hero-stat-val, .food-hero-main, .food-hero-stat-val, .tilastot-card-kcal {
   font-family: 'Tanker', sans-serif;
 }
@@ -718,7 +718,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
 }
 .set-table-row.is-collapsed .set-collapsed { display: flex; }
 .set-collapsed-summary {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text2);
   font-variant-numeric: tabular-nums;
@@ -727,6 +727,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
   gap: 8px;
 }
 .set-collapsed .delta {
+  font-family: 'Satoshi', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
   font-size: var(--fs-2xs);
   font-weight: 700;
   padding: 1px 6px;
@@ -2497,6 +2498,16 @@ function expandSetRow(o, d, e, s) {
   if (box) box.classList.remove('is-collapsed');
 }
 
+// Manually typed sets collapse once focus leaves the row (kg → reps stays open)
+// and both fields are filled, so typed and tap-confirmed sets end up looking the same.
+function collapseSetRowOnLeave(ev, o, d, e, s) {
+  const box = ev.currentTarget;
+  if (ev.relatedTarget && box.contains(ev.relatedTarget)) return;
+  const sd = getED(o, d, getActiveSession(o, d), e).sets?.[s] || {};
+  if (!sd.kg || !sd.reps || sd.prefilled) return;
+  box.classList.add('is-collapsed');
+}
+
 function calcSleepScore(row) {
   return row && row.sleep_score != null ? row.sleep_score : null;
 }
@@ -3705,7 +3716,7 @@ async function renderSession(requestId) {
       const repsDisplay = escapeHtml(String(sd.reps || '?'));
       const summaryText = `${kgDisplay} kg × ${repsDisplay}<span class="delta ${deltaCls}">${deltaIcon} ${prevStr}</span>`;
 
-      html += `<div class="set-table-row s-${status}${isCollapsed ? ' is-collapsed' : ''}${isNext ? ' is-next' : ''}" id="set-${wOff}-${aDay}-${exId}-${s}">
+      html += `<div class="set-table-row s-${status}${isCollapsed ? ' is-collapsed' : ''}${isNext ? ' is-next' : ''}" id="set-${wOff}-${aDay}-${exId}-${s}" onfocusout="collapseSetRowOnLeave(event,${wOff},${aDay},${exId},${s})">
         <div class="set-expanded">
           <span class="set-tnum"${confirmTap}>${s + 1}<span class="set-check" id="set-check-${wOff}-${aDay}-${exId}-${s}"${checkVisible ? '' : ' style="display:none"'}>✓</span></span>
           <input class="set-tinput" type="text" inputmode="decimal" placeholder="kg" autocomplete="off" name="set-kg-${wOff}-${aDay}-${exId}-${s}"
