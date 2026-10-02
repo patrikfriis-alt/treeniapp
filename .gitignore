@@ -2,3 +2,5 @@
 /specs/
 scripts/fineli-extra-nutrients-import-*.sql
 .superdesign/tmp/
+.DS_Store
+.superdesign/resume.json
