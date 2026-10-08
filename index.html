@@ -1976,6 +1976,76 @@ const isStarted  = (o, d, st) => LD[`${dKey(o,d,st)}_started`] === true;
 const setStarted = (o, d, st, v) => { LD[`${dKey(o,d,st)}_started`] = v; saveLD(); };
 const getED      = (o, d, st, e) => LD[eKey(o, d, st, e)] || { sets: [] };
 
+/* ═══ KAAVIOT — yhteinen ilme ═══════════════════════════════════
+   Palette validated with the dataviz skill (validate_palette.js --mode dark --surface #121214):
+   lightness band, chroma, CVD separation, normal-vision floor and contrast all pass.
+   Every chart builds its datasets/options from these helpers so the app has one look. */
+const CHART_COLORS = { s1: '#10a2b0', s2: '#c98500', s3: '#9085e9', ref: '#8a8a93', tick: '#8a8a93', grid: 'rgba(255,255,255,0.06)' };
+const CHART_FONT = { size: 10 };
+const FI_NUM = new Intl.NumberFormat('fi-FI', { maximumFractionDigits: 1 });
+function fmtNum(v, unit = '') { return v == null || isNaN(v) ? '—' : FI_NUM.format(v) + unit; }
+function isoToLocalDate(iso) { const [y, m, d] = String(iso).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); }
+function fmtDayShort(iso) { const d = isoToLocalDate(iso); return `${d.getDate()}.${d.getMonth() + 1}.`; }
+function fmtDayLong(iso) {
+  const d = isoToLocalDate(iso);
+  return `${d.toLocaleDateString('fi-FI', { weekday: 'short' })} ${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`;
+}
+
+// A line series in the shared style. Dense series (> 20 points) hide points until hovered.
+function lineDataset(label, data, color = CHART_COLORS.s1, extra = {}) {
+  const dense = data.filter(v => v != null).length > 20;
+  return {
+    label, data, borderColor: color, backgroundColor: color, borderWidth: 2,
+    pointRadius: dense ? 0 : 3, pointHoverRadius: 5, pointBackgroundColor: color, pointBorderWidth: 0,
+    cubicInterpolationMode: 'monotone', fill: false, spanGaps: true, ...extra,
+  };
+}
+
+// Dashed horizontal goal/target line spanning all n labels.
+function referenceLineDataset(label, value, n) {
+  return {
+    type: 'line', label, data: Array(n).fill(value), isReference: true,
+    borderColor: CHART_COLORS.ref, backgroundColor: CHART_COLORS.ref, borderWidth: 1.5, borderDash: [6, 4],
+    pointRadius: 0, pointHoverRadius: 0, fill: false, order: 10,
+  };
+}
+
+// Shared options. dateLabels: labels are ISO dates (formatted here). unit: appended to values.
+// y / x: merged into the scale (e.g. { min, max, reverse, title }).
+function baseChartOptions({ dateLabels = false, unit = '', legend = false, y = {}, x = {} } = {}) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: {
+        display: legend,
+        labels: { color: CHART_COLORS.tick, font: CHART_FONT, usePointStyle: true, pointStyle: 'circle', boxWidth: 8, boxHeight: 8 },
+      },
+      tooltip: {
+        callbacks: {
+          title: items => (items.length ? (dateLabels ? fmtDayLong(items[0].label) : items[0].label) : ''),
+          label: item => `${item.dataset.label}: ${fmtNum(item.parsed.y, unit)}`,
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false }, border: { display: false },
+        ticks: {
+          color: CHART_COLORS.tick, font: CHART_FONT, maxRotation: 0, autoSkip: true, maxTicksLimit: 6,
+          ...(dateLabels ? { callback(v) { return fmtDayShort(this.getLabelForValue(v)); } } : {}),
+        },
+        ...x,
+      },
+      y: {
+        grid: { color: CHART_COLORS.grid }, border: { display: false },
+        ticks: { color: CHART_COLORS.tick, font: CHART_FONT, maxTicksLimit: 6, callback: v => fmtNum(v, unit) },
+        ...y,
+      },
+    },
+  };
+}
+
 const syncTimers = {};
 const charts = {};
 let forecastState = null;        // { latest, profile, forecast } tai null
