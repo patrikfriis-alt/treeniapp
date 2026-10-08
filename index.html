@@ -4335,6 +4335,11 @@ async function renderForecastChart(startIso, endIso, profile, forecast) {
       const iso = localIso(d);
       if (iso >= startIso && iso <= endIso) liveForecastByDate[iso] = r.totalWeight;
     });
+    // Start the forecast line at the latest actual value so actual → forecast is one continuous path.
+    const startIsoLive = forecastState.latest.measured_at;
+    if (startIsoLive >= startIso && startIsoLive <= endIso && forecastState.latest.weight_kg != null) {
+      liveForecastByDate[startIsoLive] = round1(forecastState.latest.weight_kg);
+    }
   }
 
   const historicalByDate = {};
@@ -4369,27 +4374,15 @@ async function renderForecastChart(startIso, endIso, profile, forecast) {
   const hasLive = liveData.some(v => v != null);
   const hasHistorical = historicalData.some(v => v != null);
 
-  const datasets = [
-    { label: 'Toteuma', data: actualData, borderColor: '#8a2be2', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#8a2be2', tension: .3, fill: false, spanGaps: true },
-  ];
-  if (hasLive) {
-    datasets.push({ label: 'Ennuste', data: liveData, borderColor: 'rgba(29,158,117,0.5)', borderDash: [5, 5], borderWidth: 2, pointRadius: 0, tension: .3, fill: false, spanGaps: true });
-  }
-  if (hasHistorical) {
-    datasets.push({ label: 'Mennyt ennuste', data: historicalData, borderColor: 'rgba(150,150,150,0.6)', borderDash: [2, 3], borderWidth: 1.5, pointRadius: 0, tension: .3, fill: false, spanGaps: true });
-  }
+  const datasets = [lineDataset('Toteuma', actualData, CHART_COLORS.s1)];
+  if (hasLive) datasets.push(lineDataset('Ennuste', liveData, CHART_COLORS.s2, { borderDash: [6, 4], pointRadius: 0 }));
+  if (hasHistorical) datasets.push(lineDataset('Mennyt ennuste', historicalData, CHART_COLORS.ref, { borderDash: [2, 3], borderWidth: 1.5, pointRadius: 0 }));
+  if (profile && profile.target_weight_kg != null) datasets.push(referenceLineDataset('Tavoitepaino', Number(profile.target_weight_kg), labels.length));
 
   charts.forecast = new Chart(document.getElementById('forecast-chart'), {
     type: 'line',
-    data: { labels: labels.map(d => d.slice(5)), datasets },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, labels: { boxWidth: 10, font: { size: 10 } } } },
-      scales: {
-        y: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#222' } },
-        x: { ticks: { color: '#555', font: { size: 10 } }, grid: { display: false } },
-      },
-    },
+    data: { labels, datasets },
+    options: baseChartOptions({ dateLabels: true, unit: ' kg', legend: true }),
   });
 }
 
