@@ -1512,10 +1512,13 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
     </div>
     <div class="card">
       <div class="card-title">Kehitys</div>
-      <div class="chart-subtitle">Paino (kg)</div>
+      <div class="chart-subtitle" id="body-weight-subtitle">Paino (kg)</div>
       <div class="chart-wrap"><canvas id="body-chart"></canvas></div>
+      <div id="body-comp-section">
       <div class="chart-subtitle" style="margin-top:14px">Rasva% ja lihas%</div>
       <div class="chart-wrap" style="height:150px"><canvas id="body-comp-chart"></canvas></div>
+      </div>
+      <div class="chart-subtitle" id="body-comp-empty" style="display:none">Ei rasva- tai lihasmittauksia vielä</div>
       <div style="font-size:var(--fs-xs);color:var(--text3);text-align:center;margin-top:6px;">Viiva = viikon keskiarvo · haaleat pisteet = yksittäiset mittaukset</div>
     </div>
     <div class="card" id="forecast-card">
@@ -1985,9 +1988,10 @@ const getED      = (o, d, st, e) => LD[eKey(o, d, st, e)] || { sets: [] };
    lightness band, chroma, CVD separation, normal-vision floor and contrast all pass.
    Every chart builds its datasets/options from these helpers so the app has one look. */
 const CHART_COLORS = { s1: '#10a2b0', s2: '#c98500', s3: '#9085e9', ref: '#8a8a93', tick: '#8a8a93', grid: 'rgba(255,255,255,0.06)' };
+const TARGET_LINE_MAX_GAP_KG = 5;
 const CHART_FONT = { size: 10 };
 const FI_NUM = new Intl.NumberFormat('fi-FI', { maximumFractionDigits: 1 });
-function fmtNum(v, unit = '') { return v == null || isNaN(v) ? '—' : FI_NUM.format(v) + unit; }
+function fmtNum(v, unit = '') { if (v == null || isNaN(v)) return '—'; const n = Math.round(v * 10) / 10 || 0; return FI_NUM.format(n) + unit; }
 function isoToLocalDate(iso) { const [y, m, d] = String(iso).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); }
 function fmtDayShort(iso) { const d = isoToLocalDate(iso); return `${d.getDate()}.${d.getMonth() + 1}.`; }
 function fmtDayLong(iso) {
@@ -2048,6 +2052,15 @@ function baseChartOptions({ dateLabels = false, unit = '', legend = false, y = {
       },
     },
   };
+}
+
+// Legend click hides/shows a weekly line together with its faded measurement dots (next dataset).
+function toggleSeriesWithDots(e, item, legend) {
+  const chart = legend.chart, i = item.datasetIndex, hide = chart.isDatasetVisible(i);
+  chart.setDatasetVisibility(i, !hide);
+  const next = chart.data.datasets[i + 1];
+  if (next && next.kind === 'measurement') chart.setDatasetVisibility(i + 1, !hide);
+  chart.update();
 }
 
 const syncTimers = {};
@@ -4041,7 +4054,7 @@ async function loadBodyMetrics() {
     const weekLabel = w => (w.year === thisYear ? `vk ${w.week}` : `vk ${w.week}/${String(w.year).slice(2)}`);
     const labels = shown.map(weekLabel);
 
-    if (charts.bodyComp) charts.bodyComp.destroy();
+    if (charts.bodyComp) { charts.bodyComp.destroy(); charts.bodyComp = null; }
     // Faded individual measurements behind a weekly line, stacked on their week.
     const dotsFor = (field, color) => ({
       label: 'Mittaus', kind: 'measurement', showLine: false, order: 2,
@@ -4068,10 +4081,17 @@ async function loadBodyMetrics() {
 
     const weightSets = [weekLine('Paino', 'weight_kg', CHART_COLORS.s1), dotsFor('weight_kg', CHART_COLORS.s1)];
     const target = profile && profile.target_weight_kg != null ? Number(profile.target_weight_kg) : null;
-    if (target != null) weightSets.push(referenceLineDataset('Tavoitepaino', target, labels.length));
-    const weightOpts = baseChartOptions({ unit: ' kg', legend: target != null });
+    // Target line only when it is within reach of the plotted values; otherwise shown as text.
+    const plottedKg = [...weightSets[0].data, ...weightSets[1].data.map(p => p.y)].filter(v => v != null);
+    const showTargetLine = target != null && plottedKg.length > 0
+      && target >= Math.min(...plottedKg) - TARGET_LINE_MAX_GAP_KG && target <= Math.max(...plottedKg) + TARGET_LINE_MAX_GAP_KG;
+    if (showTargetLine) weightSets.push(referenceLineDataset('Tavoitepaino', target, labels.length));
+    document.getElementById('body-weight-subtitle').textContent = target != null && !showTargetLine
+      ? `Paino (kg) · tavoite ${fmtNum(target, ' kg')}` : 'Paino (kg)';
+    const weightOpts = baseChartOptions({ unit: ' kg', legend: showTargetLine });
     weightOpts.interaction = { mode: 'nearest', intersect: false };
-    weightOpts.plugins.legend.labels.filter = item => weightSets[item.datasetIndex].kind !== 'measurement';
+    weightOpts.plugins.legend.labels.filter = item => { const ds = weightSets[item.datasetIndex]; return ds.kind !== 'measurement' && ds.data.some(v => v != null); };
+    weightOpts.plugins.legend.onClick = toggleSeriesWithDots;
     weightOpts.plugins.tooltip = bodyTooltip(' kg');
     charts.body = new Chart(document.getElementById('body-chart'), { type: 'line', data: { labels, datasets: weightSets }, options: weightOpts });
 
@@ -4081,14 +4101,13 @@ async function loadBodyMetrics() {
     ];
     const compOpts = baseChartOptions({ unit: ' %', legend: true });
     compOpts.interaction = { mode: 'nearest', intersect: false };
-    compOpts.plugins.legend.labels.filter = item => compSets[item.datasetIndex].kind !== 'measurement';
-    compOpts.plugins.legend.onClick = (e, item, legend) => {
-      const chart = legend.chart, hide = chart.isDatasetVisible(item.datasetIndex);
-      [item.datasetIndex, item.datasetIndex + 1].forEach(i => chart.setDatasetVisibility(i, !hide));
-      chart.update();
-    };
+    compOpts.plugins.legend.labels.filter = item => { const ds = compSets[item.datasetIndex]; return ds.kind !== 'measurement' && ds.data.some(v => v != null); };
+    compOpts.plugins.legend.onClick = toggleSeriesWithDots;
     compOpts.plugins.tooltip = bodyTooltip(' %');
-    charts.bodyComp = new Chart(document.getElementById('body-comp-chart'), { type: 'line', data: { labels, datasets: compSets }, options: compOpts });
+    const hasComp = shown.some(w => w.fat_pct != null || w.muscle_pct != null);
+    document.getElementById('body-comp-section').style.display = hasComp ? '' : 'none';
+    document.getElementById('body-comp-empty').style.display = hasComp ? 'none' : '';
+    if (hasComp) charts.bodyComp = new Chart(document.getElementById('body-comp-chart'), { type: 'line', data: { labels, datasets: compSets }, options: compOpts });
   }
 }
 
@@ -4305,6 +4324,7 @@ async function renderForecastCard() {
       <span class="week-label">${label}</span>
       <button class="week-btn" onclick="changeForecastMonth(1)">→</button>
     </div>
+    <div class="chart-subtitle" id="forecast-target-note"></div>
     <div class="chart-wrap"><canvas id="forecast-chart"></canvas></div>
     ${statsHtml}`;
 
@@ -4332,7 +4352,10 @@ async function renderForecastChart(startIso, endIso, profile, forecast) {
     });
     // Start the forecast line at the latest actual value so actual → forecast is one continuous path.
     const startIsoLive = forecastState.latest.measured_at;
-    if (startIsoLive >= startIso && startIsoLive <= endIso && forecastState.latest.weight_kg != null) {
+    const lastActualIso = Object.keys(actualByDate).sort().pop();
+    if (lastActualIso && lastActualIso >= forecastState.latest.measured_at && lastActualIso <= todayIso) {
+      liveForecastByDate[lastActualIso] = actualByDate[lastActualIso];
+    } else if (startIsoLive >= startIso && startIsoLive <= endIso && forecastState.latest.weight_kg != null) {
       liveForecastByDate[startIsoLive] = round1(forecastState.latest.weight_kg);
     }
   }
@@ -4366,13 +4389,19 @@ async function renderForecastChart(startIso, endIso, profile, forecast) {
   const actualData = labels.map(d => actualByDate[d] ?? null);
   const liveData = labels.map(d => liveForecastByDate[d] ?? null);
   const historicalData = labels.map(d => historicalByDate[d] ?? null);
-  const hasLive = liveData.some(v => v != null);
+  const hasLive = liveData.filter(v => v != null).length >= 2;
   const hasHistorical = historicalData.some(v => v != null);
 
   const datasets = [lineDataset('Toteuma', actualData, CHART_COLORS.s1)];
   if (hasLive) datasets.push(lineDataset('Ennuste', liveData, CHART_COLORS.s2, { borderDash: [6, 4], pointRadius: 0 }));
   if (hasHistorical) datasets.push(lineDataset('Mennyt ennuste', historicalData, CHART_COLORS.ref, { borderDash: [2, 3], borderWidth: 1.5, pointRadius: 0 }));
-  if (profile && profile.target_weight_kg != null) datasets.push(referenceLineDataset('Tavoitepaino', Number(profile.target_weight_kg), labels.length));
+  const fcTarget = profile && profile.target_weight_kg != null ? Number(profile.target_weight_kg) : null;
+  const plottedKg = [...actualData, ...(hasLive ? liveData : []), ...(hasHistorical ? historicalData : [])].filter(v => v != null);
+  const showTargetLine = fcTarget != null && plottedKg.length > 0
+    && fcTarget >= Math.min(...plottedKg) - TARGET_LINE_MAX_GAP_KG && fcTarget <= Math.max(...plottedKg) + TARGET_LINE_MAX_GAP_KG;
+  if (showTargetLine) datasets.push(referenceLineDataset('Tavoitepaino', fcTarget, labels.length));
+  const noteEl = document.getElementById('forecast-target-note');
+  if (noteEl) noteEl.textContent = fcTarget != null && !showTargetLine ? `Tavoitepaino ${fmtNum(fcTarget, ' kg')}` : '';
 
   charts.forecast = new Chart(document.getElementById('forecast-chart'), {
     type: 'line',
@@ -5294,7 +5323,7 @@ async function loadRunChart() {
     options: baseChartOptions({
       dateLabels: true, unit: isPace ? ' min/km' : ' km',
       // Pace: lower is faster, so the axis is reversed (faster = higher) and titled.
-      y: isPace ? { reverse: true, title: { display: true, text: 'min/km (nopeampi ylempänä)', color: CHART_COLORS.tick, font: CHART_FONT } } : {},
+      y: isPace ? { reverse: true, ticks: { color: CHART_COLORS.tick, font: CHART_FONT, maxTicksLimit: 6, callback: v => fmtNum(v) }, title: { display: true, text: 'min/km (nopeampi ylempänä)', color: CHART_COLORS.tick, font: CHART_FONT } } : {},
     }),
   });
 }
@@ -7747,11 +7776,14 @@ async function openStepsModal() {
       backgroundColor: stepValues.map(v => (goal == null || v >= goal ? CHART_COLORS.s1 : CHART_COLORS.s1 + '66')),
       borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 14,
     }];
-    if (goal != null) stepDatasets.push(referenceLineDataset('Tavoite', goal, stepRows.length));
+    if (goal != null) stepDatasets.push({ ...referenceLineDataset('Tavoite', goal, stepRows.length), order: 0 });
+    const stepOpts = baseChartOptions({ dateLabels: true, legend: goal != null, y: { beginAtZero: true } });
+    // Legend swatch for the bars is always full colour (bars themselves may be faded).
+    stepOpts.plugins.legend.labels.generateLabels = chart => Chart.defaults.plugins.legend.labels.generateLabels(chart).map(l => (l.datasetIndex === 0 ? { ...l, fillStyle: CHART_COLORS.s1, strokeStyle: CHART_COLORS.s1 } : l));
     charts.steps = new Chart(document.getElementById('steps-chart'), {
       type: 'bar',
       data: { labels: stepRows.map(r => r.step_date), datasets: stepDatasets },
-      options: baseChartOptions({ dateLabels: true, legend: goal != null, y: { beginAtZero: true } }),
+      options: stepOpts,
     });
   }
 }
