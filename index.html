@@ -8761,6 +8761,11 @@ function renderSessionExpand(s) {
   });
   html += `</div>
 
+    <label class="sess-catchup-toggle" style="display:flex;align-items:center;gap:10px;margin-top:14px;font-size:var(--fs-sm);color:var(--text2);cursor:pointer;">
+      <input type="checkbox" ${s.collects_catchup ? 'checked' : ''} onchange="toggleCollectsCatchup('${s.id}', this.checked)">
+      Kerää viikon rästit
+    </label>
+
     <div class="sess-field-label" style="margin-top:14px">Liikkeet</div>
     <div id="ex-list-${s.id}">`;
   ex.forEach(e => {
@@ -8804,6 +8809,14 @@ async function saveSessionField(id, field, value) {
 async function toggleSessionWeekday(id, dayIndex) {
   const { error } = await sb.rpc('toggle_session_weekday', { p_session_id: id, p_day_index: dayIndex });
   if (error) { console.error('toggleSessionWeekday failed:', error.message); return; }
+  await loadProgram();
+  renderOhjelma();
+}
+
+// "Kerää viikon rästit": this session's day view gets the week's undone sets (see daySession).
+async function toggleCollectsCatchup(id, on) {
+  const { error } = await sbWrite({ table: 'program_sessions', op: 'update', payload: { collects_catchup: on }, eq: { column: 'id', value: id } });
+  if (error) { console.error('toggleCollectsCatchup failed:', error.message); return; }
   await loadProgram();
   renderOhjelma();
 }
