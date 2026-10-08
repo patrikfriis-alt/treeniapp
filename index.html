@@ -3589,6 +3589,38 @@ const getActiveSession = (o, d) => {
   return (cached && cached.override) || SCHED[d];
 };
 
+// Weekly catch-up ("Viikon rästit") for the collecting workout shown on viewDate.
+// Undone = target sets minus logged sets (a row with weight or reps) of each exercise in a
+// workout marked done this week; collecting workouts never generate catch-up themselves.
+// Sets already made up on OTHER collecting days this week are subtracted; the viewed day's own
+// logged sets are not (they fill the rows shown). Pure: no DOM, no Supabase.
+function computeWeekCatchup({ doneSessions, setsByDate, program, daySessionByDate, viewDate }) {
+  const loggedCount = (iso, name) =>
+    ((setsByDate[iso] || {})[name] || []).filter(r => r.weight_kg != null || r.reps != null).length;
+  const out = {};
+  for (const row of doneSessions || []) {
+    const sess = program[row.session_type];
+    if (!row.is_done || !sess || sess.collectsCatchup || !sess.ex || !sess.ex.length) continue;
+    for (const ex of sess.ex) {
+      const missing = Math.max(0, ex.s - loggedCount(row.workout_date, ex.n));
+      if (!missing) continue;
+      if (!out[ex.n]) out[ex.n] = { remaining: 0, origins: [], targetDisplay: ex.t };
+      out[ex.n].remaining += missing;
+      if (!out[ex.n].origins.includes(sess.name)) out[ex.n].origins.push(sess.name);
+    }
+  }
+  for (const [iso, sid] of Object.entries(daySessionByDate || {})) {
+    const sess = program[sid];
+    if (iso === viewDate || !sess || !sess.collectsCatchup) continue;
+    for (const name of Object.keys(out)) {
+      const own = (sess.ex.find(e => e.n === name) || { s: 0 }).s;
+      out[name].remaining -= Math.max(0, loggedCount(iso, name) - own);
+    }
+  }
+  for (const name of Object.keys(out)) if (out[name].remaining <= 0) delete out[name];
+  return out;
+}
+
 async function setActiveSession(o, d, st) {
   const mon = wStart(o), dt = new Date(mon.date);
   dt.setDate(mon.date.getDate() + d);
