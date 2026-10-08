@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const src = html.match(/\nfunction computeWeekCatchup\([\s\S]*?\n\}\n/);
+const src = html.match(/\r?\nfunction computeWeekCatchup\([\s\S]*?\r?\n\}\r?\n/);
 assert.ok(src, 'computeWeekCatchup not found in index.html');
 const ctx = {}; vm.createContext(ctx); vm.runInContext(src[0] + '\nthis.f = computeWeekCatchup;', ctx);
 const f = ctx.f;
