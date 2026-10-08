@@ -82,7 +82,25 @@ assert.deepEqual(run({
   program, daySessionByDate: days({ 0: 't1', 6: 't5' }), viewDate: week[6],
 }), {});
 
-console.log('computeWeekCatchup: all 8 cases pass');
+// 9. Same exercise missing in two DIFFERENT workouts → one entry, origins in date order, summed, target from earlier.
+const program2 = { ...program, t1: { ...program.t1, ex: [...program.t1.ex, { n: 'Reverse Pec Deck', t: '3×12', s: 3 }] } };
+assert.deepEqual(run({
+  doneSessions: [{ workout_date: week[0], session_type: 't1', is_done: true },
+                 { workout_date: week[1], session_type: 't2', is_done: true }],
+  setsByDate: { [week[0]]: { Penkki: [set(1), set(2), set(3)], Soutu: [set(1), set(2), set(3)], 'Reverse Pec Deck': [set(1)] },
+                [week[1]]: { Ylätalja: [set(1), set(2), set(3)], 'Reverse Pec Deck': [set(1), set(2)] } },
+  program: program2, daySessionByDate: days({ 0: 't1', 1: 't2', 6: 't5' }), viewDate: week[6],
+}), { 'Reverse Pec Deck': { remaining: 3, origins: ['Treeni 1', 'Treeni 2'], targetDisplay: '3×12' } });
+
+// 10. Catch-up logged on a LATER collecting day (Sun) is subtracted when viewing an EARLIER one (Fri).
+assert.deepEqual(run({
+  doneSessions: [{ workout_date: week[1], session_type: 't2', is_done: true }],
+  setsByDate: { [week[1]]: { Ylätalja: [set(1), set(2), set(3)], 'Reverse Pec Deck': [set(1)] },
+                [week[6]]: { 'Reverse Pec Deck': [set(1), set(2), set(3), set(4)] } },
+  program, daySessionByDate: days({ 1: 't2', 4: 't5', 6: 't5' }), viewDate: week[4],
+}), { 'Reverse Pec Deck': { remaining: 1, origins: ['Treeni 2'], targetDisplay: '3×15' } });
+
+console.log('computeWeekCatchup: all 10 cases pass');
 // catchupExId: stable, negative, distinct for distinct names.
 const idSrc = html.match(/\r?\nfunction catchupExId\([\s\S]*?\r?\n\}\r?\n/);
 assert.ok(idSrc, 'catchupExId not found');

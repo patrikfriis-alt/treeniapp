@@ -2435,8 +2435,6 @@ let weekActivityOffset = null; // which week (wOff) weekActivityCache/weekDoneSe
 let treeniRequestId = 0;
 
 async function loadWeekActivityData(o, requestId) {
-  weekActivityCache = {};
-  weekDoneSessions = []; weekActivityOffset = null;
   const mon = wStart(o);
   const sun = new Date(mon.date);
   sun.setDate(mon.date.getDate() + 6);
@@ -2462,36 +2460,41 @@ async function loadWeekActivityData(o, requestId) {
       .select('workout_date, session_type, is_done')
       .eq('is_done', true)
       .gte('workout_date', fromDate)
-      .lte('workout_date', toDate),
+      .lte('workout_date', toDate)
+      .order('workout_date'),
   ]);
   if (requestId !== treeniRequestId) return;
   if (doneRes.error) console.error('loadWeekActivityData (workout_sessions) failed:', doneRes.error.message);
-  weekDoneSessions = doneRes.data || [];
-  weekActivityOffset = o;
 
   if (workoutRes.error) console.error('loadWeekActivityData (workout_sets) failed:', workoutRes.error.message);
   if (actRes.error) console.error('loadWeekActivityData (activity_data) failed:', actRes.error.message);
   if (overrideRes.error) console.error('loadWeekActivityData (day_session_overrides) failed:', overrideRes.error.message);
 
+  // Build into locals and swap all three globals together (no empty window for syncSet).
+  const cache = {};
   (workoutRes.data || []).forEach(row => {
-    if (!weekActivityCache[row.workout_date])
-      weekActivityCache[row.workout_date] = { workout: {}, activities: [] };
-    if (!weekActivityCache[row.workout_date].workout[row.exercise_name])
-      weekActivityCache[row.workout_date].workout[row.exercise_name] = [];
-    weekActivityCache[row.workout_date].workout[row.exercise_name].push(row);
+    if (!cache[row.workout_date])
+      cache[row.workout_date] = { workout: {}, activities: [] };
+    if (!cache[row.workout_date].workout[row.exercise_name])
+      cache[row.workout_date].workout[row.exercise_name] = [];
+    cache[row.workout_date].workout[row.exercise_name].push(row);
   });
 
   (actRes.data || []).forEach(row => {
-    if (!weekActivityCache[row.activity_date])
-      weekActivityCache[row.activity_date] = { workout: {}, activities: [] };
-    weekActivityCache[row.activity_date].activities.push(row);
+    if (!cache[row.activity_date])
+      cache[row.activity_date] = { workout: {}, activities: [] };
+    cache[row.activity_date].activities.push(row);
   });
 
   (overrideRes.data || []).forEach(row => {
-    if (!weekActivityCache[row.workout_date])
-      weekActivityCache[row.workout_date] = { workout: {}, activities: [] };
-    weekActivityCache[row.workout_date].override = row.session_type;
+    if (!cache[row.workout_date])
+      cache[row.workout_date] = { workout: {}, activities: [] };
+    cache[row.workout_date].override = row.session_type;
   });
+
+  weekActivityCache = cache;
+  weekDoneSessions = (workoutRes.error || doneRes.error) ? [] : (doneRes.data || []);
+  weekActivityOffset = o;
 }
 
 const getPrevSet = (exName, setIdx) => {
