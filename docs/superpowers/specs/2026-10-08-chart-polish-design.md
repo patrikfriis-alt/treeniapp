@@ -66,7 +66,7 @@ series colours.
    dense-series points, unrotated dates.
 5. **Steps** (`steps-chart`, modal): **bars** in slot 1, bars on goal-reaching days at full
    opacity and others at reduced opacity, dashed goal line at `app_settings.daily_steps_goal`
-   (fallback 10 000 as today).
+   when a goal is set (no goal → no line and all bars full opacity, as the modal already omits it).
 6. **Exercise progress** (`ex-chart`, Sali → Kehitys) and 7. **exercise modal**
    (`ex-modal-chart`): shared style, Finnish dates, monotone line.
 8. **Run/walk** (`run-chart`): slot 1 instead of orange; pace keeps the reversed axis, axis
