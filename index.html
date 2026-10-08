@@ -4988,22 +4988,13 @@ async function loadSleep() {
   if (chartError) { console.error('loadSleep (chart) failed:', chartError.message); return; }
   if (chartData && chartData.length > 1) {
     if (charts.sleep) charts.sleep.destroy();
+    const sleepRows = [...chartData].reverse();
+    const scores = sleepRows.map(d => d.sleep_score);
+    const yMin = Math.max(0, Math.floor((Math.min(...scores) - 5) / 10) * 10);
     charts.sleep = new Chart(document.getElementById('sleep-chart'), {
       type: 'line',
-      data: {
-        labels: [...chartData].reverse().map(d => d.sleep_date.slice(5)),
-        datasets: [
-          { label:'Unipisteet', data:[...chartData].reverse().map(d=>d.sleep_score), borderColor:'#005c9e', borderWidth:2, pointRadius:3, pointBackgroundColor:'#005c9e', tension:.3, fill:false },
-        ],
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:false } },
-        scales:{
-          y:{ min:0, max:100, ticks:{ color:'#555', font:{size:10} }, grid:{ color:'#222' } },
-          x:{ ticks:{ color:'#555', font:{size:10} }, grid:{ display:false } },
-        },
-      },
+      data: { labels: sleepRows.map(d => d.sleep_date), datasets: [lineDataset('Unipisteet', scores)] },
+      options: baseChartOptions({ dateLabels: true, unit: ' p', y: { min: yMin, max: 100 } }),
     });
   }
 }
@@ -7811,22 +7802,19 @@ async function openStepsModal() {
 
   if (rows.length > 1) {
     if (charts.steps) charts.steps.destroy();
+    const stepRows = [...rows].reverse();
+    const stepValues = stepRows.map(r => r.steps);
+    // Bars: goal-reaching days at full colour, others faded; dashed goal line when a goal is set.
+    const stepDatasets = [{
+      type: 'bar', label: 'Askeleet', data: stepValues, order: 1,
+      backgroundColor: stepValues.map(v => (goal == null || v >= goal ? CHART_COLORS.s1 : CHART_COLORS.s1 + '66')),
+      borderRadius: 4, borderSkipped: 'bottom', maxBarThickness: 14,
+    }];
+    if (goal != null) stepDatasets.push(referenceLineDataset('Tavoite', goal, stepRows.length));
     charts.steps = new Chart(document.getElementById('steps-chart'), {
-      type: 'line',
-      data: {
-        labels: [...rows].reverse().map(r => r.step_date.slice(5)),
-        datasets: [
-          { label:'Askeleet', data:[...rows].reverse().map(r=>r.steps), borderColor:'#2fff7e', borderWidth:2, pointRadius:2, pointBackgroundColor:'#2fff7e', tension:.3, fill:false },
-        ],
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:false } },
-        scales:{
-          y:{ beginAtZero:true, ticks:{ color:'#555', font:{size:10} }, grid:{ color:'#222' } },
-          x:{ ticks:{ color:'#555', font:{size:10}, maxTicksLimit:8 }, grid:{ display:false } },
-        },
-      },
+      type: 'bar',
+      data: { labels: stepRows.map(r => r.step_date), datasets: stepDatasets },
+      options: baseChartOptions({ dateLabels: true, legend: goal != null, y: { beginAtZero: true } }),
     });
   }
 }
