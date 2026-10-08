@@ -888,6 +888,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
 
 /* ─── Chart ──────────────────────────────────────────────────── */
 .chart-wrap { position: relative; height: 200px; }
+.chart-subtitle { font-size: var(--fs-xs); color: var(--text3); margin: 4px 0 6px; }
 
 /* ─── Status ─────────────────────────────────────────────────── */
 .status { font-size: var(--fs-sm); text-align: center; padding: 6px; min-height: 24px; }
@@ -1511,7 +1512,10 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
     </div>
     <div class="card">
       <div class="card-title">Kehitys</div>
+      <div class="chart-subtitle">Paino (kg)</div>
       <div class="chart-wrap"><canvas id="body-chart"></canvas></div>
+      <div class="chart-subtitle" style="margin-top:14px">Rasva% ja lihas%</div>
+      <div class="chart-wrap" style="height:150px"><canvas id="body-comp-chart"></canvas></div>
       <div style="font-size:var(--fs-xs);color:var(--text3);text-align:center;margin-top:6px;">Viiva = viikon keskiarvo · haaleat pisteet = yksittäiset mittaukset</div>
     </div>
     <div class="card" id="forecast-card">
@@ -4042,75 +4046,54 @@ async function loadBodyMetrics() {
     const weekLabel = w => (w.year === thisYear ? `vk ${w.week}` : `vk ${w.week}/${String(w.year).slice(2)}`);
     const labels = shown.map(weekLabel);
 
-    const metrics = [
-      { field: 'weight_kg',  label: 'Paino',  unit: ' kg', color: '#8a2be2', axis: 'y1' },
-      { field: 'fat_pct',    label: 'Rasva%', unit: '%',   color: '#378ADD', axis: 'y2' },
-      { field: 'muscle_pct', label: 'Lihas%', unit: '%',   color: '#ffbb00', axis: 'y2' },
-    ];
-    const datasets = [];
-    metrics.forEach(m => {
-      // Main line: the week's value (average of that week's measurements).
-      datasets.push({
-        label: m.label, unit: m.unit, kind: 'week',
-        data: shown.map(w => (w[m.field] != null ? round1(w[m.field]) : null)),
-        counts: shown.map(w => w.measurements.filter(r => r[m.field] != null).length),
-        borderColor: m.color, borderWidth: 2, pointRadius: 3, pointBackgroundColor: m.color,
-        tension: .3, fill: false, spanGaps: true, yAxisID: m.axis, order: 1,
-      });
-      // Individual measurements as faded dots behind the line, stacked on their week.
-      const dots = shown.flatMap(w => w.measurements
-        .filter(r => r[m.field] != null)
-        .map(r => ({ x: weekLabel(w), y: Number(r[m.field]), date: r.measured_at })));
-      datasets.push({
-        label: m.label, unit: m.unit, kind: 'measurement', data: dots, showLine: false,
-        pointRadius: 3, pointHoverRadius: 4, borderWidth: 0,
-        pointBackgroundColor: m.color + '66', pointBorderColor: 'transparent',
-        yAxisID: m.axis, order: 2,
-      });
+    if (charts.bodyComp) charts.bodyComp.destroy();
+    // Faded individual measurements behind a weekly line, stacked on their week.
+    const dotsFor = (field, color) => ({
+      label: 'Mittaus', kind: 'measurement', showLine: false, order: 2,
+      data: shown.flatMap(w => w.measurements.filter(r => r[field] != null)
+        .map(r => ({ x: weekLabel(w), y: Number(r[field]), date: r.measured_at }))),
+      pointRadius: 3, pointHoverRadius: 4, borderWidth: 0, pointBackgroundColor: color + '66', pointBorderColor: 'transparent',
     });
-
-    charts.body = new Chart(document.getElementById('body-chart'), {
-      type: 'line',
-      data: { labels, datasets },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        plugins:{
-          // One entry per metric (the weekly line); tapping it hides/shows the line and its dots.
-          legend:{
-            display:true,
-            labels:{
-              color:'#999', font:{ size:10 }, usePointStyle:true, pointStyle:'circle', boxWidth:8, boxHeight:8,
-              filter: item => datasets[item.datasetIndex].kind === 'week',
-            },
-            onClick: (e, item, legend) => {
-              const chart = legend.chart;
-              const hide = chart.isDatasetVisible(item.datasetIndex);
-              [item.datasetIndex, item.datasetIndex + 1].forEach(i => chart.setDatasetVisibility(i, !hide));
-              chart.update();
-            },
-          },
-          tooltip:{
-            callbacks:{
-              title: items => { const w = shown[items[0].dataIndex]; return items[0].dataset.kind === 'week' && w ? `Vk ${w.week}/${w.year}` : items[0].label; },
-              label: item => {
-                const ds = item.dataset;
-                if (ds.kind === 'measurement') {
-                  const p = ds.data[item.dataIndex];
-                  return `${ds.label} ${p.date.slice(8)}.${p.date.slice(5, 7)}.: ${p.y}${ds.unit}`;
-                }
-                const n = ds.counts[item.dataIndex];
-                return `${ds.label}: ${item.parsed.y}${ds.unit} (${n} ${n === 1 ? 'mittaus' : 'mittausta'})`;
-              },
-            },
-          },
-        },
-        scales:{
-          y1:{ position:'left',  ticks:{ color:'#555', font:{size:10} }, grid:{ color:'#222' } },
-          y2:{ position:'right', ticks:{ color:'#555', font:{size:10}, callback:v=>v+'%' }, grid:{ display:false } },
-          x: { ticks:{ color:'#555', font:{size:10} }, grid:{ display:false } },
+    const weekLine = (label, field, color) => lineDataset(label, shown.map(w => (w[field] != null ? round1(w[field]) : null)), color, {
+      kind: 'week', order: 1, counts: shown.map(w => w.measurements.filter(r => r[field] != null).length),
+    });
+    // Tooltip: week title, count per weekly value, date per individual measurement.
+    const bodyTooltip = unit => ({
+      callbacks: {
+        title: items => { const w = shown[items[0].dataIndex]; return items[0].dataset.kind === 'week' && w ? `Vk ${w.week}/${w.year}` : items[0].label; },
+        label: item => {
+          const ds = item.dataset;
+          if (ds.isReference) return `${ds.label}: ${fmtNum(item.parsed.y, unit)}`;
+          if (ds.kind === 'measurement') { const p = ds.data[item.dataIndex]; return `${fmtDayShort(p.date)}: ${fmtNum(p.y, unit)}`; }
+          const n = ds.counts[item.dataIndex];
+          return `${ds.label}: ${fmtNum(item.parsed.y, unit)} (${n} ${n === 1 ? 'mittaus' : 'mittausta'})`;
         },
       },
     });
+
+    const weightSets = [weekLine('Paino', 'weight_kg', CHART_COLORS.s1), dotsFor('weight_kg', CHART_COLORS.s1)];
+    const target = profile && profile.target_weight_kg != null ? Number(profile.target_weight_kg) : null;
+    if (target != null) weightSets.push(referenceLineDataset('Tavoitepaino', target, labels.length));
+    const weightOpts = baseChartOptions({ unit: ' kg', legend: target != null });
+    weightOpts.interaction = { mode: 'nearest', intersect: false };
+    weightOpts.plugins.legend.labels.filter = item => weightSets[item.datasetIndex].kind !== 'measurement';
+    weightOpts.plugins.tooltip = bodyTooltip(' kg');
+    charts.body = new Chart(document.getElementById('body-chart'), { type: 'line', data: { labels, datasets: weightSets }, options: weightOpts });
+
+    const compSets = [
+      weekLine('Rasva%', 'fat_pct', CHART_COLORS.s1), dotsFor('fat_pct', CHART_COLORS.s1),
+      weekLine('Lihas%', 'muscle_pct', CHART_COLORS.s2), dotsFor('muscle_pct', CHART_COLORS.s2),
+    ];
+    const compOpts = baseChartOptions({ unit: ' %', legend: true });
+    compOpts.interaction = { mode: 'nearest', intersect: false };
+    compOpts.plugins.legend.labels.filter = item => compSets[item.datasetIndex].kind !== 'measurement';
+    compOpts.plugins.legend.onClick = (e, item, legend) => {
+      const chart = legend.chart, hide = chart.isDatasetVisible(item.datasetIndex);
+      [item.datasetIndex, item.datasetIndex + 1].forEach(i => chart.setDatasetVisibility(i, !hide));
+      chart.update();
+    };
+    compOpts.plugins.tooltip = bodyTooltip(' %');
+    charts.bodyComp = new Chart(document.getElementById('body-comp-chart'), { type: 'line', data: { labels, datasets: compSets }, options: compOpts });
   }
 }
 
