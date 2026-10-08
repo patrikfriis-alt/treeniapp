@@ -1819,7 +1819,7 @@ async function loadProgram() {
 
   const newSESS = {};
   programSessionsRaw.forEach(s => {
-    newSESS[s.id] = { name: s.name, focus: s.focus || '', ex: [] };
+    newSESS[s.id] = { name: s.name, focus: s.focus || '', ex: [], collectsCatchup: s.collects_catchup === true };
   });
   programSessionExercisesRaw.forEach(e => {
     if (newSESS[e.program_session_id]) {
