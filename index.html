@@ -1677,7 +1677,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.40.0</div>
+    <div class="version-chip" style="margin:0">v1.41.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:var(--fs-xl);cursor:pointer;line-height:1;">✕</button>
   </div>
   <div style="font-size:var(--fs-xs);font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Navigointi</div>
@@ -1878,6 +1878,45 @@ function isoWeekYear(d) {
 function localIso(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
+
+// Body measurements grouped by ISO week (Mon–Sun). A week's value is the average of that week's
+// measurements, per metric — a measurement without fat% still counts towards the week's weight.
+// The body chart, the Keho/Koonti numbers and the forecast model all use this, so they agree.
+// Values are unrounded (round only for display). `measured_at` is the week's average measurement
+// date — the point in time the averaged values describe. Weeks are returned oldest first.
+function groupMeasurementsByWeek(rows) {
+  const dayOf = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d, 12); };
+  const byKey = new Map();
+  for (const r of rows || []) {
+    if (!r || !r.measured_at) continue;
+    const date = dayOf(r.measured_at);
+    const year = isoWeekYear(date), week = isoWeek(date);
+    const key = `${year}-W${String(week).padStart(2, '0')}`;
+    if (!byKey.has(key)) byKey.set(key, { key, year, week, measurements: [] });
+    byKey.get(key).measurements.push(r);
+  }
+  const avg = (list, field) => {
+    const vals = list.map(r => r[field]).filter(v => v != null).map(Number);
+    return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+  };
+  return [...byKey.values()]
+    .sort((a, b) => (a.key < b.key ? -1 : 1))
+    .map(w => {
+      w.measurements.sort((a, b) => (a.measured_at < b.measured_at ? -1 : 1));
+      const meanTime = w.measurements.reduce((s, r) => s + dayOf(r.measured_at).getTime(), 0) / w.measurements.length;
+      return {
+        ...w,
+        count: w.measurements.length,
+        weight_kg: avg(w.measurements, 'weight_kg'),
+        fat_pct: avg(w.measurements, 'fat_pct'),
+        muscle_pct: avg(w.measurements, 'muscle_pct'),
+        measured_at: localIso(new Date(meanTime)),
+      };
+    });
+}
+
+// One decimal for display: 110.45 → 110.5 (same "." style the Keho numbers already use).
+const round1 = v => Math.round(v * 10) / 10;
 
 /* ═══════════════════════════════════════════════════════════════
    LOCAL DATA HELPERS
@@ -3786,25 +3825,35 @@ function changeWeek(dir) { wOff += dir; renderTreeni(); }
 /* ═══════════════════════════════════════════════════════════════
    BODY METRICS
 ═══════════════════════════════════════════════════════════════ */
+const BODY_CHART_WEEKS = 20;
+
 async function loadBodyMetrics() {
+  // Enough rows for BODY_CHART_WEEKS weeks even when measuring several times a week.
   const [{ data: hist, error: histErr }, profile] = await Promise.all([
-    sb.from('body_metrics').select('*').order('measured_at', { ascending: false }).limit(20),
+    sb.from('body_metrics').select('*').order('measured_at', { ascending: false }).limit(150),
     loadUserProfile(),
   ]);
   if (histErr) { console.error('loadBodyMetrics failed:', histErr.message); }
-  const latest = hist && hist[0];
+  // Numbers, forecast and chart all use weekly values (average of the week's measurements).
+  const weeks = groupMeasurementsByWeek(hist);
+  const latest = weeks[weeks.length - 1];
+  const prevWeek = weeks[weeks.length - 2];
 
   const deltaEl = document.getElementById('m-weight-delta');
   if (deltaEl) deltaEl.textContent = '';
   if (latest) {
-    document.getElementById('m-weight').textContent = latest.weight_kg  != null ? `${latest.weight_kg} kg` : '—';
-    document.getElementById('m-fat')   .textContent = latest.fat_pct    != null ? `${latest.fat_pct}%`     : '—';
-    document.getElementById('m-muscle').textContent = latest.muscle_pct != null ? `${latest.muscle_pct}%`  : '—';
+    document.getElementById('m-weight').textContent = latest.weight_kg  != null ? `${round1(latest.weight_kg)} kg` : '—';
+    document.getElementById('m-fat')   .textContent = latest.fat_pct    != null ? `${round1(latest.fat_pct)}%`     : '—';
+    document.getElementById('m-muscle').textContent = latest.muscle_pct != null ? `${round1(latest.muscle_pct)}%`  : '—';
+    if (deltaEl && prevWeek && latest.weight_kg != null && prevWeek.weight_kg != null) {
+      const d = round1(latest.weight_kg - prevWeek.weight_kg);
+      deltaEl.textContent = (d >= 0 ? '+' : '') + d + ' kg ed. viikosta';
+    }
   }
 
   let forecast = null;
   const hasTarget = profile && profile.target_weight_kg != null;
-  const hasComposition = latest && latest.fat_pct != null && latest.muscle_pct != null;
+  const hasComposition = latest && latest.weight_kg != null && latest.fat_pct != null && latest.muscle_pct != null;
   if (hasTarget && hasComposition) {
     const comp = getBodyComposition(latest.weight_kg, latest.fat_pct, latest.muscle_pct);
     const [{ data: calRows }, weeklyIntakeKcal] = await Promise.all([
@@ -3827,23 +3876,61 @@ async function loadBodyMetrics() {
 
   if (hist && hist.length > 1) {
     if (charts.body) charts.body.destroy();
-    const histLabels = [...hist].reverse().map(d => d.measured_at.slice(5));
-    const histWeights = [...hist].reverse().map(d => d.weight_kg);
-    const histFat = [...hist].reverse().map(d => d.fat_pct);
-    const histMuscle = [...hist].reverse().map(d => d.muscle_pct);
+    const shown = weeks.slice(-BODY_CHART_WEEKS);
+    const thisYear = isoWeekYear(new Date());
+    // Category labels must be unique; add the year only for weeks outside the current ISO year.
+    const weekLabel = w => (w.year === thisYear ? `vk ${w.week}` : `vk ${w.week}/${String(w.year).slice(2)}`);
+    const labels = shown.map(weekLabel);
 
-    const datasets = [
-      { label:'Paino',  data: histWeights, borderColor:'#8a2be2', borderWidth:2, pointRadius:3, pointBackgroundColor:'#8a2be2', tension:.3, fill:false, yAxisID:'y1' },
-      { label:'Rasva%', data: histFat,    borderColor:'#378ADD', borderWidth:2, pointRadius:3, pointBackgroundColor:'#378ADD', tension:.3, fill:false, yAxisID:'y2' },
-      { label:'Lihas%', data: histMuscle, borderColor:'#ffbb00', borderWidth:2, pointRadius:3, pointBackgroundColor:'#ffbb00', tension:.3, fill:false, yAxisID:'y2' },
+    const metrics = [
+      { field: 'weight_kg',  label: 'Paino',  unit: ' kg', color: '#8a2be2', axis: 'y1' },
+      { field: 'fat_pct',    label: 'Rasva%', unit: '%',   color: '#378ADD', axis: 'y2' },
+      { field: 'muscle_pct', label: 'Lihas%', unit: '%',   color: '#ffbb00', axis: 'y2' },
     ];
+    const datasets = [];
+    metrics.forEach(m => {
+      // Main line: the week's value (average of that week's measurements).
+      datasets.push({
+        label: m.label, unit: m.unit, kind: 'week',
+        data: shown.map(w => (w[m.field] != null ? round1(w[m.field]) : null)),
+        counts: shown.map(w => w.measurements.filter(r => r[m.field] != null).length),
+        borderColor: m.color, borderWidth: 2, pointRadius: 3, pointBackgroundColor: m.color,
+        tension: .3, fill: false, spanGaps: true, yAxisID: m.axis, order: 1,
+      });
+      // Individual measurements as faded dots behind the line, stacked on their week.
+      const dots = shown.flatMap(w => w.measurements
+        .filter(r => r[m.field] != null)
+        .map(r => ({ x: weekLabel(w), y: Number(r[m.field]), date: r.measured_at })));
+      datasets.push({
+        label: m.label, unit: m.unit, kind: 'measurement', data: dots, showLine: false,
+        pointRadius: 3, pointHoverRadius: 4, borderWidth: 0,
+        pointBackgroundColor: m.color + '66', pointBorderColor: 'transparent',
+        yAxisID: m.axis, order: 2,
+      });
+    });
 
     charts.body = new Chart(document.getElementById('body-chart'), {
       type: 'line',
-      data: { labels: histLabels, datasets },
+      data: { labels, datasets },
       options: {
         responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:false } },
+        plugins:{
+          legend:{ display:false },
+          tooltip:{
+            callbacks:{
+              title: items => { const w = shown[items[0].dataIndex]; return items[0].dataset.kind === 'week' && w ? `Vk ${w.week}/${w.year}` : items[0].label; },
+              label: item => {
+                const ds = item.dataset;
+                if (ds.kind === 'measurement') {
+                  const p = ds.data[item.dataIndex];
+                  return `${ds.label} ${p.date.slice(8)}.${p.date.slice(5, 7)}.: ${p.y}${ds.unit}`;
+                }
+                const n = ds.counts[item.dataIndex];
+                return `${ds.label}: ${item.parsed.y}${ds.unit} (${n} ${n === 1 ? 'mittaus' : 'mittausta'})`;
+              },
+            },
+          },
+        },
         scales:{
           y1:{ position:'left',  ticks:{ color:'#555', font:{size:10} }, grid:{ color:'#222' } },
           y2:{ position:'right', ticks:{ color:'#555', font:{size:10}, callback:v=>v+'%' }, grid:{ display:false } },
@@ -3851,10 +3938,6 @@ async function loadBodyMetrics() {
         },
       },
     });
-    if (deltaEl && hist.length >= 2 && latest && latest.weight_kg != null && hist[1] && hist[1].weight_kg != null) {
-      const d = Math.round((latest.weight_kg - hist[1].weight_kg) * 10) / 10;
-      deltaEl.textContent = (d >= 0 ? '+' : '') + d + ' kg ed. mittauksesta';
-    }
   }
 }
 
@@ -4006,12 +4089,15 @@ function changeForecastMonth(dir) {
 
 async function computeHistoricalForecast(cutoffIso, targetWeightKg) {
   const [{ data: priorMetrics }, { data: priorCal }, weeklyIntakeKcal] = await Promise.all([
-    sb.from('body_metrics').select('*').lt('measured_at', cutoffIso).order('measured_at', { ascending: false }).limit(1),
+    // Enough rows to cover the last week with measurements before the cutoff.
+    sb.from('body_metrics').select('*').lt('measured_at', cutoffIso).order('measured_at', { ascending: false }).limit(20),
     sb.from('model_calibration').select('*').lte('calibrated_at', cutoffIso).order('calibrated_at', { ascending: false }).limit(1),
     getRecentAvgWeeklyIntake(cutoffIso),
   ]);
-  const metric = priorMetrics && priorMetrics[0];
-  if (!metric || metric.fat_pct == null || metric.muscle_pct == null) return null;
+  // Start from the last week's value before the cutoff (average of that week's measurements).
+  const priorWeeks = groupMeasurementsByWeek(priorMetrics);
+  const metric = priorWeeks[priorWeeks.length - 1];
+  if (!metric || metric.weight_kg == null || metric.fat_pct == null || metric.muscle_pct == null) return null;
 
   const cal = priorCal && priorCal[0];
   const otherTissueCoeff = cal ? cal.other_tissue_kcal_per_kg : DEFAULT_OTHER_TISSUE_COEFF;
@@ -4165,9 +4251,13 @@ async function calibrateModelIfDue() {
     if (daysSince < 14) return;
   }
 
-  const m1 = measurements[measurements.length - 2];
-  const m2 = measurements[measurements.length - 1];
-  if (m1.weight_kg == null || m1.fat_pct == null || m1.muscle_pct == null || m2.weight_kg == null || m2.fat_pct == null || m2.muscle_pct == null) return;
+  // Compare the two latest weeks' values (averages smooth the scale's measurement noise);
+  // each week's time point is its average measurement date.
+  const completeWeeks = groupMeasurementsByWeek(measurements)
+    .filter(w => w.weight_kg != null && w.fat_pct != null && w.muscle_pct != null);
+  if (completeWeeks.length < 2) return;
+  const m1 = completeWeeks[completeWeeks.length - 2];
+  const m2 = completeWeeks[completeWeeks.length - 1];
 
   const comp1 = getBodyComposition(m1.weight_kg, m1.fat_pct, m1.muscle_pct);
   const comp2 = getBodyComposition(m2.weight_kg, m2.fat_pct, m2.muscle_pct);
@@ -8176,7 +8266,7 @@ async function loadKoonti() {
     sb.from('activity_data').select('activity_type,activity_date,duration_min,created_at')
       .order('activity_date', { ascending: false }).order('created_at', { ascending: false }).limit(1),
     loadActivityGoalProgress(0),
-    sb.from('body_metrics').select('weight_kg,measured_at').order('measured_at', { ascending: false }).limit(2),
+    sb.from('body_metrics').select('weight_kg,measured_at').order('measured_at', { ascending: false }).limit(20), // enough for this + previous week with measurements
     sb.from('sleep_data').select('sleep_date,sleep_score').order('sleep_date', { ascending: false }).limit(7),
     sb.from('step_data').select('step_date,steps').gte('step_date', weekStartIso).order('step_date', { ascending: false }),
     sb.from('water_log').select('amount_ml').eq('logged_at', todayIso),
@@ -8250,13 +8340,17 @@ async function loadKoonti() {
   kcKehoSub.classList.remove('skel-sub');
   const kehoDoneToday = !!(bodyRows && bodyRows[0] && bodyRows[0].measured_at === todayIso);
   kcKehoCard.classList.toggle('koonti-card--done', kehoDoneToday);
-  if (bodyRows && bodyRows[0] && bodyRows[0].weight_kg) {
+  // Same weekly values as the Keho page: latest week vs the previous week with measurements.
+  const bodyWeeks = groupMeasurementsByWeek(bodyRows).filter(w => w.weight_kg != null);
+  const kehoWeek = bodyWeeks[bodyWeeks.length - 1];
+  const kehoPrevWeek = bodyWeeks[bodyWeeks.length - 2];
+  if (kehoWeek) {
     let deltaStr = '';
-    if (bodyRows[1] && bodyRows[1].weight_kg) {
-      const d = Math.round((bodyRows[0].weight_kg - bodyRows[1].weight_kg) * 10) / 10;
+    if (kehoPrevWeek) {
+      const d = round1(kehoWeek.weight_kg - kehoPrevWeek.weight_kg);
       deltaStr = ` · ${d >= 0 ? '+' : ''}${d} kg`;
     }
-    kcKehoSub.textContent = `${bodyRows[0].weight_kg} kg${deltaStr}`;
+    kcKehoSub.textContent = `${round1(kehoWeek.weight_kg)} kg${deltaStr}`;
   } else {
     kcKehoSub.textContent = 'Ei mittauksia vielä';
   }
