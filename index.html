@@ -2428,17 +2428,20 @@ async function reconcileSessionWithServer(o, d, st, sess, requestId) {
    WEEK ACTIVITY CACHE
 ═══════════════════════════════════════════════════════════════ */
 let weekActivityCache = {};
+let weekDoneSessions = [];   // workout_sessions rows with is_done for the loaded week
+let weekActivityOffset = null; // which week (wOff) weekActivityCache/weekDoneSessions describe
 let treeniRequestId = 0;
 
 async function loadWeekActivityData(o, requestId) {
   weekActivityCache = {};
+  weekDoneSessions = []; weekActivityOffset = null;
   const mon = wStart(o);
   const sun = new Date(mon.date);
   sun.setDate(mon.date.getDate() + 6);
   const fromDate = mon.iso;
   const toDate   = localIso(sun);
 
-  const [workoutRes, actRes, overrideRes] = await Promise.all([
+  const [workoutRes, actRes, overrideRes, doneRes] = await Promise.all([
     sb.from('workout_sets')
       .select('workout_date, exercise_name, set_number, weight_kg, reps')
       .gte('workout_date', fromDate)
@@ -2453,8 +2456,16 @@ async function loadWeekActivityData(o, requestId) {
       .select('workout_date, session_type')
       .gte('workout_date', fromDate)
       .lte('workout_date', toDate),
+    sb.from('workout_sessions')
+      .select('workout_date, session_type, is_done')
+      .eq('is_done', true)
+      .gte('workout_date', fromDate)
+      .lte('workout_date', toDate),
   ]);
   if (requestId !== treeniRequestId) return;
+  if (doneRes.error) console.error('loadWeekActivityData (workout_sessions) failed:', doneRes.error.message);
+  weekDoneSessions = doneRes.data || [];
+  weekActivityOffset = o;
 
   if (workoutRes.error) console.error('loadWeekActivityData (workout_sets) failed:', workoutRes.error.message);
   if (actRes.error) console.error('loadWeekActivityData (activity_data) failed:', actRes.error.message);
@@ -3619,6 +3630,39 @@ function computeWeekCatchup({ doneSessions, setsByDate, program, daySessionByDat
   }
   for (const name of Object.keys(out)) if (out[name].remaining <= 0) delete out[name];
   return out;
+}
+
+// Catch-up exercises have no program row, so they get a synthetic id: a stable NEGATIVE integer
+// (real ids are positive) because ids are written unquoted into inline handlers.
+function catchupExId(name) {
+  let h = 2166136261;
+  for (let i = 0; i < name.length; i++) { h ^= name.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return -((h >>> 0) % 2147483646) - 1;
+}
+
+// The exercise list for one day: the program's exercises, plus the week's catch-up sets when the
+// day's workout collects them (merged into a same-named row, otherwise appended). Every gym-page
+// code path that works on a specific day must use this instead of SESS[st].
+function daySession(o, d, st) {
+  const sess = SESS[st];
+  if (!sess || !sess.collectsCatchup || o !== weekActivityOffset) return sess;
+  const mon = wStart(o);
+  const isos = [...Array(7)].map((_, i) => { const x = new Date(mon.date); x.setDate(mon.date.getDate() + i); return localIso(x); });
+  const catchup = computeWeekCatchup({
+    doneSessions: weekDoneSessions,
+    setsByDate: Object.fromEntries(isos.map(iso => [iso, (weekActivityCache[iso] && weekActivityCache[iso].workout) || {}])),
+    program: SESS,
+    daySessionByDate: Object.fromEntries(isos.map((iso, i) => [iso, getActiveSession(o, i)])),
+    viewDate: isos[d],
+  });
+  if (!Object.keys(catchup).length) return sess;
+  const own = sess.ex.map(e => catchup[e.n]
+    ? { ...e, s: e.s + catchup[e.n].remaining, catchup: { ...catchup[e.n], merged: true } }
+    : e);
+  const extra = Object.entries(catchup)
+    .filter(([n]) => !sess.ex.some(e => e.n === n))
+    .map(([n, c]) => ({ n, t: c.targetDisplay, s: c.remaining, _id: catchupExId(n), catchup: { ...c, merged: false } }));
+  return { ...sess, ex: [...own, ...extra] };
 }
 
 async function setActiveSession(o, d, st) {

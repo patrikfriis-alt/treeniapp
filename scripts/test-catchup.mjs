@@ -83,3 +83,10 @@ assert.deepEqual(run({
 }), {});
 
 console.log('computeWeekCatchup: all 8 cases pass');
+// catchupExId: stable, negative, distinct for distinct names.
+const idSrc = html.match(/\r?\nfunction catchupExId\([\s\S]*?\r?\n\}\r?\n/);
+assert.ok(idSrc, 'catchupExId not found');
+vm.runInContext(idSrc[0] + '\nthis.id = catchupExId;', ctx);
+const a = ctx.id('Yksikätinen soutulaite'), b = ctx.id('Yksikätinen soutulaite'), c = ctx.id('Reverse Pec Deck');
+assert.equal(a, b); assert.ok(a < 0 && Number.isInteger(a)); assert.notEqual(a, c);
+console.log('catchupExId: ok');
