@@ -2044,7 +2044,7 @@ function stopRestTimer() {
 const celebratedPRSlots = new Set();
 
 function checkForPR(o, d, st, e) {
-  const sess = SESS[st];
+  const sess = daySession(o, d, st);
   const exObj = sess && sess.ex.find(x => x._id === e);
   if (!exObj) return;
   const exName = exObj.n;
@@ -2102,7 +2102,7 @@ function scheduleSyncSet(o, d, st, e, s) {
 }
 
 async function syncSet(o, d, st, e, s) {
-  const sess = SESS[st];
+  const sess = daySession(o, d, st);
   const ex = sess && sess.ex.find(x => x._id === e);
   if (!ex) return;
   const ed = getED(o, d, st, e), sd = ed.sets[s] || {};
@@ -2133,7 +2133,7 @@ async function syncSet(o, d, st, e, s) {
 
 function prefillExercise(o, d, exId, btnEl) {
   const st = getActiveSession(o, d);
-  const sess = SESS[st];
+  const sess = daySession(o, d, st);
   const ex = sess && sess.ex.find(x => x._id === exId);
   if (!ex) return;
   const prev = prevCache[ex.n];
@@ -2178,7 +2178,7 @@ function prefillExercise(o, d, exId, btnEl) {
 // the promotion animation, and collapse-on-confirm all already work on rows this touches.
 function applySuggestedWeight(o, d, exId) {
   const st = getActiveSession(o, d);
-  const sess = SESS[st];
+  const sess = daySession(o, d, st);
   const ex = sess && sess.ex.find(x => x._id === exId);
   if (!ex) return;
   const stuck = stuckCache[ex.n];
@@ -2258,7 +2258,7 @@ let stuckCache = {};
 
 async function loadPrevSession(o, d, requestId) {
   prevCache = {};
-  const st = getActiveSession(o, d), sess = SESS[st];
+  const st = getActiveSession(o, d), sess = daySession(o, d, st);
   if (!sess || !sess.ex || !sess.ex.length) return;
 
   const names = sess.ex.map(e => e.n);
@@ -2295,7 +2295,7 @@ async function loadPrevSession(o, d, requestId) {
 
 async function loadStuckWeightCache(o, d, requestId) {
   stuckCache = {};
-  const st = getActiveSession(o, d), sess = SESS[st];
+  const st = getActiveSession(o, d), sess = daySession(o, d, st);
   if (!sess || !sess.ex || !sess.ex.length) return;
 
   const names = sess.ex.map(e => e.n);
@@ -2575,7 +2575,7 @@ function updateSetBox(o, d, e, s) {
   const st   = getActiveSession(o, d);
   const ed   = getED(o, d, st, e);
   const sd   = (ed.sets && ed.sets[s]) || {};
-  const sess = SESS[st];
+  const sess = daySession(o, d, st);
   const exObj = sess && sess.ex.find(x => x._id === e);
   const exName = exObj ? exObj.n : null;
   const prev = exName ? getPrevSet(exName, s) : null;
@@ -3467,7 +3467,7 @@ async function renderTreeni() {
   document.getElementById('week-label').textContent = `Viikko ${wk} / ${isoWeekYear(ws.date)}`;
 
   const st   = getActiveSession(wOff, aDay);
-  const sess = SESS[st];
+  const sess = daySession(wOff, aDay, st);
   const started = isStarted(wOff, aDay, st);
   const done    = isDone(wOff, aDay, st);
 
@@ -3686,7 +3686,7 @@ async function catchUpToday() {
 }
 
 async function renderSession(requestId) {
-  const st = getActiveSession(wOff, aDay), sess = SESS[st];
+  const st = getActiveSession(wOff, aDay), sess = daySession(wOff, aDay, st);
   const el = document.getElementById('session-content');
 
   // Session type picker (collapsed by default — rarely changed once the week's schedule is set)
@@ -3881,7 +3881,7 @@ function toggleDone() {
   const st = getActiveSession(wOff, aDay);
   const goingDone = !isDone(wOff, aDay, st);
   if (goingDone) {
-    const sess = SESS[st];
+    const sess = daySession(wOff, aDay, st);
     const incomplete = (sess && sess.ex ? sess.ex : []).filter(ex => {
       const ed = getED(wOff, aDay, st, ex._id);
       const doneCount = (ed.sets || []).filter(s => {
