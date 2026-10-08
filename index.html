@@ -3212,19 +3212,21 @@ async function renderSleepTonnageChart() {
 
   wrap.innerHTML = `<div class="chart-wrap" style="margin-top:12px"><canvas id="sleep-tonnage-chart"></canvas></div>`;
   if (charts.sleepTonnage) charts.sleepTonnage.destroy();
+  const scatterOpts = baseChartOptions({
+    unit: ' kg',
+    x: { type: 'linear', title: { display: true, text: 'Unipisteet (edellisyö)', color: CHART_COLORS.tick, font: CHART_FONT },
+         ticks: { color: CHART_COLORS.tick, font: CHART_FONT, maxTicksLimit: 6, callback: v => fmtNum(v) } },
+    y: { beginAtZero: true, title: { display: true, text: 'Tonnimäärä (kg)', color: CHART_COLORS.tick, font: CHART_FONT } },
+  });
+  scatterOpts.interaction = { mode: 'nearest', intersect: true };
+  scatterOpts.plugins.tooltip.callbacks = {
+    title: () => '',
+    label: item => `Uni ${fmtNum(item.parsed.x, ' p')} → ${fmtNum(item.parsed.y, ' kg')}`,
+  };
   charts.sleepTonnage = new Chart(document.getElementById('sleep-tonnage-chart'), {
     type: 'scatter',
-    data: {
-      datasets: [{ label: 'Unipisteet vs. tonnimäärä', data: points, backgroundColor: '#2fff7e' }],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { title: { display: true, text: 'Unipisteet (edellisyö)', color: '#555' }, ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#222' } },
-        y: { title: { display: true, text: 'Tonnimäärä (kg)', color: '#555' }, beginAtZero: true, ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#222' } },
-      },
-    },
+    data: { datasets: [{ label: 'Unipisteet vs. tonnimäärä', data: points, backgroundColor: CHART_COLORS.s1, pointRadius: 4, pointHoverRadius: 6 }] },
+    options: scatterOpts,
   });
 }
 
@@ -3295,18 +3297,11 @@ async function renderForecastAccuracyChart() {
     data: {
       labels: predicted.map(p => p.x),
       datasets: [
-        { label: 'Ennustettu rasvanpudotus (kg)', data: predicted.map(p => p.y), borderColor: '#00f2ff', borderWidth: 2, pointRadius: 2, pointBackgroundColor: '#00f2ff', tension: .3, fill: false },
-        { label: 'Toteutunut rasvanpudotus (kg)', data: actual.map(p => p.y), borderColor: '#2fff7e', borderWidth: 2, pointRadius: 2, pointBackgroundColor: '#2fff7e', tension: .3, fill: false },
+        lineDataset('Ennustettu rasvanpudotus', predicted.map(p => p.y), CHART_COLORS.s1),
+        lineDataset('Toteutunut rasvanpudotus', actual.map(p => p.y), CHART_COLORS.s2),
       ],
     },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, labels: { color: '#999', font: { size: 10 } } } },
-      scales: {
-        y: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#222' } },
-        x: { ticks: { color: '#555', font: { size: 10 }, maxTicksLimit: 8 }, grid: { display: false } },
-      },
-    },
+    options: baseChartOptions({ dateLabels: true, unit: ' kg', legend: true }),
   });
 }
 
@@ -5129,28 +5124,8 @@ async function loadExerciseChart(exName) {
   if (charts.ex) charts.ex.destroy();
   charts.ex = new Chart(document.getElementById('ex-chart'), {
     type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: exName,
-        data: values,
-        borderColor: '#00f2ff',
-        borderWidth: 2,
-        pointRadius: 3,
-        pointBackgroundColor: '#00f2ff',
-        tension: .3,
-        fill: false,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        y: { ticks: { color: '#555', font: { size: 10 }, callback: v => v + ' kg' }, grid: { color: '#222' } },
-        x: { ticks: { color: '#555', font: { size: 10 } }, grid: { display: false } },
-      },
-    },
+    data: { labels, datasets: [lineDataset(exName, values)] },
+    options: baseChartOptions({ dateLabels: true, unit: ' kg' }),
   });
 }
 
@@ -5238,27 +5213,8 @@ async function loadModalChart(months) {
     if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
     _modalChart = new Chart(document.getElementById('ex-modal-chart'), {
       type: 'line',
-      data: {
-        labels: sortedDates,
-        datasets: [{
-          label: _modalExName,
-          data: sortedDates.map(d => byDate[d]),
-          borderColor: '#00f2ff',
-          borderWidth: 2,
-          pointRadius: 3,
-          pointBackgroundColor: '#00f2ff',
-          tension: .3,
-          fill: false,
-        }],
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          y: { ticks: { color: '#555', font: { size: 10 }, maxTicksLimit: 6, callback: v => Math.round(v) + ' kg' }, grid: { color: '#222' } },
-          x: { ticks: { color: '#555', font: { size: 10 } }, grid: { display: false } },
-        },
-      },
+      data: { labels: sortedDates, datasets: [lineDataset(_modalExName, sortedDates.map(d => Math.round(byDate[d] * 10) / 10))] },
+      options: baseChartOptions({ dateLabels: true, unit: ' kg' }),
     });
 
     const listEl = document.getElementById('ex-modal-sessions-list');
@@ -5322,7 +5278,7 @@ async function loadRunChart() {
   }
   if (statusEl) statusEl.textContent = '';
 
-  const labels = data.map(d => d.activity_date.slice(5));
+  const labels = data.map(d => d.activity_date);
   const values = type === 'distance'
     ? data.map(d => d.distance_km)
     : data.map(d => {
@@ -5331,34 +5287,15 @@ async function loadRunChart() {
       });
 
   if (charts.run) charts.run.destroy();
+  const isPace = type === 'pace';
   charts.run = new Chart(document.getElementById('run-chart'), {
     type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: type === 'distance' ? 'km' : 'min/km',
-        data: values,
-        borderColor: '#ff6b00',
-        borderWidth: 2,
-        pointRadius: 4,
-        pointBackgroundColor: '#ff6b00',
-        tension: 0.3,
-        fill: false,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        y: {
-          reverse: type === 'pace',
-          ticks: { color: '#555', font: { size: 10 } },
-          grid: { color: '#222' },
-        },
-        x: { ticks: { color: '#555', font: { size: 10 } }, grid: { display: false } },
-      },
-    },
+    data: { labels, datasets: [lineDataset(isPace ? 'Vauhti' : 'Matka', values)] },
+    options: baseChartOptions({
+      dateLabels: true, unit: isPace ? ' min/km' : ' km',
+      // Pace: lower is faster, so the axis is reversed (faster = higher) and titled.
+      y: isPace ? { reverse: true, title: { display: true, text: 'min/km (nopeampi ylempänä)', color: CHART_COLORS.tick, font: CHART_FONT } } : {},
+    }),
   });
 }
 
