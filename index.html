@@ -645,6 +645,8 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
 }
 .ex-block-title { font-size:var(--fs-md); font-weight:600; color:#fff; letter-spacing:-0.01em; }
 .ex-block-sub   { font-size:var(--fs-sm); color:rgba(255,255,255,0.5); margin-top:2px; }
+.catchup-heading { margin: 22px 2px 10px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--amber, var(--accent)); }
+.catchup-tag { display: inline-block; margin-top: 4px; font-size: var(--fs-xs); color: var(--amber, var(--accent)); }
 .ex-block-progress { text-align:right; flex-shrink:0; }
 .ex-block-prog-label { font-size:var(--fs-xs); color:rgba(255,255,255,0.4); margin-bottom:4px; }
 .ex-block-prog-bar  { width:50px; height:3px; background:var(--surface3); border-radius:3px; }
@@ -1678,7 +1680,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.41.0</div>
+    <div class="version-chip" style="margin:0">v1.42.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:var(--fs-xl);cursor:pointer;line-height:1;">✕</button>
   </div>
   <div style="font-size:var(--fs-xs);font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Navigointi</div>
@@ -1819,7 +1821,7 @@ async function loadProgram() {
 
   const newSESS = {};
   programSessionsRaw.forEach(s => {
-    newSESS[s.id] = { name: s.name, focus: s.focus || '', ex: [] };
+    newSESS[s.id] = { name: s.name, focus: s.focus || '', ex: [], collectsCatchup: s.collects_catchup === true };
   });
   programSessionExercisesRaw.forEach(e => {
     if (newSESS[e.program_session_id]) {
@@ -2044,7 +2046,7 @@ function stopRestTimer() {
 const celebratedPRSlots = new Set();
 
 function checkForPR(o, d, st, e) {
-  const sess = SESS[st];
+  const sess = daySession(o, d, st);
   const exObj = sess && sess.ex.find(x => x._id === e);
   if (!exObj) return;
   const exName = exObj.n;
@@ -2102,7 +2104,7 @@ function scheduleSyncSet(o, d, st, e, s) {
 }
 
 async function syncSet(o, d, st, e, s) {
-  const sess = SESS[st];
+  const sess = daySession(o, d, st);
   const ex = sess && sess.ex.find(x => x._id === e);
   if (!ex) return;
   const ed = getED(o, d, st, e), sd = ed.sets[s] || {};
@@ -2133,7 +2135,7 @@ async function syncSet(o, d, st, e, s) {
 
 function prefillExercise(o, d, exId, btnEl) {
   const st = getActiveSession(o, d);
-  const sess = SESS[st];
+  const sess = daySession(o, d, st);
   const ex = sess && sess.ex.find(x => x._id === exId);
   if (!ex) return;
   const prev = prevCache[ex.n];
@@ -2178,7 +2180,7 @@ function prefillExercise(o, d, exId, btnEl) {
 // the promotion animation, and collapse-on-confirm all already work on rows this touches.
 function applySuggestedWeight(o, d, exId) {
   const st = getActiveSession(o, d);
-  const sess = SESS[st];
+  const sess = daySession(o, d, st);
   const ex = sess && sess.ex.find(x => x._id === exId);
   if (!ex) return;
   const stuck = stuckCache[ex.n];
@@ -2258,7 +2260,7 @@ let stuckCache = {};
 
 async function loadPrevSession(o, d, requestId) {
   prevCache = {};
-  const st = getActiveSession(o, d), sess = SESS[st];
+  const st = getActiveSession(o, d), sess = daySession(o, d, st);
   if (!sess || !sess.ex || !sess.ex.length) return;
 
   const names = sess.ex.map(e => e.n);
@@ -2295,7 +2297,7 @@ async function loadPrevSession(o, d, requestId) {
 
 async function loadStuckWeightCache(o, d, requestId) {
   stuckCache = {};
-  const st = getActiveSession(o, d), sess = SESS[st];
+  const st = getActiveSession(o, d), sess = daySession(o, d, st);
   if (!sess || !sess.ex || !sess.ex.length) return;
 
   const names = sess.ex.map(e => e.n);
@@ -2428,17 +2430,18 @@ async function reconcileSessionWithServer(o, d, st, sess, requestId) {
    WEEK ACTIVITY CACHE
 ═══════════════════════════════════════════════════════════════ */
 let weekActivityCache = {};
+let weekDoneSessions = [];   // workout_sessions rows with is_done for the loaded week
+let weekActivityOffset = null; // which week (wOff) weekActivityCache/weekDoneSessions describe
 let treeniRequestId = 0;
 
 async function loadWeekActivityData(o, requestId) {
-  weekActivityCache = {};
   const mon = wStart(o);
   const sun = new Date(mon.date);
   sun.setDate(mon.date.getDate() + 6);
   const fromDate = mon.iso;
   const toDate   = localIso(sun);
 
-  const [workoutRes, actRes, overrideRes] = await Promise.all([
+  const [workoutRes, actRes, overrideRes, doneRes] = await Promise.all([
     sb.from('workout_sets')
       .select('workout_date, exercise_name, set_number, weight_kg, reps')
       .gte('workout_date', fromDate)
@@ -2453,32 +2456,45 @@ async function loadWeekActivityData(o, requestId) {
       .select('workout_date, session_type')
       .gte('workout_date', fromDate)
       .lte('workout_date', toDate),
+    sb.from('workout_sessions')
+      .select('workout_date, session_type, is_done')
+      .eq('is_done', true)
+      .gte('workout_date', fromDate)
+      .lte('workout_date', toDate)
+      .order('workout_date'),
   ]);
   if (requestId !== treeniRequestId) return;
+  if (doneRes.error) console.error('loadWeekActivityData (workout_sessions) failed:', doneRes.error.message);
 
   if (workoutRes.error) console.error('loadWeekActivityData (workout_sets) failed:', workoutRes.error.message);
   if (actRes.error) console.error('loadWeekActivityData (activity_data) failed:', actRes.error.message);
   if (overrideRes.error) console.error('loadWeekActivityData (day_session_overrides) failed:', overrideRes.error.message);
 
+  // Build into locals and swap all three globals together (no empty window for syncSet).
+  const cache = {};
   (workoutRes.data || []).forEach(row => {
-    if (!weekActivityCache[row.workout_date])
-      weekActivityCache[row.workout_date] = { workout: {}, activities: [] };
-    if (!weekActivityCache[row.workout_date].workout[row.exercise_name])
-      weekActivityCache[row.workout_date].workout[row.exercise_name] = [];
-    weekActivityCache[row.workout_date].workout[row.exercise_name].push(row);
+    if (!cache[row.workout_date])
+      cache[row.workout_date] = { workout: {}, activities: [] };
+    if (!cache[row.workout_date].workout[row.exercise_name])
+      cache[row.workout_date].workout[row.exercise_name] = [];
+    cache[row.workout_date].workout[row.exercise_name].push(row);
   });
 
   (actRes.data || []).forEach(row => {
-    if (!weekActivityCache[row.activity_date])
-      weekActivityCache[row.activity_date] = { workout: {}, activities: [] };
-    weekActivityCache[row.activity_date].activities.push(row);
+    if (!cache[row.activity_date])
+      cache[row.activity_date] = { workout: {}, activities: [] };
+    cache[row.activity_date].activities.push(row);
   });
 
   (overrideRes.data || []).forEach(row => {
-    if (!weekActivityCache[row.workout_date])
-      weekActivityCache[row.workout_date] = { workout: {}, activities: [] };
-    weekActivityCache[row.workout_date].override = row.session_type;
+    if (!cache[row.workout_date])
+      cache[row.workout_date] = { workout: {}, activities: [] };
+    cache[row.workout_date].override = row.session_type;
   });
+
+  weekActivityCache = cache;
+  weekDoneSessions = (workoutRes.error || doneRes.error) ? [] : (doneRes.data || []);
+  weekActivityOffset = o;
 }
 
 const getPrevSet = (exName, setIdx) => {
@@ -2564,7 +2580,7 @@ function updateSetBox(o, d, e, s) {
   const st   = getActiveSession(o, d);
   const ed   = getED(o, d, st, e);
   const sd   = (ed.sets && ed.sets[s]) || {};
-  const sess = SESS[st];
+  const sess = daySession(o, d, st);
   const exObj = sess && sess.ex.find(x => x._id === e);
   const exName = exObj ? exObj.n : null;
   const prev = exName ? getPrevSet(exName, s) : null;
@@ -3456,7 +3472,7 @@ async function renderTreeni() {
   document.getElementById('week-label').textContent = `Viikko ${wk} / ${isoWeekYear(ws.date)}`;
 
   const st   = getActiveSession(wOff, aDay);
-  const sess = SESS[st];
+  const sess = daySession(wOff, aDay, st);
   const started = isStarted(wOff, aDay, st);
   const done    = isDone(wOff, aDay, st);
 
@@ -3589,6 +3605,71 @@ const getActiveSession = (o, d) => {
   return (cached && cached.override) || SCHED[d];
 };
 
+// Weekly catch-up ("Viikon rästit") for the collecting workout shown on viewDate.
+// Undone = target sets minus logged sets (a row with weight or reps) of each exercise in a
+// workout marked done this week; collecting workouts never generate catch-up themselves.
+// Sets already made up on OTHER collecting days this week are subtracted; the viewed day's own
+// logged sets are not (they fill the rows shown). Pure: no DOM, no Supabase.
+function computeWeekCatchup({ doneSessions, setsByDate, program, daySessionByDate, viewDate }) {
+  const loggedCount = (iso, name) =>
+    ((setsByDate[iso] || {})[name] || []).filter(r => r.weight_kg != null || r.reps != null).length;
+  const out = {};
+  for (const row of doneSessions || []) {
+    const sess = program[row.session_type];
+    if (!row.is_done || !sess || sess.collectsCatchup || !sess.ex || !sess.ex.length) continue;
+    for (const ex of sess.ex) {
+      const missing = Math.max(0, ex.s - loggedCount(row.workout_date, ex.n));
+      if (!missing) continue;
+      if (!out[ex.n]) out[ex.n] = { remaining: 0, origins: [], targetDisplay: ex.t };
+      out[ex.n].remaining += missing;
+      if (!out[ex.n].origins.includes(sess.name)) out[ex.n].origins.push(sess.name);
+    }
+  }
+  for (const [iso, sid] of Object.entries(daySessionByDate || {})) {
+    const sess = program[sid];
+    if (iso === viewDate || !sess || !sess.collectsCatchup) continue;
+    for (const name of Object.keys(out)) {
+      const own = (sess.ex.find(e => e.n === name) || { s: 0 }).s;
+      out[name].remaining -= Math.max(0, loggedCount(iso, name) - own);
+    }
+  }
+  for (const name of Object.keys(out)) if (out[name].remaining <= 0) delete out[name];
+  return out;
+}
+
+// Catch-up exercises have no program row, so they get a synthetic id: a stable NEGATIVE integer
+// (real ids are positive) because ids are written unquoted into inline handlers.
+function catchupExId(name) {
+  let h = 2166136261;
+  for (let i = 0; i < name.length; i++) { h ^= name.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return -((h >>> 0) % 2147483646) - 1;
+}
+
+// The exercise list for one day: the program's exercises, plus the week's catch-up sets when the
+// day's workout collects them (merged into a same-named row, otherwise appended). Every gym-page
+// code path that works on a specific day must use this instead of SESS[st].
+function daySession(o, d, st) {
+  const sess = SESS[st];
+  if (!sess || !sess.collectsCatchup || o !== weekActivityOffset) return sess;
+  const mon = wStart(o);
+  const isos = [...Array(7)].map((_, i) => { const x = new Date(mon.date); x.setDate(mon.date.getDate() + i); return localIso(x); });
+  const catchup = computeWeekCatchup({
+    doneSessions: weekDoneSessions,
+    setsByDate: Object.fromEntries(isos.map(iso => [iso, (weekActivityCache[iso] && weekActivityCache[iso].workout) || {}])),
+    program: SESS,
+    daySessionByDate: Object.fromEntries(isos.map((iso, i) => [iso, getActiveSession(o, i)])),
+    viewDate: isos[d],
+  });
+  if (!Object.keys(catchup).length) return sess;
+  const own = sess.ex.map(e => catchup[e.n]
+    ? { ...e, s: e.s + catchup[e.n].remaining, catchup: { ...catchup[e.n], merged: true } }
+    : e);
+  const extra = Object.entries(catchup)
+    .filter(([n]) => !sess.ex.some(e => e.n === n))
+    .map(([n, c]) => ({ n, t: c.targetDisplay, s: c.remaining, _id: catchupExId(n), catchup: { ...c, merged: false } }));
+  return { ...sess, ex: [...own, ...extra] };
+}
+
 async function setActiveSession(o, d, st) {
   const mon = wStart(o), dt = new Date(mon.date);
   dt.setDate(mon.date.getDate() + d);
@@ -3610,7 +3691,7 @@ async function catchUpToday() {
 }
 
 async function renderSession(requestId) {
-  const st = getActiveSession(wOff, aDay), sess = SESS[st];
+  const st = getActiveSession(wOff, aDay), sess = daySession(wOff, aDay, st);
   const el = document.getElementById('session-content');
 
   // Session type picker (collapsed by default — rarely changed once the week's schedule is set)
@@ -3649,6 +3730,13 @@ async function renderSession(requestId) {
   const locked  = !started || done;
 
   sess.ex.forEach((ex, ei) => {
+    if (ex.catchup && !ex.catchup.merged && !(ei > 0 && sess.ex[ei - 1].catchup && !sess.ex[ei - 1].catchup.merged)) {
+      html += `<div class="catchup-heading">Viikon rästit</div>`;
+    }
+    const catchupTag = !ex.catchup ? ''
+      : ex.catchup.merged
+        ? `<div class="catchup-tag">+${ex.catchup.remaining} ${ex.catchup.remaining === 1 ? 'rästi' : 'rästiä'} ${escapeHtml(ex.catchup.origins.join(', '))}:sta</div>`
+        : `<div class="catchup-tag">Rästi · ${escapeHtml(ex.catchup.origins.join(', '))}</div>`;
     const exId = ex._id;
     let ed     = getED(wOff, aDay, st, exId);
     const prev = prevCache[ex.n];
@@ -3720,6 +3808,7 @@ async function renderSession(requestId) {
         <div>
           <div class="ex-block-title" data-ex="${ex.n.replace(/"/g,'&quot;')}" onclick="openExerciseModal(this.dataset.ex)" style="cursor:pointer">${escapeHtml(ex.n)}<span class="ex-check" id="ex-check-${wOff}-${aDay}-${exId}"${exDone ? '' : ' style="display:none"'}>✓</span>${isPR ? '<span class="pr-badge">PR</span>' : ''}</div>
           <div class="ex-block-sub">${escapeHtml(ex.t)}</div>
+          ${catchupTag}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
           <div class="ex-block-progress">
@@ -3805,7 +3894,7 @@ function toggleDone() {
   const st = getActiveSession(wOff, aDay);
   const goingDone = !isDone(wOff, aDay, st);
   if (goingDone) {
-    const sess = SESS[st];
+    const sess = daySession(wOff, aDay, st);
     const incomplete = (sess && sess.ex ? sess.ex : []).filter(ex => {
       const ed = getED(wOff, aDay, st, ex._id);
       const doneCount = (ed.sets || []).filter(s => {
@@ -8675,6 +8764,11 @@ function renderSessionExpand(s) {
   });
   html += `</div>
 
+    <label class="sess-catchup-toggle" style="display:flex;align-items:center;gap:10px;margin-top:14px;font-size:var(--fs-sm);color:var(--text2);cursor:pointer;">
+      <input type="checkbox" ${s.collects_catchup ? 'checked' : ''} onchange="toggleCollectsCatchup('${s.id}', this.checked)">
+      Kerää viikon rästit
+    </label>
+
     <div class="sess-field-label" style="margin-top:14px">Liikkeet</div>
     <div id="ex-list-${s.id}">`;
   ex.forEach(e => {
@@ -8718,6 +8812,14 @@ async function saveSessionField(id, field, value) {
 async function toggleSessionWeekday(id, dayIndex) {
   const { error } = await sb.rpc('toggle_session_weekday', { p_session_id: id, p_day_index: dayIndex });
   if (error) { console.error('toggleSessionWeekday failed:', error.message); return; }
+  await loadProgram();
+  renderOhjelma();
+}
+
+// "Kerää viikon rästit": this session's day view gets the week's undone sets (see daySession).
+async function toggleCollectsCatchup(id, on) {
+  const { error } = await sbWrite({ table: 'program_sessions', op: 'update', payload: { collects_catchup: on }, eq: { column: 'id', value: id } });
+  if (error) { console.error('toggleCollectsCatchup failed:', error.message); return; }
   await loadProgram();
   renderOhjelma();
 }
