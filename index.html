@@ -1687,7 +1687,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.43.0</div>
+    <div class="version-chip" style="margin:0">v1.44.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:var(--fs-xl);cursor:pointer;line-height:1;">✕</button>
   </div>
   <div style="font-size:var(--fs-xs);font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Navigointi</div>
@@ -2065,8 +2065,7 @@ function toggleSeriesWithDots(e, item, legend) {
 
 const syncTimers = {};
 const charts = {};
-let forecastState = null;        // { latest, profile, forecast } tai null
-let forecastMonthOffset = 0;     // 0 = kuluva kuukausi, negatiivinen = mennyt, positiivinen = tuleva
+let forecastState = null;        // { latest, profile, forecast, weeks } tai null
 
 /* ─── Rest timer ────────────────────────────────────────────── */
 let _restInterval = null;
@@ -4042,8 +4041,7 @@ async function loadBodyMetrics() {
     });
   }
 
-  forecastState = (hasTarget && hasComposition) ? { latest, profile, forecast } : null;
-  forecastMonthOffset = 0;
+  forecastState = (hasTarget && hasComposition) ? { latest, profile, forecast, weeks } : null;
   renderForecastCard();
 
   if (hist && hist.length > 1) {
@@ -4241,44 +4239,47 @@ async function getRecentAvgWeeklyIntake(asOfIso = localIso(new Date())) {
   return (totalKcal / loggedDays) * 7;
 }
 
-function forecastMonthBounds(offset) {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0);
-  return {
-    startIso: localIso(start),
-    endIso: localIso(end),
-    label: start.toLocaleDateString('fi-FI', { month: 'long', year: 'numeric' }),
-  };
+const FI_MONTHS = ['tammi', 'helmi', 'maalis', 'huhti', 'touko', 'kesä', 'heinä', 'elo', 'syys', 'loka', 'marras', 'joulu'];
+// Monday (ISO date) of the week an ISO date belongs to.
+function mondayIso(iso) {
+  const d = isoToLocalDate(iso);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return localIso(d);
+}
+function addDaysIso(iso, days) {
+  const d = isoToLocalDate(iso);
+  d.setDate(d.getDate() + days);
+  return localIso(d);
 }
 
-function changeForecastMonth(dir) {
-  forecastMonthOffset += dir;
-  renderForecastCard();
-}
-
-async function computeHistoricalForecast(cutoffIso, targetWeightKg) {
-  const [{ data: priorMetrics }, { data: priorCal }, weeklyIntakeKcal] = await Promise.all([
-    // Enough rows to cover the last week with measurements before the cutoff.
-    sb.from('body_metrics').select('*').lt('measured_at', cutoffIso).order('measured_at', { ascending: false }).limit(20),
-    sb.from('model_calibration').select('*').lte('calibrated_at', cutoffIso).order('calibrated_at', { ascending: false }).limit(1),
-    getRecentAvgWeeklyIntake(cutoffIso),
-  ]);
-  // Start from the last week's value before the cutoff (average of that week's measurements).
-  const priorWeeks = groupMeasurementsByWeek(priorMetrics);
-  const metric = priorWeeks[priorWeeks.length - 1];
-  if (!metric || metric.weight_kg == null || metric.fat_pct == null || metric.muscle_pct == null) return null;
-
-  const cal = priorCal && priorCal[0];
-  const otherTissueCoeff = cal ? cal.other_tissue_kcal_per_kg : DEFAULT_OTHER_TISSUE_COEFF;
-  const activityMult = cal ? cal.activity_multiplier : DEFAULT_ACTIVITY_MULT;
-  const comp = getBodyComposition(metric.weight_kg, metric.fat_pct, metric.muscle_pct);
-  const { rows } = simulateToTarget({
-    fatKg: comp.fatKg, muscleKg: comp.muscleKg, otherKg: comp.otherKg,
-    targetWeightKg, weeklyIntakeKcal, otherTissueCoeff, activityMult,
-  });
-  return { startDate: metric.measured_at, rows };
-}
+// Draws the "Tänään" marker and the target label on the forecast journey chart.
+const forecastMarkersPlugin = {
+  id: 'forecastMarkers',
+  afterDatasetsDraw(chart, _args, o) {
+    const { ctx, chartArea: area, scales: { x, y } } = chart;
+    ctx.save();
+    ctx.font = `10px ${getComputedStyle(document.body).fontFamily}`;
+    ctx.fillStyle = CHART_COLORS.tick;
+    if (o.todayIndex != null) {
+      const px = x.getPixelForValue(o.todayIndex);
+      ctx.strokeStyle = CHART_COLORS.ref;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(px, area.top); ctx.lineTo(px, area.bottom); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('Tänään', px + 4, area.top + 2);
+    }
+    if (o.target) {
+      const px = x.getPixelForValue(o.target.index), py = y.getPixelForValue(o.target.value);
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(o.target.text, px, py - 8);
+    }
+    ctx.restore();
+  },
+};
 
 async function renderForecastCard() {
   const el = document.getElementById('forecast-body');
@@ -4292,17 +4293,16 @@ async function renderForecastCard() {
     return;
   }
 
-  const { profile, forecast } = forecastState;
-  const { startIso, endIso, label } = forecastMonthBounds(forecastMonthOffset);
-
+  const { latest, forecast } = forecastState;
+  const reachable = forecast && !forecast.alreadyAtTarget && forecast.rows.length && forecast.weeksToTarget < 150;
   let statsHtml;
   if (forecast && forecast.alreadyAtTarget) {
     statsHtml = `<div class="kc-week-budget-sub">Tavoitepaino on jo saavutettu</div>`;
-  } else if (!forecast || forecast.weeksToTarget >= 150 || !forecast.rows.length) {
+  } else if (!reachable) {
     statsHtml = `<div class="kc-week-budget-sub">Nykyisellä syömistahdilla tavoitetta ei saavuteta ennustejaksolla</div>`;
   } else {
-    const etaDate = new Date();
-    etaDate.setDate(etaDate.getDate() + forecast.weeksToTarget * 7);
+    // Counted from the latest measurement — the same origin the chart's forecast line uses.
+    const etaDate = isoToLocalDate(addDaysIso(latest.measured_at, forecast.weeksToTarget * 7));
     const etaFormat = etaDate.getFullYear() === new Date().getFullYear()
       ? { day: 'numeric', month: 'numeric' }
       : { day: 'numeric', month: 'numeric', year: 'numeric' };
@@ -4319,94 +4319,72 @@ async function renderForecastCard() {
   }
 
   el.innerHTML = `
-    <div class="week-nav">
-      <button class="week-btn" onclick="changeForecastMonth(-1)">←</button>
-      <span class="week-label">${label}</span>
-      <button class="week-btn" onclick="changeForecastMonth(1)">→</button>
-    </div>
-    <div class="chart-subtitle" id="forecast-target-note"></div>
-    <div class="chart-wrap"><canvas id="forecast-chart"></canvas></div>
+    <div class="chart-wrap" style="height:220px"><canvas id="forecast-chart"></canvas></div>
     ${statsHtml}`;
-
-  await renderForecastChart(startIso, endIso, profile, forecast);
+  renderForecastChart();
 }
 
-async function renderForecastChart(startIso, endIso, profile, forecast) {
-  const todayIso = localIso(new Date());
+// The whole journey on one chart: weekly actual weights from the first measurement, the forecast
+// from the latest measurement to the target, the target as a labelled point, and a today marker.
+// x = consecutive weeks (Mondays), so distance on the axis is proportional to time.
+function renderForecastChart() {
+  if (charts.forecast) charts.forecast.destroy();
+  const { latest, profile, forecast, weeks } = forecastState;
+  const actualByMonday = {};
+  (weeks || []).forEach(w => { if (w.weight_kg != null) actualByMonday[mondayIso(w.measured_at)] = round1(w.weight_kg); });
 
-  const { data: monthActual } = await sb.from('body_metrics')
-    .select('measured_at,weight_kg')
-    .gte('measured_at', startIso).lte('measured_at', endIso)
-    .order('measured_at');
-  const actualByDate = {};
-  (monthActual || []).forEach(r => { if (r.weight_kg != null) actualByDate[r.measured_at] = r.weight_kg; });
-
-  const liveForecastByDate = {};
-  if (forecast && forecast.rows.length && forecast.weeksToTarget < 150 && endIso >= todayIso) {
-    const lastDate = new Date(forecastState.latest.measured_at + 'T00:00:00');
-    forecast.rows.forEach(r => {
-      const d = new Date(lastDate);
-      d.setDate(lastDate.getDate() + r.week * 7);
-      const iso = localIso(d);
-      if (iso >= startIso && iso <= endIso) liveForecastByDate[iso] = r.totalWeight;
-    });
-    // Start the forecast line at the latest actual value so actual → forecast is one continuous path.
-    const startIsoLive = forecastState.latest.measured_at;
-    const lastActualIso = Object.keys(actualByDate).sort().pop();
-    if (lastActualIso && lastActualIso >= forecastState.latest.measured_at && lastActualIso <= todayIso) {
-      liveForecastByDate[lastActualIso] = actualByDate[lastActualIso];
-    } else if (startIsoLive >= startIso && startIsoLive <= endIso && forecastState.latest.weight_kg != null) {
-      liveForecastByDate[startIsoLive] = round1(forecastState.latest.weight_kg);
-    }
+  const forecastByMonday = {};
+  const reachable = forecast && !forecast.alreadyAtTarget && forecast.rows.length && forecast.weeksToTarget < 150;
+  // Unreachable target: still show where the current pace leads over the next half year.
+  const shownRows = forecast && !forecast.alreadyAtTarget ? forecast.rows.slice(0, reachable ? forecast.rows.length : 26) : [];
+  if (shownRows.length) {
+    forecastByMonday[mondayIso(latest.measured_at)] = round1(latest.weight_kg); // continuous with the actual line
+    shownRows.forEach(r => { forecastByMonday[mondayIso(addDaysIso(latest.measured_at, r.week * 7))] = r.totalWeight; });
   }
 
-  const historicalByDate = {};
-  if (endIso < todayIso) {
-    const historical = await computeHistoricalForecast(startIso, profile.target_weight_kg);
-    if (historical) {
-      const startDate = new Date(historical.startDate + 'T00:00:00');
-      historical.rows.forEach(r => {
-        const d = new Date(startDate);
-        d.setDate(startDate.getDate() + r.week * 7);
-        const iso = localIso(d);
-        if (iso >= startIso && iso <= endIso) historicalByDate[iso] = r.totalWeight;
+  const known = [...Object.keys(actualByMonday), ...Object.keys(forecastByMonday)].sort();
+  if (!known.length) return;
+  const labels = [];
+  for (let m = known[0]; m <= known[known.length - 1]; m = addDaysIso(m, 7)) labels.push(m);
+
+  const actualData = labels.map(m => actualByMonday[m] ?? null);
+  const forecastData = labels.map(m => forecastByMonday[m] ?? null);
+  const datasets = [lineDataset('Toteuma', actualData, CHART_COLORS.s1)];
+  if (shownRows.length) datasets.push(lineDataset('Ennuste', forecastData, CHART_COLORS.s2, { borderDash: [6, 4], pointRadius: 0 }));
+
+  let target = null;
+  if (reachable) {
+    const lastRow = forecast.rows[forecast.rows.length - 1];
+    const etaIso = addDaysIso(latest.measured_at, lastRow.week * 7);
+    const index = labels.indexOf(mondayIso(etaIso));
+    if (index >= 0) {
+      const etaDate = isoToLocalDate(etaIso);
+      target = { index, value: lastRow.totalWeight, text: `${fmtNum(profile.target_weight_kg, ' kg')} · ${etaDate.getDate()}.${etaDate.getMonth() + 1}.${etaDate.getFullYear()}` };
+      datasets.push({
+        label: 'Tavoite', data: labels.map((_, i) => (i === index ? lastRow.totalWeight : null)),
+        pointRadius: 5, pointHoverRadius: 6, pointBackgroundColor: CHART_COLORS.s2, borderWidth: 0, showLine: false,
       });
     }
   }
+  const todayIndex = labels.indexOf(mondayIso(localIso(new Date())));
 
-  const labels = [...new Set([
-    ...Object.keys(actualByDate),
-    ...Object.keys(liveForecastByDate),
-    ...Object.keys(historicalByDate),
-  ])].sort();
-
-  if (charts.forecast) charts.forecast.destroy();
-  if (!labels.length) {
-    document.getElementById('forecast-chart').getContext('2d').clearRect(0, 0, 9999, 9999);
-    return;
-  }
-
-  const actualData = labels.map(d => actualByDate[d] ?? null);
-  const liveData = labels.map(d => liveForecastByDate[d] ?? null);
-  const historicalData = labels.map(d => historicalByDate[d] ?? null);
-  const hasLive = liveData.filter(v => v != null).length >= 2;
-  const hasHistorical = historicalData.some(v => v != null);
-
-  const datasets = [lineDataset('Toteuma', actualData, CHART_COLORS.s1)];
-  if (hasLive) datasets.push(lineDataset('Ennuste', liveData, CHART_COLORS.s2, { borderDash: [6, 4], pointRadius: 0 }));
-  if (hasHistorical) datasets.push(lineDataset('Mennyt ennuste', historicalData, CHART_COLORS.ref, { borderDash: [2, 3], borderWidth: 1.5, pointRadius: 0 }));
-  const fcTarget = profile && profile.target_weight_kg != null ? Number(profile.target_weight_kg) : null;
-  const plottedKg = [...actualData, ...(hasLive ? liveData : []), ...(hasHistorical ? historicalData : [])].filter(v => v != null);
-  const showTargetLine = fcTarget != null && plottedKg.length > 0
-    && fcTarget >= Math.min(...plottedKg) - TARGET_LINE_MAX_GAP_KG && fcTarget <= Math.max(...plottedKg) + TARGET_LINE_MAX_GAP_KG;
-  if (showTargetLine) datasets.push(referenceLineDataset('Tavoitepaino', fcTarget, labels.length));
-  const noteEl = document.getElementById('forecast-target-note');
-  if (noteEl) noteEl.textContent = fcTarget != null && !showTargetLine ? `Tavoitepaino ${fmtNum(fcTarget, ' kg')}` : '';
+  const opts = baseChartOptions({ unit: ' kg', legend: true });
+  opts.scales.x.ticks.callback = function (v) {
+    const d = isoToLocalDate(this.getLabelForValue(v));
+    return `${FI_MONTHS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
+  };
+  opts.plugins.tooltip.callbacks.title = items => {
+    if (!items.length) return '';
+    const iso = items[0].label;
+    return `Vk ${isoWeek(isoToLocalDate(iso))} · ${fmtDayLong(iso)}`;
+  };
+  opts.plugins.forecastMarkers = { todayIndex: todayIndex >= 0 ? todayIndex : null, target };
 
   charts.forecast = new Chart(document.getElementById('forecast-chart'), {
     type: 'line',
     data: { labels, datasets },
-    options: baseChartOptions({ dateLabels: true, unit: ' kg', legend: true }),
+    options: opts,
+    plugins: [forecastMarkersPlugin],
   });
 }
 
