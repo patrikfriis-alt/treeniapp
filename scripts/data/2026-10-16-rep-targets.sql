@@ -1,0 +1,54 @@
+-- Rep targets: compound 10, isolation 12, calves 15 (approved 2026-10-16). Sets unchanged.
+-- Each update must hit exactly one row (matched by id AND the old text), else nothing changes.
+begin;
+do $$
+declare n int;
+begin
+  update program_session_exercises set target_display = '3×12' where id = 53 and target_display = '3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 53: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '3×12' where id = 55 and target_display = '3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 55: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '3×12' where id = 61 and target_display = '3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 61: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '3×12' where id = 62 and target_display = '3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 62: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '4×15' where id = 63 and target_display = '4×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 63: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '3×12' where id = 65 and target_display = '3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 65: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '4×12' where id = 66 and target_display = '4×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 66: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '3×12' where id = 67 and target_display = '3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 67: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '3×12' where id = 68 and target_display = '3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 68: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '3×12' where id = 73 and target_display = '3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 73: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '3×12' where id = 74 and target_display = '3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 74: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '3×12' where id = 75 and target_display = '3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 75: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '4×15' where id = 76 and target_display = '4×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 76: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '4×12' where id = 77 and target_display = '4×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 77: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = 'Supersarja ojentaja · 3×12' where id = 78 and target_display = 'Supersarja ojentaja · 3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 78: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = 'Supersarja hauis · 3×12' where id = 79 and target_display = 'Supersarja hauis · 3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 79: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '3×12' where id = 80 and target_display = '3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 80: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '3×12' where id = 81 and target_display = '3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 81: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '3×12' where id = 82 and target_display = '3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 82: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '3×12' where id = 83 and target_display = '3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 83: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = 'Supersarja rannekääntö · 3×12' where id = 84 and target_display = 'Supersarja rannekääntö · 3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 84: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = 'Supersarja käänt. hauis · 3×12' where id = 85 and target_display = 'Supersarja käänt. hauis · 3×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 85: expected 1, got %', n; end if;
+  update program_session_exercises set target_display = '4×15' where id = 86 and target_display = '4×10';
+  get diagnostics n = row_count; if n <> 1 then raise exception 'row 86: expected 1, got %', n; end if;
+end $$;
+commit;
