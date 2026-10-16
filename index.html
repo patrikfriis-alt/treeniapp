@@ -583,6 +583,9 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
   transition: all var(--t);
 }
 .day-tab.active { background: var(--accent); color: #000; }
+.meso-banner { padding: 12px 14px; margin-bottom: 12px; border: 1px solid; border-radius: var(--radius-md); color: #fff; font-size: var(--fs-sm); line-height: 1.45; }
+.meso-banner--peak { background: #2e1f08; border-color: #EF9F27; }
+.meso-banner--deload { background: #2e0a0a; border-color: #E24B4A; }
 .day-tab.done   { color: var(--green); }
 .day-tab.rest   { color: var(--text3); }
 
@@ -1687,7 +1690,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.44.0</div>
+    <div class="version-chip" style="margin:0">v1.45.0</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:var(--fs-xl);cursor:pointer;line-height:1;">✕</button>
   </div>
   <div style="font-size:var(--fs-xs);font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Navigointi</div>
@@ -1722,6 +1725,9 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
   <div style="font-size:var(--fs-xs);font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:20px;margin-bottom:12px;">Muu</div>
   <button onclick="openRestTimerModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:var(--fs-base);cursor:pointer;">
     <span data-icon="timer" style="display:inline-flex"></span> Lepoajastin
+  </button>
+  <button onclick="startNewMesocycle()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:var(--fs-base);cursor:pointer;">
+    <span data-icon="calendar" style="display:inline-flex"></span> Aloita uusi mesosykli
   </button>
   <button onclick="openProfileModal()" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:none;color:var(--text);font-size:var(--fs-base);cursor:pointer;">
     <span data-icon="scale" style="display:inline-flex"></span> Profiili
@@ -1927,6 +1933,35 @@ function groupMeasurementsByWeek(rows) {
 
 // One decimal for display: 110.45 → 110.5 (same "." style the Keho numbers already use).
 const round1 = v => Math.round(v * 10) / 10;
+
+/* ─── Mesosykli: 6 viikkoa, viikko 6 = deload ─────────────────── */
+const MESOCYCLE_WEEKS = 6;
+const MESO_COLORS = { 1: '#1D9E75', 2: '#1D9E75', 3: '#EF9F27', 4: '#EF9F27', 5: '#E8742A', 6: '#E24B4A' };
+
+// Whole weeks between two Mondays given as ISO dates. Counted on UTC calendar dates, so DST
+// changes and year boundaries (ISO week 52/53 → 1) can't shift the result.
+function weeksBetweenMondays(fromIso, toIso) {
+  const utc = iso => { const [y, m, d] = iso.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+  return Math.round((utc(toIso) - utc(fromIso)) / (7 * 86400000));
+}
+
+// Mesocycle week (1–6) of the week starting weekMondayIso, for a cycle that started on
+// startMondayIso. Repeats every 6 weeks (week 7 = week 1 of the next cycle); null before the start.
+function getMesocycleWeek(startMondayIso, weekMondayIso) {
+  if (!startMondayIso || !weekMondayIso) return null;
+  const n = weeksBetweenMondays(startMondayIso, weekMondayIso);
+  return n < 0 ? null : (n % MESOCYCLE_WEEKS) + 1;
+}
+
+// Start Monday of the cycle containing weekMondayIso: the stored start moved forward in whole
+// 6-week steps, so cycles stay aligned even if the app wasn't opened for a while.
+function rolledMesocycleStart(startMondayIso, weekMondayIso) {
+  const n = weeksBetweenMondays(startMondayIso, weekMondayIso);
+  if (n < MESOCYCLE_WEEKS) return startMondayIso;
+  const [y, m, d] = startMondayIso.split('-').map(Number);
+  const rolled = new Date(Date.UTC(y, m - 1, d + Math.floor(n / MESOCYCLE_WEEKS) * MESOCYCLE_WEEKS * 7));
+  return rolled.toISOString().slice(0, 10);
+}
 
 /* ═══════════════════════════════════════════════════════════════
    LOCAL DATA HELPERS
@@ -3009,6 +3044,18 @@ async function checkBestRunningWeek(offset = wOff) {
 }
 
 async function checkPlateau(offset = wOff) {
+  // Deload weeks are skipped (manually marked, or mesocycle week 6): lighter loads there are
+  // planned, not a stall. The check compares the last three NON-deload weeks.
+  const s = await loadAppSettings();
+  const isDeloadMonday = iso => !!s && (s.deload_week_monday === iso
+    || getMesocycleWeek(s.mesocycle_start_monday, iso) === MESOCYCLE_WEEKS);
+  if (isDeloadMonday(wStart(offset).iso)) return null;
+  const weekOffsets = [];
+  for (let i = 0; weekOffsets.length < 3 && i < 8; i++) {
+    if (!isDeloadMonday(wStart(offset - i).iso)) weekOffsets.push(offset - i);
+  }
+  if (weekOffsets.length < 3) return null;
+
   const mon = wStart(offset);
   const sun = new Date(mon.date);
   sun.setDate(mon.date.getDate() + 6);
@@ -3018,15 +3065,15 @@ async function checkPlateau(offset = wOff) {
   const exercisesThisWeek = [...new Set((thisWeekSets || []).map(r => r.exercise_name))];
   if (!exercisesThisWeek.length) return null;
 
-  const mon3 = wStart(offset - 2);
+  const mon3 = wStart(weekOffsets[2]);
   const { data: historySets, error: historyErr } = await sb.from('workout_sets').select('exercise_name,weight_kg,workout_date')
     .in('exercise_name', exercisesThisWeek)
     .gte('workout_date', mon3.iso).lte('workout_date', localIso(sun));
   if (historyErr) { console.error('checkPlateau failed:', historyErr.message); return null; }
 
   for (const exName of exercisesThisWeek) {
-    const weekMax = [0, 1, 2].map(i => {
-      const wm = wStart(offset - i);
+    const weekMax = weekOffsets.map(wo => {
+      const wm = wStart(wo);
       const ws = new Date(wm.date);
       ws.setDate(wm.date.getDate() + 6);
       const from = wm.iso, to = localIso(ws);
@@ -3549,8 +3596,13 @@ async function renderTreeni() {
   await loadWeekActivityData(wOff, requestId);
   if (requestId !== treeniRequestId) return;
 
+  await ensureMesocycle();
+  if (requestId !== treeniRequestId) return;
+
   const ws = wStart(wOff), wk = isoWeek(ws.date);
-  document.getElementById('week-label').textContent = `Viikko ${wk} / ${isoWeekYear(ws.date)}`;
+  const meso = mesoWeekFor(wOff);
+  document.getElementById('week-label').innerHTML = `Viikko ${wk} / ${isoWeekYear(ws.date)}`
+    + (meso ? ` · <span style="color:${MESO_COLORS[meso]};font-weight:700">Sykli ${meso}/${MESOCYCLE_WEEKS}</span>` : '');
 
   const st   = getActiveSession(wOff, aDay);
   const sess = daySession(wOff, aDay, st);
@@ -3623,6 +3675,11 @@ async function renderTreeni() {
     else if (isDone(wOff, i, ist)) btn.classList.add('done');
     else if (!hasEx)                btn.classList.add('rest');
     btn.style.cssText = 'display:flex;flex-direction:column;align-items:center;';
+    // Active tab wears the mesocycle week's colour (border + background).
+    if (i === aDay && meso) {
+      btn.style.background = MESO_COLORS[meso];
+      btn.style.border = `1px solid ${MESO_COLORS[meso]}`;
+    }
     const dotDone    = isDone(wOff, i, ist);
     const dotStarted = isStarted(wOff, i, ist);
     const dotCls     = dotDone ? 'done' : dotStarted ? 'active' : '';
@@ -3810,6 +3867,14 @@ async function renderSession(requestId) {
   const started = isStarted(wOff, aDay, st);
   const locked  = !started || done;
 
+  // Mesocycle banners, current week only: week 5 = peak week, week 6 = deload.
+  const mesoNow = wOff === 0 ? mesoWeekFor(0) : null;
+  if (mesoNow === 5) {
+    html += `<div class="meso-banner meso-banner--peak">⚠️ Huippuviikko — Ensi viikolla deload. Paina tällä viikolla täysillä.</div>`;
+  } else if (mesoNow === MESOCYCLE_WEEKS) {
+    html += `<div class="meso-banner meso-banner--deload"><strong>🔴 DELOAD-VIIKKO — Tee kaikki liikkeet 50% painoilla</strong><br>Sama toistomäärä, täysi liikerata. Palautuminen on treenaamista.</div>`;
+  }
+
   sess.ex.forEach((ex, ei) => {
     if (ex.catchup && !ex.catchup.merged && !(ei > 0 && sess.ex[ei - 1].catchup && !sess.ex[ei - 1].catchup.merged)) {
       html += `<div class="catchup-heading">Viikon rästit</div>`;
@@ -3830,7 +3895,9 @@ async function renderSession(requestId) {
     const noSetsYet = !ed.sets || !ed.sets.length || ed.sets.every(s => !s || (!s.kg && !s.reps));
     if (prev && started && !done && noSetsYet) {
       const repsList = prev.map(s => s.reps).filter(r => r != null);
-      const isDeloadWeek = !!(appSettings && appSettings.deload_week_monday === wStart(wOff).iso);
+      // Mesocycle week 6 (current week only): 50% of last session's weights, no progression.
+      const isMesoDeload = wOff === 0 && mesoWeekFor(0) === MESOCYCLE_WEEKS;
+      const isDeloadWeek = isMesoDeload || !!(appSettings && appSettings.deload_week_monday === wStart(wOff).iso);
       const cleanly = !isDeloadWeek && repsList.length > 0 && repsList.every(r => r >= repsList[0]);
       const k = eKey(wOff, aDay, st, exId);
       if (!LD[k]) LD[k] = { sets: [] };
@@ -3841,7 +3908,9 @@ async function renderSession(requestId) {
         if (!LD[k].sets[s]) LD[k].sets[s] = {};
         if (prevSet.weight_kg != null) {
           let suggestedKg = prevSet.weight_kg;
-          if (cleanly) {
+          if (isMesoDeload && prevSet.weight_kg > 0) {
+            suggestedKg = Math.max(5, Math.round((prevSet.weight_kg * 0.5) / 2.5) * 2.5);
+          } else if (cleanly) {
             suggestedKg = Math.round((prevSet.weight_kg * 1.025) / 2.5) * 2.5;
             if (suggestedKg <= prevSet.weight_kg) suggestedKg = prevSet.weight_kg + 2.5;
           }
@@ -4489,6 +4558,44 @@ async function getDailyFoodCalories(fromIso, toIso) {
     if (r.kcal != null) byDate[r.logged_at] = (byDate[r.logged_at] || 0) + r.kcal;
   });
   return byDate;
+}
+
+// Mesocycle week of the gym page's week offset o (null until the cycle exists).
+function mesoWeekFor(o) {
+  return getMesocycleWeek(appSettings && appSettings.mesocycle_start_monday, wStart(o).iso);
+}
+
+// Keeps app_settings in step with the calendar: starts the first cycle this week, rolls the
+// start forward after week 6, and marks mesocycle week 6 as the deload week (deload_week_monday).
+// Does nothing until the mesocycle_start_monday column exists (migration 20261016_mesocycle).
+async function ensureMesocycle() {
+  const s = await loadAppSettings();
+  if (!s || !('mesocycle_start_monday' in s)) return;
+  const thisMonday = wStart(0).iso;
+  const patch = {};
+  let start = s.mesocycle_start_monday;
+  if (!start) {
+    start = patch.mesocycle_start_monday = thisMonday;
+  } else {
+    const rolled = rolledMesocycleStart(start, thisMonday);
+    if (rolled !== start) start = patch.mesocycle_start_monday = rolled;
+  }
+  if (getMesocycleWeek(start, thisMonday) === MESOCYCLE_WEEKS && s.deload_week_monday !== thisMonday) {
+    patch.deload_week_monday = thisMonday;
+  }
+  if (!Object.keys(patch).length) return;
+  const { error } = await sbWrite({ table: 'app_settings', op: 'upsert', payload: { id: 1, ...patch, updated_at: new Date().toISOString() } });
+  if (error) { console.error('ensureMesocycle failed:', error.message); return; }
+  appSettings = { ...s, ...patch };
+}
+
+async function startNewMesocycle() {
+  closeSidebar();
+  if (!confirm('Aloitetaanko uusi mesosykli tältä viikolta? Tämä viikko on silloin viikko 1/6.')) return;
+  const { error } = await sbWrite({ table: 'app_settings', op: 'upsert', payload: { id: 1, mesocycle_start_monday: wStart(0).iso, updated_at: new Date().toISOString() } });
+  if (error) { console.error('startNewMesocycle failed:', error.message); alert('Tallennus epäonnistui, yritä uudelleen.'); return; }
+  appSettings = null;
+  renderTreeni();
 }
 
 let appSettingsPromise = null;
@@ -8747,8 +8854,9 @@ function renderSessionExpand(s) {
 
     <label class="sess-catchup-toggle" style="display:flex;align-items:center;gap:10px;margin-top:14px;font-size:var(--fs-sm);color:var(--text2);cursor:pointer;">
       <input type="checkbox" ${s.collects_catchup ? 'checked' : ''} onchange="toggleCollectsCatchup('${s.id}', this.checked)">
-      Kerää viikon rästit
+      Kokoa viikon rästit tähän treeniin
     </label>
+    <div style="font-size:var(--fs-xs);color:var(--text3);margin:4px 0 0 28px;">Muiden treenien tekemättä jääneet sarjat lisätään tähän</div>
 
     <div class="sess-field-label" style="margin-top:14px">Liikkeet</div>
     <div id="ex-list-${s.id}">`;
