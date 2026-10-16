@@ -8854,8 +8854,9 @@ function renderSessionExpand(s) {
 
     <label class="sess-catchup-toggle" style="display:flex;align-items:center;gap:10px;margin-top:14px;font-size:var(--fs-sm);color:var(--text2);cursor:pointer;">
       <input type="checkbox" ${s.collects_catchup ? 'checked' : ''} onchange="toggleCollectsCatchup('${s.id}', this.checked)">
-      Kerää viikon rästit
+      Kokoa viikon rästit tähän treeniin
     </label>
+    <div style="font-size:var(--fs-xs);color:var(--text3);margin:4px 0 0 28px;">Muiden treenien tekemättä jääneet sarjat lisätään tähän</div>
 
     <div class="sess-field-label" style="margin-top:14px">Liikkeet</div>
     <div id="ex-list-${s.id}">`;
