@@ -1690,7 +1690,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.45.0</div>
+    <div class="version-chip" style="margin:0">v1.45.1</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:var(--fs-xl);cursor:pointer;line-height:1;">✕</button>
   </div>
   <div style="font-size:var(--fs-xs);font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Navigointi</div>
@@ -1893,6 +1893,21 @@ function isoWeekYear(d) {
 }
 function localIso(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// Supabase (PostgREST) returns at most 1000 rows per request, silently — a larger .limit() does
+// not help. fetchAllRows pages through with .range() until a short page. makeQuery must build a
+// fresh query each call with a deterministic order (end with a unique column such as id), so
+// pages never overlap or skip. Resolves to { data, error } like a normal query.
+const SB_PAGE_SIZE = 1000;
+async function fetchAllRows(makeQuery) {
+  const rows = [];
+  for (let from = 0; ; from += SB_PAGE_SIZE) {
+    const { data, error } = await makeQuery().range(from, from + SB_PAGE_SIZE - 1);
+    if (error) return { data: null, error };
+    rows.push(...(data || []));
+    if (!data || data.length < SB_PAGE_SIZE) return { data: rows, error: null };
+  }
 }
 
 // Body measurements grouped by ISO week (Mon–Sun). A week's value is the average of that week's
@@ -3066,9 +3081,10 @@ async function checkPlateau(offset = wOff) {
   if (!exercisesThisWeek.length) return null;
 
   const mon3 = wStart(weekOffsets[2]);
-  const { data: historySets, error: historyErr } = await sb.from('workout_sets').select('exercise_name,weight_kg,workout_date')
+  const { data: historySets, error: historyErr } = await fetchAllRows(() => sb.from('workout_sets').select('exercise_name,weight_kg,workout_date')
     .in('exercise_name', exercisesThisWeek)
-    .gte('workout_date', mon3.iso).lte('workout_date', localIso(sun));
+    .gte('workout_date', mon3.iso).lte('workout_date', localIso(sun))
+    .order('workout_date').order('id'));
   if (historyErr) { console.error('checkPlateau failed:', historyErr.message); return null; }
 
   for (const exName of exercisesThisWeek) {
@@ -3181,7 +3197,7 @@ async function computeHuomiotHistory(numWeeks = 12) {
   const todayIso = localIso(new Date());
 
   const huomiotHistoryResults = await Promise.all([
-    sb.from('workout_sets').select('workout_date,exercise_name,weight_kg,reps').gte('workout_date', earliestMonday.iso).lte('workout_date', todayIso),
+    fetchAllRows(() => sb.from('workout_sets').select('workout_date,exercise_name,weight_kg,reps').gte('workout_date', earliestMonday.iso).lte('workout_date', todayIso).order('workout_date').order('id')),
     sb.from('body_metrics').select('weight_kg,fat_pct,muscle_pct,measured_at').gte('measured_at', earliestMonday.iso).lte('measured_at', todayIso).order('measured_at', { ascending: true }),
     sb.from('sleep_data').select('sleep_date,sleep_score').gte('sleep_date', earliestMonday.iso).lte('sleep_date', todayIso),
     sb.from('step_data').select('step_date,steps').gte('step_date', earliestMonday.iso).lte('step_date', todayIso),
@@ -3246,7 +3262,7 @@ async function renderSleepTonnageChart() {
   const todayIso = localIso(new Date());
   const sleepTonnageResults = await Promise.all([
     sb.from('sleep_data').select('sleep_date,sleep_score').gte('sleep_date', fromIso).lte('sleep_date', todayIso),
-    sb.from('workout_sets').select('workout_date,weight_kg,reps').gte('workout_date', fromIso).lte('workout_date', todayIso),
+    fetchAllRows(() => sb.from('workout_sets').select('workout_date,weight_kg,reps').gte('workout_date', fromIso).lte('workout_date', todayIso).order('workout_date').order('id')),
   ]);
   logQueryErrors('renderSleepTonnageChart', sleepTonnageResults);
   const [{ data: sleepRows }, { data: setsRows }] = sleepTonnageResults;
@@ -3408,7 +3424,7 @@ async function loadHuomioita() {
   if (!appSettings) appSettings = await loadAppSettings();
 
   const huomiotResults = await Promise.all([
-    sb.from('workout_sets').select('workout_date,exercise_name,weight_kg,reps').gte('workout_date', from42).lte('workout_date', todayIso),
+    fetchAllRows(() => sb.from('workout_sets').select('workout_date,exercise_name,weight_kg,reps').gte('workout_date', from42).lte('workout_date', todayIso).order('workout_date').order('id')),
     sb.from('body_metrics').select('weight_kg,fat_pct,muscle_pct,measured_at').gte('measured_at', from21).lte('measured_at', todayIso).order('measured_at', { ascending: true }),
     sb.from('sleep_data').select('sleep_score').gte('sleep_date', thisWeekFrom).lte('sleep_date', thisWeekTo),
     sb.from('sleep_data').select('sleep_score').gte('sleep_date', lastWeekFrom).lte('sleep_date', lastWeekTo),
@@ -4992,7 +5008,7 @@ async function exportActivitiesCSV() {
   const btn = document.getElementById('export-activities-btn');
   btn.disabled = true;
   try {
-    const { data, error } = await sb.from('activity_data').select('*').order('activity_date', { ascending: false }).limit(100000);
+    const { data, error } = await fetchAllRows(() => sb.from('activity_data').select('*').order('activity_date', { ascending: false }).order('id'));
     if (error) { console.error('exportActivitiesCSV failed:', error.message); return; }
     const headers = ['activity_date', 'activity_type', 'duration_min', 'calories', 'avg_heart_rate', 'distance_km'];
     const rows = (data || []).map(a => [a.activity_date, a.activity_type, a.duration_min, a.calories, a.avg_heart_rate, a.distance_km]);
@@ -5006,7 +5022,7 @@ async function exportWorkoutSetsCSV() {
   const btn = document.getElementById('export-sets-btn');
   btn.disabled = true;
   try {
-    const { data, error } = await sb.from('workout_sets').select('*').order('workout_date', { ascending: false }).limit(100000);
+    const { data, error } = await fetchAllRows(() => sb.from('workout_sets').select('*').order('workout_date', { ascending: false }).order('id'));
     if (error) { console.error('exportWorkoutSetsCSV failed:', error.message); return; }
     const headers = ['workout_date', 'exercise_name', 'set_number', 'weight_kg', 'reps', 'session_type'];
     const rows = (data || []).map(s => [s.workout_date, s.exercise_name, s.set_number, s.weight_kg, s.reps, s.session_type]);
@@ -5020,14 +5036,14 @@ async function exportFoodLogCSV() {
   const btn = document.getElementById('export-food-btn');
   btn.disabled = true;
   try {
-    const { data, error } = await sb.from('food_log_entries')
+    const { data, error } = await fetchAllRows(() => sb.from('food_log_entries')
       .select(`
         id, logged_at, meal_type, amount_g, kcal, protein_g, food_cache_id, custom_food_id,
         food_cache(name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g),
         custom_foods(name,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g)
       `)
       .order('logged_at', { ascending: false })
-      .limit(100000);
+      .order('id'));
     if (error) { console.error('exportFoodLogCSV failed:', error.message); return; }
     const headers = ['logged_at', 'meal_type', 'name', ...TILASTOT_COLUMNS.map(c => c.key)];
     const rows = (data || []).map(entry => {
@@ -5614,7 +5630,7 @@ let tilastotSortKey = 'label';
 let tilastotSortDir = 'desc';
 
 async function loadTilastotEntries(fromIso, toIso) {
-  const { data, error } = await sb.from('food_log_entries')
+  const { data, error } = await fetchAllRows(() => sb.from('food_log_entries')
     .select(`
       id, logged_at, meal_type, amount_g, kcal, protein_g, food_cache_id, custom_food_id,
       food_cache(name_fi,kcal_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,fiber_per_100g,sugar_per_100g,salt_per_100g,fat_saturated_per_100g,fat_mono_per_100g,fat_poly_per_100g,fat_trans_per_100g,sodium_per_100g,calcium_per_100g,potassium_per_100g,magnesium_per_100g,iron_per_100g,zinc_per_100g,vitamin_c_per_100g,vitamin_d_per_100g),
@@ -5623,7 +5639,7 @@ async function loadTilastotEntries(fromIso, toIso) {
     .gte('logged_at', fromIso)
     .lte('logged_at', toIso)
     .order('logged_at', { ascending: false })
-    .limit(100000);
+    .order('id'));
   if (error) { console.error('loadTilastotEntries failed:', error.message); return []; }
   return data || [];
 }

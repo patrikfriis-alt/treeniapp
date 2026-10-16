@@ -2,6 +2,19 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 type SB = ReturnType<typeof createClient>;
 
+// PostgREST returns at most 1000 rows per request, silently. Pages through with .range() until a
+// short page; makeQuery must build a fresh query with a deterministic order each call.
+const PAGE_SIZE = 1000;
+async function fetchAllRows(makeQuery: () => any): Promise<{ data: any[] | null; error: any }> {
+  const rows: any[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await makeQuery().range(from, from + PAGE_SIZE - 1);
+    if (error) return { data: null, error };
+    rows.push(...(data || []));
+    if (!data || data.length < PAGE_SIZE) return { data: rows, error: null };
+  }
+}
+
 function todayHelsinkiIso(): string {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Helsinki' });
 }
@@ -78,13 +91,13 @@ export async function buildDataContext(sb: SB): Promise<string> {
   ] = await Promise.all([
     sb.from('user_profile').select('*').eq('id', 1).maybeSingle(),
     sb.from('body_metrics').select('weight_kg,fat_pct,muscle_pct,measured_at').gte('measured_at', twelveWeeksAgoIso).order('measured_at', { ascending: true }),
-    sb.from('workout_sets').select('workout_date,weight_kg,reps').gte('workout_date', twelveWeeksAgoIso).lte('workout_date', todayIso),
+    fetchAllRows(() => sb.from('workout_sets').select('workout_date,weight_kg,reps').gte('workout_date', twelveWeeksAgoIso).lte('workout_date', todayIso).order('workout_date').order('id')),
     sb.from('activity_data').select('activity_type,activity_date,duration_min,distance_km,calories').gte('activity_date', twelveWeeksAgoIso).lte('activity_date', todayIso),
     sb.from('sleep_data').select('sleep_date,sleep_score').gte('sleep_date', twelveWeeksAgoIso).lte('sleep_date', todayIso),
     sb.from('food_log_entries').select('logged_at,kcal').gte('logged_at', twelveWeeksAgoIso).lte('logged_at', todayIso),
-    sb.from('workout_sets').select('workout_date,exercise_name,weight_kg,reps').gte('workout_date', threeWeeksAgoIso).lte('workout_date', todayIso).order('workout_date', { ascending: true }),
+    fetchAllRows(() => sb.from('workout_sets').select('workout_date,exercise_name,weight_kg,reps').gte('workout_date', threeWeeksAgoIso).lte('workout_date', todayIso).order('workout_date', { ascending: true }).order('id')),
     sb.from('activity_data').select('activity_date').gte('activity_date', ninetyDaysAgoIso).lte('activity_date', todayIso),
-    sb.from('workout_sets').select('workout_date').gte('workout_date', ninetyDaysAgoIso).lte('workout_date', todayIso),
+    fetchAllRows(() => sb.from('workout_sets').select('workout_date').gte('workout_date', ninetyDaysAgoIso).lte('workout_date', todayIso).order('workout_date').order('id')),
     sb.from('workout_sessions').select('calories').eq('workout_date', todayIso),
     sb.from('app_settings').select('calorie_correction').eq('id', 1).maybeSingle(),
     sb.from('coach_notes').select('notes').eq('id', 1).maybeSingle(),
