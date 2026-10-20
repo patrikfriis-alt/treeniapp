@@ -81,6 +81,20 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* The document never scrolls. In an iOS home-screen app a scrolling document carries
+   position:fixed elements with it (after the keyboard closes, during rubber-band bounce and
+   momentum scroll), which detached the bottom nav. Pages scroll inside #app-scroll instead;
+   the nav, sidebar and modals live outside it and stay put. */
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+#app-scroll {
+  position: fixed;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
 /* ─── Display font (headlines, big numbers) ─────────────────── */
 .koonti-greeting, .hero-metric-val, .hero-name, .hero-stat-val, .ex-block-title, .set-tnum, .set-tinput, .set-collapsed-summary,
 .seuranta-hero-main, .seuranta-hero-stat-val, .food-hero-main, .food-hero-stat-val, .tilastot-card-kcal {
@@ -975,7 +989,7 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
 }
 /* While the menu is open the page behind it must not scroll (iOS otherwise scrolls the body
    when a swipe starts on the dimmed overlay). */
-body.sidebar-open { overflow: hidden; }
+body.sidebar-open #app-scroll { overflow: hidden; }
 #sidebar-overlay {
   touch-action: none;
   display: none;
@@ -1234,6 +1248,8 @@ body.sidebar-open { overflow: hidden; }
   <span id="rest-timer-count">90</span>
 </div>
 
+<!-- All pages scroll inside #app-scroll; the document itself never scrolls (see CSS). -->
+<main id="app-scroll">
 <!-- ── KOONTI ─────────────────────────────────────────────────── -->
 <div id="page-koonti" class="page active">
   <div class="koonti-navbar" id="koonti-navbar">Koonti</div>
@@ -1695,11 +1711,13 @@ body.sidebar-open { overflow: hidden; }
   <div id="food-meals"></div>
 </div>
 
+</main>
+
 <!-- ── SIDEBAR ────────────────────────────────────────────────── -->
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.45.2</div>
+    <div class="version-chip" style="margin:0">v1.45.3</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:var(--fs-xl);cursor:pointer;line-height:1;">✕</button>
   </div>
   <div style="font-size:var(--fs-xs);font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Navigointi</div>
@@ -8219,12 +8237,20 @@ function showPage(name, btn) {
   if (name === 'tilastot') renderTilastotPage();
 }
 
-window.addEventListener('scroll', () => {
+document.getElementById('app-scroll').addEventListener('scroll', e => {
   const navbar = document.getElementById('koonti-navbar');
   const koontiPage = document.getElementById('page-koonti');
   if (!navbar || !koontiPage || !koontiPage.classList.contains('active')) return;
-  navbar.style.opacity = window.scrollY > 70 ? '1' : '0';
-});
+  navbar.style.opacity = e.currentTarget.scrollTop > 70 ? '1' : '0';
+}, { passive: true });
+
+// Safety net for iOS: after the on-screen keyboard closes it can leave the (non-scrolling)
+// document offset, which would show fixed elements out of place. Snap it back.
+function resetDocumentOffset() {
+  if (window.scrollY || document.documentElement.scrollTop || document.body.scrollTop) window.scrollTo(0, 0);
+}
+document.addEventListener('focusout', () => setTimeout(resetDocumentOffset, 60));
+if (window.visualViewport) window.visualViewport.addEventListener('resize', resetDocumentOffset);
 
 let coachActiveConversationId = null;
 let coachRequestId = 0;
