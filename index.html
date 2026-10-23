@@ -167,7 +167,7 @@ nav button:not(.active):hover { color: var(--text); background: var(--surface2);
 }
 
 /* ─── Pages ─────────────────────────────────────────────────── */
-.page { display: none; padding: 14px 14px 90px; max-width: 600px; margin: 0 auto; }
+.page { display: none; padding: 14px 14px calc(90px + env(safe-area-inset-bottom)); max-width: 600px; margin: 0 auto; }
 .page.active { display: block; }
 
 /* ─── Cards ─────────────────────────────────────────────────── */
@@ -1717,7 +1717,7 @@ body.sidebar-open #app-scroll { overflow: hidden; }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.45.3</div>
+    <div class="version-chip" style="margin:0">v1.45.4</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:var(--fs-xl);cursor:pointer;line-height:1;">✕</button>
   </div>
   <div style="font-size:var(--fs-xs);font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Navigointi</div>
@@ -8249,8 +8249,29 @@ document.getElementById('app-scroll').addEventListener('scroll', e => {
 function resetDocumentOffset() {
   if (window.scrollY || document.documentElement.scrollTop || document.body.scrollTop) window.scrollTo(0, 0);
 }
-document.addEventListener('focusout', () => setTimeout(resetDocumentOffset, 60));
-if (window.visualViewport) window.visualViewport.addEventListener('resize', resetDocumentOffset);
+// The on-screen keyboard covers the bottom of #app-scroll, and the document no longer scrolls
+// to reveal the focused input — so the last rows could not be reached. While the keyboard is
+// open, end #app-scroll at the keyboard's top edge and scroll the focused field into view.
+function keyboardHeight() {
+  const vv = window.visualViewport;
+  return vv ? Math.max(0, window.innerHeight - vv.height) : 0;
+}
+function fitScrollToKeyboard() {
+  const scroller = document.getElementById('app-scroll');
+  const kb = keyboardHeight();
+  if (kb > 80) {
+    resetDocumentOffset();
+    scroller.style.bottom = kb + 'px';
+    const el = document.activeElement;
+    if (el && scroller.contains(el)) el.scrollIntoView({ block: 'center' });
+  } else {
+    scroller.style.bottom = '';
+    resetDocumentOffset();
+  }
+}
+document.addEventListener('focusout', () => setTimeout(fitScrollToKeyboard, 60));
+document.addEventListener('focusin', () => setTimeout(fitScrollToKeyboard, 300));
+if (window.visualViewport) window.visualViewport.addEventListener('resize', fitScrollToKeyboard);
 
 let coachActiveConversationId = null;
 let coachRequestId = 0;
