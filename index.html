@@ -663,6 +663,8 @@ input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(.
 .ex-block-title { font-size:var(--fs-md); font-weight:600; color:#fff; letter-spacing:-0.01em; }
 .ex-block-sub   { font-size:var(--fs-sm); color:rgba(255,255,255,0.5); margin-top:2px; }
 .catchup-heading { margin: 22px 2px 10px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--amber, var(--accent)); }
+.off-program-heading { color: var(--text3); }
+.ex-block.off-program { opacity: .75; }
 .catchup-tag { display: inline-block; margin-top: 4px; font-size: var(--fs-xs); color: var(--amber, var(--accent)); }
 .ex-block-progress { text-align:right; flex-shrink:0; }
 .ex-block-prog-label { font-size:var(--fs-xs); color:rgba(255,255,255,0.4); margin-bottom:4px; }
@@ -1717,7 +1719,7 @@ body.sidebar-open #app-scroll { overflow: hidden; }
 <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="sidebar">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-    <div class="version-chip" style="margin:0">v1.45.4</div>
+    <div class="version-chip" style="margin:0">v1.45.5</div>
     <button onclick="closeSidebar()" style="background:none;border:none;color:var(--text2);font-size:var(--fs-xl);cursor:pointer;line-height:1;">✕</button>
   </div>
   <div style="font-size:var(--fs-xs);font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Navigointi</div>
@@ -3851,6 +3853,45 @@ function daySession(o, d, st) {
   return { ...sess, ex: [...own, ...extra] };
 }
 
+// Sets logged on this day for exercises that are not in the day's current exercise list — e.g.
+// after a program change, a past day still shows what was actually done. Read-only: these rows
+// have no program id, so they are never edited, pre-filled or PR-checked. Data comes from the
+// week cache loaded by renderTreeni (all of the week's workout_sets, ordered by name and set).
+function offProgramLogsHtml(o, d, sess) {
+  if (weekActivityOffset !== o) return '';
+  const mon = wStart(o), dt = new Date(mon.date);
+  dt.setDate(mon.date.getDate() + d);
+  const day = weekActivityCache[localIso(dt)];
+  if (!day || !day.workout) return '';
+  const inList = new Set(((sess && sess.ex) || []).map(e => e.n));
+  const names = Object.keys(day.workout).filter(n => !inList.has(n) && day.workout[n].length);
+  if (!names.length) return '';
+  let html = `<div class="catchup-heading off-program-heading">Kirjattu, ei nykyisessä ohjelmassa</div>`;
+  names.forEach(n => {
+    const rows = [...day.workout[n]].sort((a, b) => a.set_number - b.set_number);
+    html += `<div class="ex-block off-program">
+      <div class="ex-block-header">
+        <div>
+          <div class="ex-block-title" data-ex="${n.replace(/"/g,'&quot;')}" onclick="openExerciseModal(this.dataset.ex)" style="cursor:pointer">${escapeHtml(n)}</div>
+          <div class="ex-block-sub">${rows.length} ${rows.length === 1 ? 'sarja' : 'sarjaa'} · vain luku</div>
+        </div>
+      </div>
+      <div class="ex-set-table">`;
+    rows.forEach(r => {
+      const kg = r.weight_kg != null ? escapeHtml(String(r.weight_kg).replace('.', ',')) : '?';
+      const reps = r.reps != null ? escapeHtml(String(r.reps)) : '?';
+      html += `<div class="set-table-row is-collapsed">
+          <div class="set-collapsed" style="cursor:default">
+            <span class="set-tnum">${escapeHtml(String(r.set_number))}</span>
+            <span class="set-collapsed-summary">${kg} kg × ${reps}</span>
+          </div>
+        </div>`;
+    });
+    html += `</div></div>`;
+  });
+  return html;
+}
+
 async function setActiveSession(o, d, st) {
   const mon = wStart(o), dt = new Date(mon.date);
   dt.setDate(mon.date.getDate() + d);
@@ -3893,7 +3934,7 @@ async function renderSession(requestId) {
     el.innerHTML = html + `<div class="card rest-card">
       <div class="sess-name" style="margin-bottom:6px">${sess ? escapeHtml(sess.name) : 'Ei ohjelmoitua sessiota'}</div>
       <div class="sess-focus">${sess ? escapeHtml(sess.focus) : ''}</div>
-    </div>`;
+    </div>` + offProgramLogsHtml(wOff, aDay, sess);
     return;
   }
 
@@ -4072,6 +4113,8 @@ async function renderSession(requestId) {
 
     html += `</div>`; // ex-block
   });
+
+  html += offProgramLogsHtml(wOff, aDay, sess);
 
   const bottomBtn = !started
     ? `<button class="complete-btn" onclick="startSession()">Aloita treeni</button>`
@@ -5198,23 +5241,41 @@ function setHistRange(months, btn) {
   loadExerciseChart(document.getElementById('ex-select').value);
 }
 
-function populateExerciseDropdown() {
+// History dropdowns: the current program's exercises first (program order), then every other
+// exercise that has logged sets in workout_sets (alphabetical, "Aiemmat liikkeet"), so exercises
+// dropped from the program stay reachable in the chart and the log filter.
+let exerciseDropdownRequestId = 0;
+async function populateExerciseDropdown() {
+  const requestId = ++exerciseDropdownRequestId;
+  const programNames = [];
+  Object.values(SESS).forEach(s => {
+    (s.ex || []).forEach(e => { if (!programNames.includes(e.n)) programNames.push(e.n); });
+  });
+
+  const { data, error } = await fetchAllRows(() => sb.from('workout_sets').select('exercise_name').order('id'));
+  if (requestId !== exerciseDropdownRequestId) return;
+  if (error) console.error('populateExerciseDropdown failed:', error.message);
+  const otherNames = [...new Set((data || []).map(r => r.exercise_name))]
+    .filter(n => n && !programNames.includes(n))
+    .sort((a, b) => a.localeCompare(b, 'fi'));
+
   const sel  = document.getElementById('ex-select');
   const lSel = document.getElementById('lokit-ex-select');
   const prevSel = sel.value, prevLSel = lSel.value;
-  [sel, lSel].forEach(el => { while (el.options.length > 1) el.remove(1); });
-  const seen = new Set();
-  Object.values(SESS).forEach(s => {
-    (s.ex || []).forEach(e => {
-      if (!seen.has(e.n)) {
-        seen.add(e.n);
-        [sel, lSel].forEach(el => {
-          const o = document.createElement('option');
-          o.value = o.textContent = e.n;
-          el.appendChild(o);
-        });
-      }
-    });
+  [sel, lSel].forEach(el => {
+    while (el.children.length > 1) el.lastElementChild.remove();
+    const addOption = (parent, n) => {
+      const o = document.createElement('option');
+      o.value = o.textContent = n;
+      parent.appendChild(o);
+    };
+    programNames.forEach(n => addOption(el, n));
+    if (otherNames.length) {
+      const group = document.createElement('optgroup');
+      group.label = 'Aiemmat liikkeet';
+      otherNames.forEach(n => addOption(group, n));
+      el.appendChild(group);
+    }
   });
   if ([...sel.options].some(o => o.value === prevSel)) sel.value = prevSel;
   if ([...lSel.options].some(o => o.value === prevLSel)) lSel.value = prevLSel;
